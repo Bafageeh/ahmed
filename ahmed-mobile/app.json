@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Ahmed",
+    "slug": "ahmed",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "ahmed",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "sa.pm.ahmed"
+    },
+    "extra": {
+      "apiUrl": "https://ahmed.pm.sa/api"
+    }
+  }
+}
