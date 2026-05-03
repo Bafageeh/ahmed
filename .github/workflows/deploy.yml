@@ -33,5 +33,10 @@ jobs:
             fi
 
             cd "$AHMED_PROJECT_PATH"
+
+            echo "[Ahmed Deploy] Bootstrap latest files from GitHub"
+            git fetch origin main
+            git reset --hard origin/main
+
             chmod +x scripts/deploy-ahmed.sh
             bash scripts/deploy-ahmed.sh
