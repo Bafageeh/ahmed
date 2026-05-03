@@ -1,0 +1,37 @@
+name: Deploy Ahmed
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: ${{ secrets.AHMED_SSH_PORT || 22 }}
+          script: |
+            set -e
+            export AHMED_PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
+            export AHMED_DOMAIN="ahmed.pm.sa"
+            export AHMED_EXPO_PORT="8083"
+
+            if [ -z "$AHMED_PROJECT_PATH" ]; then
+              export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
+            fi
+
+            cd "$AHMED_PROJECT_PATH"
+            chmod +x scripts/deploy-ahmed.sh
+            bash scripts/deploy-ahmed.sh
