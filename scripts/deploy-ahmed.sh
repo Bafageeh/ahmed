@@ -61,6 +61,11 @@ if [ -d "$MOBILE_DIR" ]; then
   if [ ! -f .env ]; then
     echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
   fi
+
+  cd "$PROJECT_PATH"
+  log "Restarting Expo development server"
+  chmod +x scripts/restart-expo-ahmed.sh
+  bash scripts/restart-expo-ahmed.sh
 fi
 
 if command -v php >/dev/null 2>&1 && [ -d "$API_DIR" ]; then
