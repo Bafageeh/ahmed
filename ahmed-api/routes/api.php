@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\InvestmentPlatformController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -10,3 +11,5 @@ Route::get('/health', function () {
         'time' => now()->toDateTimeString(),
     ]);
 });
+
+Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index']);
