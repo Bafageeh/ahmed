@@ -122,6 +122,35 @@ class MoneyMoonController extends Controller
         return response()->json(['data' => DB::table('investment_opportunities')->where('id', $id)->first()]);
     }
 
+    public function receive(int $id)
+    {
+        $platform = $this->moneyMoonPlatform();
+
+        if (! $platform) {
+            return response()->json(['message' => 'MoneyMoon platform not found'], 404);
+        }
+
+        $investment = DB::table('investment_opportunities')
+            ->where('id', $id)
+            ->where('platform_id', $platform->id)
+            ->first();
+
+        if (! $investment) {
+            return response()->json(['message' => 'Investment not found'], 404);
+        }
+
+        DB::table('investment_opportunities')
+            ->where('id', $id)
+            ->update([
+                'status' => 'received',
+                'actual_profit_amount' => $investment->expected_profit_amount,
+                'completed_at' => now()->toDateString(),
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['data' => DB::table('investment_opportunities')->where('id', $id)->first()]);
+    }
+
     private function moneyMoonPlatform()
     {
         return DB::table('investment_platforms')->where('code', 'moneymoon')->first();
