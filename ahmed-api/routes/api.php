@@ -30,4 +30,6 @@ Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);
 Route::get('/income/basic', [IncomeController::class, 'index']);
 Route::post('/income/basic', [IncomeController::class, 'store']);
 Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
+Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
+Route::post('/income/linked/finance/summary/sync', [LinkedIncomeController::class, 'syncFinanceSummary']);
 Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
