@@ -50,6 +50,8 @@ class MoneyMoonController extends Controller
         }
 
         $dates = $this->investmentDates($data);
+        $profitRate = $this->profitRate($data['category']);
+        $expectedProfit = $this->expectedProfit($data['amount'], $profitRate);
 
         $id = DB::table('investment_opportunities')->insertGetId([
             'account_id' => $accountId,
@@ -57,13 +59,18 @@ class MoneyMoonController extends Controller
             'title' => 'MoneyMoon ' . $data['category'],
             'investment_type' => 'moneymoon',
             'principal_amount' => $data['amount'],
-            'expected_profit_amount' => 0,
+            'expected_profit_amount' => $expectedProfit,
             'actual_profit_amount' => 0,
+            'expected_rate' => $profitRate,
             'start_date' => $dates['investment_date'],
             'maturity_date' => $dates['maturity_date'],
             'status' => 'active',
             'profit_distribution' => 'at_maturity',
-            'metadata' => json_encode(['category' => $data['category'], 'manual_maturity' => ! empty($data['maturity_date'])]),
+            'metadata' => json_encode([
+                'category' => $data['category'],
+                'profit_rate' => $profitRate,
+                'manual_maturity' => ! empty($data['maturity_date']),
+            ]),
             'notes' => $data['notes'] ?? null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -91,15 +98,23 @@ class MoneyMoonController extends Controller
         }
 
         $dates = $this->investmentDates($data);
+        $profitRate = $this->profitRate($data['category']);
+        $expectedProfit = $this->expectedProfit($data['amount'], $profitRate);
 
         DB::table('investment_opportunities')
             ->where('id', $id)
             ->update([
                 'title' => 'MoneyMoon ' . $data['category'],
                 'principal_amount' => $data['amount'],
+                'expected_profit_amount' => $expectedProfit,
+                'expected_rate' => $profitRate,
                 'start_date' => $dates['investment_date'],
                 'maturity_date' => $dates['maturity_date'],
-                'metadata' => json_encode(['category' => $data['category'], 'manual_maturity' => ! empty($data['maturity_date'])]),
+                'metadata' => json_encode([
+                    'category' => $data['category'],
+                    'profit_rate' => $profitRate,
+                    'manual_maturity' => ! empty($data['maturity_date']),
+                ]),
                 'notes' => $data['notes'] ?? null,
                 'updated_at' => now(),
             ]);
@@ -134,5 +149,20 @@ class MoneyMoonController extends Controller
             'investment_date' => $investmentDate->toDateString(),
             'maturity_date' => $maturityDate->toDateString(),
         ];
+    }
+
+    private function profitRate(string $category): float
+    {
+        return [
+            'A' => 2,
+            'B' => 2,
+            'C' => 3,
+            'D' => 4,
+        ][$category] ?? 0;
+    }
+
+    private function expectedProfit(float|int|string $amount, float $profitRate): float
+    {
+        return round(((float) $amount) * ($profitRate / 100), 2);
     }
 }
