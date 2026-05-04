@@ -15,6 +15,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 const profitRates = { A: 2, B: 2, C: 3, D: 4 };
 const categoryProfit = (category) => profitRates[category] || 0;
 const calcProfit = (amount, category) => Number(amount || 0) * (categoryProfit(category) / 100);
+const isReceived = (item) => item.status === 'received' || item.status === 'completed';
+const isOverdue = (item) => Boolean(item.maturity_date && item.maturity_date < today() && !isReceived(item));
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -74,6 +76,7 @@ function MoneyMoonScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
+  const [receivingId, setReceivingId] = useState(null);
 
   const total = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.principal_amount || 0), 0),
@@ -82,6 +85,11 @@ function MoneyMoonScreen({ onBack }) {
 
   const totalProfit = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.expected_profit_amount || 0), 0),
+    [items]
+  );
+
+  const overdueCount = useMemo(
+    () => items.filter((item) => isOverdue(item)).length,
     [items]
   );
 
@@ -162,6 +170,29 @@ function MoneyMoonScreen({ onBack }) {
     }
   };
 
+  const receiveInvestment = async (item) => {
+    setReceivingId(item.id);
+    setMessage('جاري تسجيل الاستلام...');
+
+    try {
+      const response = await fetch(`${API_URL}/moneymoon/investments/${item.id}/receive`, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error('receive failed');
+      }
+
+      setMessage('تم اعتبار الاستثمار مستلمًا');
+      await loadItems();
+    } catch (error) {
+      setMessage('تعذر تسجيل الاستلام');
+    } finally {
+      setReceivingId(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -172,7 +203,7 @@ function MoneyMoonScreen({ onBack }) {
         <View style={styles.header}>
           <Text style={styles.badge}>موني مون</Text>
           <Text style={styles.title}>إدارة موني مون</Text>
-          <Text style={styles.subtitle}>إضافة وتعديل استثمارات موني مون من داخل التطبيق.</Text>
+          <Text style={styles.subtitle}>إضافة وتعديل واستلام استثمارات موني مون من داخل التطبيق.</Text>
         </View>
 
         <View style={styles.summaryRow}>
@@ -191,9 +222,9 @@ function MoneyMoonScreen({ onBack }) {
             <Text style={styles.summaryValue}>{totalProfit.toFixed(2)}</Text>
             <Text style={styles.summaryLabel}>إجمالي الربح المتوقع</Text>
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{categoryProfit(category)}%</Text>
-            <Text style={styles.summaryLabel}>ربح الفئة المختارة</Text>
+          <View style={[styles.summaryCard, overdueCount > 0 && styles.overdueSummary]}>
+            <Text style={[styles.summaryValue, overdueCount > 0 && styles.overdueText]}>{overdueCount}</Text>
+            <Text style={[styles.summaryLabel, overdueCount > 0 && styles.overdueText]}>متأخر غير مستلم</Text>
           </View>
         </View>
 
@@ -273,30 +304,52 @@ function MoneyMoonScreen({ onBack }) {
             <Text style={styles.platformText}>أضف أول استثمار من النموذج بالأعلى.</Text>
           </View>
         ) : (
-          items.map((item) => <MoneyMoonCard key={String(item.id)} item={item} onPress={() => startEdit(item)} />)
+          items.map((item) => (
+            <MoneyMoonCard
+              key={String(item.id)}
+              item={item}
+              onEdit={() => startEdit(item)}
+              onReceive={() => receiveInvestment(item)}
+              receiving={receivingId === item.id}
+            />
+          ))
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function MoneyMoonCard({ item, onPress }) {
+function MoneyMoonCard({ item, onEdit, onReceive, receiving }) {
   const meta = safeJson(item.metadata);
   const category = meta.category || '-';
   const rate = Number(item.expected_rate || meta.profit_rate || categoryProfit(category));
   const profit = Number(item.expected_profit_amount || calcProfit(item.principal_amount, category));
+  const received = isReceived(item);
+  const overdue = isOverdue(item);
 
   return (
-    <TouchableOpacity activeOpacity={0.85} style={styles.platformCard} onPress={onPress}>
-      <Text style={styles.platformName}>فئة {category}</Text>
+    <View style={[styles.platformCard, overdue && styles.overdueCard, received && styles.receivedCard]}>
+      <Text style={[styles.platformName, overdue && styles.overdueText]}>فئة {category}</Text>
+      {overdue ? <Text style={styles.overdueBadge}>متأخر ولم يتم الاستلام</Text> : null}
+      {received ? <Text style={styles.receivedBadge}>تم الاستلام</Text> : null}
       <Text style={styles.platformText}>المبلغ: {Number(item.principal_amount || 0).toFixed(2)} ر.س</Text>
       <Text style={styles.platformText}>نسبة الربح: {rate}%</Text>
       <Text style={styles.platformText}>الربح المتوقع: {profit.toFixed(2)} ر.س</Text>
       <Text style={styles.platformText}>تاريخ الاستثمار: {item.start_date || '-'}</Text>
       <Text style={styles.platformText}>تاريخ الاستحقاق: {item.maturity_date || '-'}</Text>
-      <Text style={styles.platformText}>الحالة: {item.status || '-'}</Text>
-      <Text style={styles.editHint}>اضغط على البطاقة للتعديل</Text>
-    </TouchableOpacity>
+      <Text style={styles.platformText}>الحالة: {received ? 'مستلم' : item.status || '-'}</Text>
+
+      <View style={styles.cardActions}>
+        {!received ? (
+          <TouchableOpacity style={styles.receiveButton} onPress={onReceive} disabled={receiving}>
+            <Text style={styles.receiveText}>{receiving ? 'جاري التسجيل...' : 'تم الاستلام'}</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity style={styles.editButton} onPress={onEdit}>
+          <Text style={styles.editText}>تعديل البطاقة</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -319,11 +372,16 @@ const styles = StyleSheet.create({
   summaryCard: { flex: 1, backgroundColor: '#fff', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#e2e8f0' },
   summaryValue: { color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   summaryLabel: { marginTop: 5, color: '#64748b', textAlign: 'right' },
+  overdueSummary: { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
+  overdueText: { color: '#b91c1c' },
   sectionTitle: { marginTop: 24, marginBottom: 10, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   platformCard: { backgroundColor: '#fff', borderRadius: 22, padding: 18, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0' },
+  overdueCard: { backgroundColor: '#fef2f2', borderColor: '#ef4444' },
+  receivedCard: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
   platformName: { color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   platformText: { marginTop: 6, color: '#64748b', textAlign: 'right' },
-  editHint: { marginTop: 10, color: '#075985', fontWeight: '900', textAlign: 'right' },
+  overdueBadge: { marginTop: 8, color: '#991b1b', backgroundColor: '#fee2e2', borderRadius: 12, padding: 8, textAlign: 'right', fontWeight: '900' },
+  receivedBadge: { marginTop: 8, color: '#166534', backgroundColor: '#dcfce7', borderRadius: 12, padding: 8, textAlign: 'right', fontWeight: '900' },
   backButton: { alignSelf: 'flex-end', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   backText: { color: '#0f172a', fontWeight: '900' },
   formCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#e2e8f0' },
@@ -345,4 +403,9 @@ const styles = StyleSheet.create({
   saveText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   cancelButton: { marginTop: 10, backgroundColor: '#f8fafc', borderRadius: 18, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
   cancelText: { color: '#0f172a', fontWeight: '900' },
+  cardActions: { marginTop: 14, flexDirection: 'row-reverse', gap: 8 },
+  receiveButton: { flex: 1, backgroundColor: '#166534', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
+  receiveText: { color: '#fff', fontWeight: '900' },
+  editButton: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
+  editText: { color: '#0f172a', fontWeight: '900' },
 });
