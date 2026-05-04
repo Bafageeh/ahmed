@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import Ta3meedScreen from './Ta3meedScreen';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const platforms = ['تعميد', 'دينار', 'ترميز', 'موني مون'];
@@ -21,6 +22,10 @@ const isOverdue = (item) => Boolean(item.maturity_date && item.maturity_date < t
 export default function App() {
   const [screen, setScreen] = useState('home');
 
+  if (screen === 'ta3meed') {
+    return <Ta3meedScreen onBack={() => setScreen('home')} />;
+  }
+
   if (screen === 'moneymoon') {
     return <MoneyMoonScreen onBack={() => setScreen('home')} />;
   }
@@ -28,6 +33,17 @@ export default function App() {
   if (screen === 'income') {
     return <BasicIncomeScreen onBack={() => setScreen('home')} />;
   }
+
+  const openPlatform = (name) => {
+    if (name === 'تعميد') {
+      setScreen('ta3meed');
+      return;
+    }
+
+    if (name === 'موني مون') {
+      setScreen('moneymoon');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -60,12 +76,14 @@ export default function App() {
           <TouchableOpacity
             key={name}
             activeOpacity={0.85}
-            onPress={() => name === 'موني مون' && setScreen('moneymoon')}
+            onPress={() => openPlatform(name)}
             style={styles.platformCard}
           >
             <Text style={styles.platformName}>{name}</Text>
             <Text style={styles.platformText}>
-              {name === 'موني مون'
+              {name === 'تعميد'
+                ? 'اضغط لعرض فرص تعميد النشطة وتوزيع المستثمرين'
+                : name === 'موني مون'
                 ? 'اضغط لإضافة وإدارة استثمارات موني مون'
                 : 'جاهزة لإضافة الفرص والحسابات'}
             </Text>
