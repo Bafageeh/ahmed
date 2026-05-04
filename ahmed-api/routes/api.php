@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonController;
 use App\Http\Controllers\Api\Ta3meedController;
+use App\Http\Controllers\Api\Ta3meedMutationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -23,6 +24,8 @@ Route::put('/moneymoon/investments/{id}', [MoneyMoonController::class, 'update']
 Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonController::class, 'receive']);
 Route::get('/ta3meed/investments', [Ta3meedController::class, 'index']);
 Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);
+Route::put('/ta3meed/investments/{id}', [Ta3meedMutationController::class, 'update']);
+Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::class, 'receive']);
 Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);
 Route::get('/income/basic', [IncomeController::class, 'index']);
 Route::post('/income/basic', [IncomeController::class, 'store']);
