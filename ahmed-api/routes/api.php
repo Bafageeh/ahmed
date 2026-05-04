@@ -17,3 +17,4 @@ Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index
 Route::get('/moneymoon/investments', [MoneyMoonController::class, 'index']);
 Route::post('/moneymoon/investments', [MoneyMoonController::class, 'store']);
 Route::put('/moneymoon/investments/{id}', [MoneyMoonController::class, 'update']);
+Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonController::class, 'receive']);
