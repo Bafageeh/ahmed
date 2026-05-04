@@ -27,15 +27,8 @@ class MoneyMoonController extends Controller
 
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'category' => ['required', 'in:A,B,C,D'],
-            'investment_date' => ['required', 'date'],
-            'maturity_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        $platform = DB::table('investment_platforms')->where('code', 'moneymoon')->first();
+        $data = $this->validatedData($request);
+        $platform = $this->moneyMoonPlatform();
 
         if (! $platform) {
             return response()->json(['message' => 'MoneyMoon platform not found'], 404);
@@ -56,10 +49,7 @@ class MoneyMoonController extends Controller
             ]);
         }
 
-        $investmentDate = Carbon::parse($data['investment_date']);
-        $maturityDate = ! empty($data['maturity_date'])
-            ? Carbon::parse($data['maturity_date'])
-            : $investmentDate->copy()->addMonthNoOverflow();
+        $dates = $this->investmentDates($data);
 
         $id = DB::table('investment_opportunities')->insertGetId([
             'account_id' => $accountId,
@@ -69,8 +59,8 @@ class MoneyMoonController extends Controller
             'principal_amount' => $data['amount'],
             'expected_profit_amount' => 0,
             'actual_profit_amount' => 0,
-            'start_date' => $investmentDate->toDateString(),
-            'maturity_date' => $maturityDate->toDateString(),
+            'start_date' => $dates['investment_date'],
+            'maturity_date' => $dates['maturity_date'],
             'status' => 'active',
             'profit_distribution' => 'at_maturity',
             'metadata' => json_encode(['category' => $data['category'], 'manual_maturity' => ! empty($data['maturity_date'])]),
@@ -80,5 +70,69 @@ class MoneyMoonController extends Controller
         ]);
 
         return response()->json(['data' => DB::table('investment_opportunities')->where('id', $id)->first()], 201);
+    }
+
+    public function update(Request $request, int $id)
+    {
+        $data = $this->validatedData($request);
+        $platform = $this->moneyMoonPlatform();
+
+        if (! $platform) {
+            return response()->json(['message' => 'MoneyMoon platform not found'], 404);
+        }
+
+        $investment = DB::table('investment_opportunities')
+            ->where('id', $id)
+            ->where('platform_id', $platform->id)
+            ->first();
+
+        if (! $investment) {
+            return response()->json(['message' => 'Investment not found'], 404);
+        }
+
+        $dates = $this->investmentDates($data);
+
+        DB::table('investment_opportunities')
+            ->where('id', $id)
+            ->update([
+                'title' => 'MoneyMoon ' . $data['category'],
+                'principal_amount' => $data['amount'],
+                'start_date' => $dates['investment_date'],
+                'maturity_date' => $dates['maturity_date'],
+                'metadata' => json_encode(['category' => $data['category'], 'manual_maturity' => ! empty($data['maturity_date'])]),
+                'notes' => $data['notes'] ?? null,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['data' => DB::table('investment_opportunities')->where('id', $id)->first()]);
+    }
+
+    private function moneyMoonPlatform()
+    {
+        return DB::table('investment_platforms')->where('code', 'moneymoon')->first();
+    }
+
+    private function validatedData(Request $request): array
+    {
+        return $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'category' => ['required', 'in:A,B,C,D'],
+            'investment_date' => ['required', 'date'],
+            'maturity_date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string'],
+        ]);
+    }
+
+    private function investmentDates(array $data): array
+    {
+        $investmentDate = Carbon::parse($data['investment_date']);
+        $maturityDate = ! empty($data['maturity_date'])
+            ? Carbon::parse($data['maturity_date'])
+            : $investmentDate->copy()->addMonthNoOverflow();
+
+        return [
+            'investment_date' => $investmentDate->toDateString(),
+            'maturity_date' => $maturityDate->toDateString(),
+        ];
     }
 }
