@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\InvestmentPlatformController;
+use App\Http\Controllers\Api\MoneyMoonController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -13,3 +14,5 @@ Route::get('/health', function () {
 });
 
 Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index']);
+Route::get('/moneymoon/investments', [MoneyMoonController::class, 'index']);
+Route::post('/moneymoon/investments', [MoneyMoonController::class, 'store']);
