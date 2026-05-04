@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import FinanceSummaryScreen from './FinanceSummaryScreen';
 import Ta3meedScreen from './Ta3meedScreen';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
@@ -32,6 +33,10 @@ export default function App() {
 
   if (screen === 'income') {
     return <BasicIncomeScreen onBack={() => setScreen('home')} />;
+  }
+
+  if (screen === 'finance') {
+    return <FinanceSummaryScreen onBack={() => setScreen('home')} />;
   }
 
   const openPlatform = (name) => {
@@ -69,6 +74,11 @@ export default function App() {
         <TouchableOpacity activeOpacity={0.85} onPress={() => setScreen('income')} style={styles.platformCard}>
           <Text style={styles.platformName}>الدخل الأساسي</Text>
           <Text style={styles.platformText}>إدخال نوع الدخل والمبلغ وإدارتهما.</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setScreen('finance')} style={styles.platformCard}>
+          <Text style={styles.platformName}>Finance</Text>
+          <Text style={styles.platformText}>عرض الأقساط والأرباح والعملاء والتنبيهات القادمة من تطبيق Finance.</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>منصات الاستثمار</Text>
