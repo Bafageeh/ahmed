@@ -25,6 +25,10 @@ export default function App() {
     return <MoneyMoonScreen onBack={() => setScreen('home')} />;
   }
 
+  if (screen === 'income') {
+    return <BasicIncomeScreen onBack={() => setScreen('home')} />;
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
@@ -45,6 +49,12 @@ export default function App() {
           </View>
         </View>
 
+        <Text style={styles.sectionTitle}>أساسيات الحساب</Text>
+        <TouchableOpacity activeOpacity={0.85} onPress={() => setScreen('income')} style={styles.platformCard}>
+          <Text style={styles.platformName}>الدخل الأساسي</Text>
+          <Text style={styles.platformText}>إدخال نوع الدخل والمبلغ وإدارتهما.</Text>
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>منصات الاستثمار</Text>
         {platforms.map((name) => (
           <TouchableOpacity
@@ -61,6 +71,156 @@ export default function App() {
             </Text>
           </TouchableOpacity>
         ))}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function BasicIncomeScreen({ onBack }) {
+  const [incomeType, setIncomeType] = useState('');
+  const [amount, setAmount] = useState('');
+  const [notes, setNotes] = useState('');
+  const [items, setItems] = useState([]);
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const totalIncome = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    [items]
+  );
+
+  const loadItems = async () => {
+    try {
+      const response = await fetch(`${API_URL}/income/basic`);
+      const json = await response.json();
+      setItems(Array.isArray(json.data) ? json.data : []);
+    } catch (error) {
+      setMessage('تعذر تحميل بيانات الدخل');
+    }
+  };
+
+  useEffect(() => {
+    loadItems();
+  }, []);
+
+  const saveIncome = async () => {
+    if (!incomeType.trim()) {
+      setMessage('ادخل نوع الدخل');
+      return;
+    }
+
+    if (!amount || Number(amount) <= 0) {
+      setMessage('ادخل المبلغ بشكل صحيح');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('جاري الحفظ...');
+
+    try {
+      const response = await fetch(`${API_URL}/income/basic`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          income_type: incomeType.trim(),
+          amount: Number(amount),
+          notes: notes || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('save failed');
+      }
+
+      setIncomeType('');
+      setAmount('');
+      setNotes('');
+      setMessage('تم حفظ الدخل الأساسي');
+      await loadItems();
+    } catch (error) {
+      setMessage('تعذر حفظ الدخل');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <TouchableOpacity style={styles.backButton} onPress={onBack}>
+          <Text style={styles.backText}>رجوع</Text>
+        </TouchableOpacity>
+
+        <View style={styles.header}>
+          <Text style={styles.badge}>أساسيات الحساب</Text>
+          <Text style={styles.title}>الدخل الأساسي</Text>
+          <Text style={styles.subtitle}>إدخال نوع الدخل والمبلغ وحفظهما في الحساب.</Text>
+        </View>
+
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryValue}>{items.length}</Text>
+            <Text style={styles.summaryLabel}>سجلات دخل</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryValue}>{totalIncome.toFixed(2)}</Text>
+            <Text style={styles.summaryLabel}>إجمالي الدخل</Text>
+          </View>
+        </View>
+
+        <View style={styles.formCard}>
+          <Text style={styles.formTitle}>إضافة دخل أساسي</Text>
+
+          <Text style={styles.inputLabel}>نوع الدخل</Text>
+          <TextInput
+            value={incomeType}
+            onChangeText={setIncomeType}
+            placeholder="مثال: راتب، إيجار، عمولة"
+            style={styles.input}
+          />
+
+          <Text style={styles.inputLabel}>المبلغ</Text>
+          <TextInput
+            value={amount}
+            onChangeText={setAmount}
+            keyboardType="decimal-pad"
+            placeholder="مثال: 5000"
+            style={styles.input}
+          />
+
+          <Text style={styles.inputLabel}>ملاحظات</Text>
+          <TextInput
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="اختياري"
+            style={[styles.input, styles.notesInput]}
+            multiline
+          />
+
+          {!!message && <Text style={styles.message}>{message}</Text>}
+
+          <TouchableOpacity style={styles.saveButton} onPress={saveIncome} disabled={saving}>
+            <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : 'حفظ الدخل'}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.sectionTitle}>سجلات الدخل</Text>
+        {items.length === 0 ? (
+          <View style={styles.platformCard}>
+            <Text style={styles.platformName}>لا يوجد دخل مسجل</Text>
+            <Text style={styles.platformText}>أضف أول دخل من النموذج بالأعلى.</Text>
+          </View>
+        ) : (
+          items.map((item) => (
+            <View key={String(item.id)} style={styles.platformCard}>
+              <Text style={styles.platformName}>{item.income_type || 'دخل'}</Text>
+              <Text style={styles.platformText}>المبلغ: {Number(item.amount || 0).toFixed(2)} ر.س</Text>
+              <Text style={styles.platformText}>التاريخ: {item.transaction_date || '-'}</Text>
+              <Text style={styles.platformText}>الحالة: {item.status || '-'}</Text>
+              {item.description ? <Text style={styles.platformText}>ملاحظات: {item.description}</Text> : null}
+            </View>
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
