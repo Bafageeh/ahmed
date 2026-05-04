@@ -12,19 +12,38 @@ class IncomeController extends Controller
     {
         $items = DB::table('financial_transactions')
             ->leftJoin('income_sources', 'financial_transactions.income_source_id', '=', 'income_sources.id')
-            ->where('financial_transactions.transaction_type', 'basic_income')
+            ->whereIn('financial_transactions.transaction_type', ['basic_income', 'linked_income'])
             ->select([
                 'financial_transactions.id',
+                'financial_transactions.external_app_key',
+                'financial_transactions.transaction_type',
                 'financial_transactions.amount',
                 'financial_transactions.currency',
                 'financial_transactions.transaction_date',
                 'financial_transactions.status',
                 'financial_transactions.description',
+                'financial_transactions.metadata',
                 'financial_transactions.created_at',
+                'income_sources.source_type',
+                'income_sources.linked_app_key',
                 'income_sources.name as income_type',
             ])
             ->orderByDesc('financial_transactions.id')
-            ->get();
+            ->get()
+            ->map(function ($item) {
+                $isLinked = $item->transaction_type === 'linked_income';
+
+                if ($isLinked) {
+                    $item->income_type = ($item->income_type ?: 'دخل مرتبط') . ' - مرتبط';
+                    $item->readonly = true;
+                    $item->display_source = $item->external_app_key ?: $item->linked_app_key ?: 'external';
+                } else {
+                    $item->readonly = false;
+                    $item->display_source = 'manual';
+                }
+
+                return $item;
+            });
 
         return response()->json(['data' => $items]);
     }
