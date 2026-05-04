@@ -62,6 +62,7 @@ export default function App() {
 }
 
 function MoneyMoonScreen({ onBack }) {
+  const [editingId, setEditingId] = useState(null);
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('A');
   const [investmentDate, setInvestmentDate] = useState(today());
@@ -90,6 +91,26 @@ function MoneyMoonScreen({ onBack }) {
     loadItems();
   }, []);
 
+  const resetForm = () => {
+    setEditingId(null);
+    setAmount('');
+    setCategory('A');
+    setInvestmentDate(today());
+    setMaturityDate('');
+    setNotes('');
+  };
+
+  const startEdit = (item) => {
+    const meta = safeJson(item.metadata);
+    setEditingId(item.id);
+    setAmount(String(item.principal_amount || ''));
+    setCategory(meta.category || 'A');
+    setInvestmentDate(item.start_date || today());
+    setMaturityDate(item.maturity_date || '');
+    setNotes(item.notes || '');
+    setMessage('تم فتح البطاقة للتعديل');
+  };
+
   const saveInvestment = async () => {
     if (!amount || Number(amount) <= 0) {
       setMessage('ادخل مبلغ الاستثمار بشكل صحيح');
@@ -97,11 +118,16 @@ function MoneyMoonScreen({ onBack }) {
     }
 
     setSaving(true);
-    setMessage('جاري الحفظ...');
+    setMessage(editingId ? 'جاري حفظ التعديل...' : 'جاري الحفظ...');
 
     try {
-      const response = await fetch(`${API_URL}/moneymoon/investments`, {
-        method: 'POST',
+      const url = editingId
+        ? `${API_URL}/moneymoon/investments/${editingId}`
+        : `${API_URL}/moneymoon/investments`;
+      const method = editingId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({
           amount: Number(amount),
@@ -116,15 +142,11 @@ function MoneyMoonScreen({ onBack }) {
         throw new Error('save failed');
       }
 
-      setAmount('');
-      setCategory('A');
-      setInvestmentDate(today());
-      setMaturityDate('');
-      setNotes('');
-      setMessage('تم حفظ استثمار موني مون');
+      resetForm();
+      setMessage(editingId ? 'تم تعديل بطاقة موني مون' : 'تم حفظ استثمار موني مون');
       await loadItems();
     } catch (error) {
-      setMessage('تعذر حفظ الاستثمار');
+      setMessage(editingId ? 'تعذر تعديل الاستثمار' : 'تعذر حفظ الاستثمار');
     } finally {
       setSaving(false);
     }
@@ -140,7 +162,7 @@ function MoneyMoonScreen({ onBack }) {
         <View style={styles.header}>
           <Text style={styles.badge}>موني مون</Text>
           <Text style={styles.title}>إدارة موني مون</Text>
-          <Text style={styles.subtitle}>إضافة استثمار حسب المبلغ والفئة وتاريخ الاستثمار.</Text>
+          <Text style={styles.subtitle}>إضافة وتعديل استثمارات موني مون من داخل التطبيق.</Text>
         </View>
 
         <View style={styles.summaryRow}>
@@ -155,7 +177,7 @@ function MoneyMoonScreen({ onBack }) {
         </View>
 
         <View style={styles.formCard}>
-          <Text style={styles.formTitle}>إضافة استثمار جديد</Text>
+          <Text style={styles.formTitle}>{editingId ? 'تعديل بطاقة استثمار' : 'إضافة استثمار جديد'}</Text>
 
           <Text style={styles.inputLabel}>المبلغ المستثمر</Text>
           <TextInput
@@ -187,11 +209,11 @@ function MoneyMoonScreen({ onBack }) {
             style={styles.input}
           />
 
-          <Text style={styles.inputLabel}>تاريخ الاستحقاق اختياري</Text>
+          <Text style={styles.inputLabel}>تاريخ الاستحقاق</Text>
           <TextInput
             value={maturityDate}
             onChangeText={setMaturityDate}
-            placeholder="اتركه فارغًا ليكون بعد شهر"
+            placeholder="اتركه فارغًا ليكون بعد شهر عند الإضافة"
             style={styles.input}
           />
 
@@ -207,8 +229,14 @@ function MoneyMoonScreen({ onBack }) {
           {!!message && <Text style={styles.message}>{message}</Text>}
 
           <TouchableOpacity style={styles.saveButton} onPress={saveInvestment} disabled={saving}>
-            <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : 'حفظ الاستثمار'}</Text>
+            <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديل' : 'حفظ الاستثمار'}</Text>
           </TouchableOpacity>
+
+          {editingId ? (
+            <TouchableOpacity style={styles.cancelButton} onPress={resetForm}>
+              <Text style={styles.cancelText}>إلغاء التعديل</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         <Text style={styles.sectionTitle}>استثمارات موني مون</Text>
@@ -218,24 +246,25 @@ function MoneyMoonScreen({ onBack }) {
             <Text style={styles.platformText}>أضف أول استثمار من النموذج بالأعلى.</Text>
           </View>
         ) : (
-          items.map((item) => <MoneyMoonCard key={String(item.id)} item={item} />)
+          items.map((item) => <MoneyMoonCard key={String(item.id)} item={item} onPress={() => startEdit(item)} />)
         )}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function MoneyMoonCard({ item }) {
+function MoneyMoonCard({ item, onPress }) {
   const meta = safeJson(item.metadata);
 
   return (
-    <View style={styles.platformCard}>
+    <TouchableOpacity activeOpacity={0.85} style={styles.platformCard} onPress={onPress}>
       <Text style={styles.platformName}>فئة {meta.category || '-'}</Text>
       <Text style={styles.platformText}>المبلغ: {Number(item.principal_amount || 0).toFixed(2)} ر.س</Text>
       <Text style={styles.platformText}>تاريخ الاستثمار: {item.start_date || '-'}</Text>
       <Text style={styles.platformText}>تاريخ الاستحقاق: {item.maturity_date || '-'}</Text>
       <Text style={styles.platformText}>الحالة: {item.status || '-'}</Text>
-    </View>
+      <Text style={styles.editHint}>اضغط على البطاقة للتعديل</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -262,6 +291,7 @@ const styles = StyleSheet.create({
   platformCard: { backgroundColor: '#fff', borderRadius: 22, padding: 18, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   platformName: { color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   platformText: { marginTop: 6, color: '#64748b', textAlign: 'right' },
+  editHint: { marginTop: 10, color: '#075985', fontWeight: '900', textAlign: 'right' },
   backButton: { alignSelf: 'flex-end', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   backText: { color: '#0f172a', fontWeight: '900' },
   formCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#e2e8f0' },
@@ -277,4 +307,6 @@ const styles = StyleSheet.create({
   message: { marginTop: 12, color: '#075985', textAlign: 'right', fontWeight: '800' },
   saveButton: { marginTop: 16, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
   saveText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  cancelButton: { marginTop: 10, backgroundColor: '#f8fafc', borderRadius: 18, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  cancelText: { color: '#0f172a', fontWeight: '900' },
 });
