@@ -12,6 +12,9 @@ import {
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const platforms = ['تعميد', 'دينار', 'ترميز', 'موني مون'];
 const today = () => new Date().toISOString().slice(0, 10);
+const profitRates = { A: 2, B: 2, C: 3, D: 4 };
+const categoryProfit = (category) => profitRates[category] || 0;
+const calcProfit = (amount, category) => Number(amount || 0) * (categoryProfit(category) / 100);
 
 export default function App() {
   const [screen, setScreen] = useState('home');
@@ -76,6 +79,13 @@ function MoneyMoonScreen({ onBack }) {
     () => items.reduce((sum, item) => sum + Number(item.principal_amount || 0), 0),
     [items]
   );
+
+  const totalProfit = useMemo(
+    () => items.reduce((sum, item) => sum + Number(item.expected_profit_amount || 0), 0),
+    [items]
+  );
+
+  const formExpectedProfit = calcProfit(amount, category);
 
   const loadItems = async () => {
     try {
@@ -176,6 +186,17 @@ function MoneyMoonScreen({ onBack }) {
           </View>
         </View>
 
+        <View style={styles.summaryRow}>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryValue}>{totalProfit.toFixed(2)}</Text>
+            <Text style={styles.summaryLabel}>إجمالي الربح المتوقع</Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryValue}>{categoryProfit(category)}%</Text>
+            <Text style={styles.summaryLabel}>ربح الفئة المختارة</Text>
+          </View>
+        </View>
+
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>{editingId ? 'تعديل بطاقة استثمار' : 'إضافة استثمار جديد'}</Text>
 
@@ -197,8 +218,14 @@ function MoneyMoonScreen({ onBack }) {
                 style={[styles.categoryButton, category === item && styles.categoryActive]}
               >
                 <Text style={[styles.categoryText, category === item && styles.categoryTextActive]}>{item}</Text>
+                <Text style={[styles.categoryRate, category === item && styles.categoryTextActive]}>{categoryProfit(item)}%</Text>
               </TouchableOpacity>
             ))}
+          </View>
+
+          <View style={styles.profitBox}>
+            <Text style={styles.profitTitle}>الربح المتوقع لهذه العملية</Text>
+            <Text style={styles.profitValue}>{formExpectedProfit.toFixed(2)} ر.س</Text>
           </View>
 
           <Text style={styles.inputLabel}>تاريخ الاستثمار</Text>
@@ -255,11 +282,16 @@ function MoneyMoonScreen({ onBack }) {
 
 function MoneyMoonCard({ item, onPress }) {
   const meta = safeJson(item.metadata);
+  const category = meta.category || '-';
+  const rate = Number(item.expected_rate || meta.profit_rate || categoryProfit(category));
+  const profit = Number(item.expected_profit_amount || calcProfit(item.principal_amount, category));
 
   return (
     <TouchableOpacity activeOpacity={0.85} style={styles.platformCard} onPress={onPress}>
-      <Text style={styles.platformName}>فئة {meta.category || '-'}</Text>
+      <Text style={styles.platformName}>فئة {category}</Text>
       <Text style={styles.platformText}>المبلغ: {Number(item.principal_amount || 0).toFixed(2)} ر.س</Text>
+      <Text style={styles.platformText}>نسبة الربح: {rate}%</Text>
+      <Text style={styles.platformText}>الربح المتوقع: {profit.toFixed(2)} ر.س</Text>
       <Text style={styles.platformText}>تاريخ الاستثمار: {item.start_date || '-'}</Text>
       <Text style={styles.platformText}>تاريخ الاستحقاق: {item.maturity_date || '-'}</Text>
       <Text style={styles.platformText}>الحالة: {item.status || '-'}</Text>
@@ -300,10 +332,14 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 14, textAlign: 'right', color: '#0f172a' },
   notesInput: { minHeight: 74, textAlignVertical: 'top' },
   categoryRow: { flexDirection: 'row', gap: 8 },
-  categoryButton: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
+  categoryButton: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingVertical: 10, alignItems: 'center' },
   categoryActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   categoryText: { color: '#0f172a', fontWeight: '900' },
+  categoryRate: { marginTop: 3, color: '#64748b', fontWeight: '800', fontSize: 12 },
   categoryTextActive: { color: '#fff' },
+  profitBox: { marginTop: 12, backgroundColor: '#ecfeff', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#cffafe' },
+  profitTitle: { color: '#0e7490', textAlign: 'right', fontWeight: '800' },
+  profitValue: { marginTop: 6, color: '#0f172a', textAlign: 'right', fontSize: 20, fontWeight: '900' },
   message: { marginTop: 12, color: '#075985', textAlign: 'right', fontWeight: '800' },
   saveButton: { marginTop: 16, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
   saveText: { color: '#fff', fontWeight: '900', fontSize: 16 },
