@@ -16,6 +16,7 @@ class IncomeController extends Controller
             ->select([
                 'financial_transactions.id',
                 'financial_transactions.external_app_key',
+                'financial_transactions.reference_number',
                 'financial_transactions.transaction_type',
                 'financial_transactions.amount',
                 'financial_transactions.currency',
@@ -35,7 +36,7 @@ class IncomeController extends Controller
 
                 if ($isLinked) {
                     $item->income_type = ($item->income_type ?: 'دخل مرتبط') . ' - مرتبط';
-                    $item->readonly = true;
+                    $item->readonly = false;
                     $item->display_source = $item->external_app_key ?: $item->linked_app_key ?: 'external';
                 } else {
                     $item->readonly = false;
@@ -90,18 +91,18 @@ class IncomeController extends Controller
     {
         $transaction = DB::table('financial_transactions')
             ->where('id', $id)
-            ->where('transaction_type', 'basic_income')
+            ->whereIn('transaction_type', ['basic_income', 'linked_income'])
             ->first();
 
         if (! $transaction) {
-            return response()->json(['message' => 'Basic income transaction not found'], 404);
+            return response()->json(['message' => 'Income transaction not found'], 404);
         }
 
         DB::table('financial_transactions')->where('id', $id)->delete();
 
         return response()->json([
             'ok' => true,
-            'message' => 'Basic income deleted successfully',
+            'message' => 'Income deleted successfully',
             'deleted_id' => $id,
         ]);
     }
