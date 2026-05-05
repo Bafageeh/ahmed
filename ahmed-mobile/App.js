@@ -371,32 +371,85 @@ function MoneyMoonScreen({ onBack }) {
 function MoneyMoonCard({ item, onEdit, onReceive, onDelete, receiving, deleting }) {
   const meta = safeJson(item.metadata);
   const category = meta.category || '-';
+  const orderNo = moneyMoonOrderNumber(item, meta);
   const rate = Number(item.expected_rate || meta.profit_rate || categoryProfit(category));
   const profit = Number(item.expected_profit_amount || calcProfit(item.principal_amount, category));
   const received = isReceived(item);
   const overdue = isOverdue(item);
+  const statusText = received ? 'مستلم' : overdue ? 'متأخر' : 'نشط';
 
   return (
-    <View style={[styles.platformCard, overdue && styles.overdueCard, received && styles.receivedCard]}>
-      <Text style={[styles.platformName, overdue && styles.overdueText]}>فئة {category}</Text>
-      {overdue ? <Text style={styles.overdueBadge}>متأخر ولم يتم الاستلام</Text> : null}
-      {received ? <Text style={styles.receivedBadge}>تم الاستلام</Text> : null}
-      <Text style={styles.platformText}>المبلغ: {Number(item.principal_amount || 0).toFixed(2)} ر.س</Text>
-      <Text style={styles.platformText}>نسبة الربح: {rate}%</Text>
-      <Text style={styles.platformText}>الربح المتوقع: {profit.toFixed(2)} ر.س</Text>
-      <Text style={styles.platformText}>تاريخ الاستثمار: {item.start_date || '-'}</Text>
-      <Text style={styles.platformText}>تاريخ الاستحقاق: {item.maturity_date || '-'}</Text>
-      <Text style={styles.platformText}>الحالة: {received ? 'مستلم' : item.status || '-'}</Text>
-
-      <View style={styles.cardActions}>
-        {!received ? <TouchableOpacity style={styles.receiveButton} onPress={onReceive} disabled={receiving || deleting}><Text style={styles.receiveText}>{receiving ? 'جاري التسجيل...' : 'تم الاستلام'}</Text></TouchableOpacity> : null}
-        <TouchableOpacity style={styles.editButton} onPress={onEdit} disabled={deleting}><Text style={styles.editText}>تعديل البطاقة</Text></TouchableOpacity>
+    <View style={[styles.moneyMoonCard, overdue && styles.moneyMoonOverdueCard, received && styles.moneyMoonReceivedCard]}>
+      <View style={styles.moneyMoonTopRow}>
+        <View style={styles.moneyMoonTitleBlock}>
+          <View style={styles.moneyMoonBadgesRow}>
+            <Text style={styles.categoryMiniBadge}>{category}</Text>
+            <Text style={[styles.statusMiniBadge, overdue && styles.statusOverdueBadge, received && styles.statusReceivedBadge]}>{statusText}</Text>
+          </View>
+          <Text style={styles.orderLabel}>رقم الطلب</Text>
+          <Text style={styles.orderNumber} numberOfLines={1}>{orderNo || '-'}</Text>
+        </View>
+        <View style={styles.moneyMoonAmountBlock}>
+          <Text style={styles.moneyMoonAmount}>{Number(item.principal_amount || 0).toLocaleString('en-US')}</Text>
+          <Text style={styles.moneyMoonCurrency}>ر.س</Text>
+        </View>
       </View>
-      <TouchableOpacity style={styles.deleteButton} onPress={onDelete} disabled={deleting}>
-        <Text style={styles.deleteText}>{deleting ? 'جاري الحذف...' : 'حذف الاستثمار'}</Text>
-      </TouchableOpacity>
+
+      <View style={styles.compactStatsRow}>
+        <CompactStat label="الربح" value={`${profit.toFixed(2)} ر.س`} />
+        <CompactStat label="النسبة" value={`${rate}%`} />
+        <CompactStat label="الاستثمار" value={item.start_date || '-'} />
+        <CompactStat label="الاستحقاق" value={item.maturity_date || '-'} />
+      </View>
+
+      <View style={styles.iconActionsRow}>
+        {!received ? (
+          <TouchableOpacity
+            style={[styles.iconActionButton, styles.receiveIconButton]}
+            onPress={onReceive}
+            disabled={receiving || deleting}
+            activeOpacity={0.82}
+          >
+            <Text style={styles.iconActionText}>{receiving ? '…' : '✓'}</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          style={[styles.iconActionButton, styles.editIconButton]}
+          onPress={onEdit}
+          disabled={deleting}
+          activeOpacity={0.82}
+        >
+          <Text style={styles.iconActionText}>✎</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.iconActionButton, styles.deleteIconButton]}
+          onPress={onDelete}
+          disabled={deleting}
+          activeOpacity={0.82}
+        >
+          <Text style={[styles.iconActionText, styles.deleteIconText]}>{deleting ? '…' : '⌫'}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
+}
+
+function CompactStat({ label, value }) {
+  return (
+    <View style={styles.compactStatBox}>
+      <Text style={styles.compactStatLabel}>{label}</Text>
+      <Text style={styles.compactStatValue} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
+
+function moneyMoonOrderNumber(item, meta) {
+  if (meta?.external_order_no) return String(meta.external_order_no);
+  if (meta?.order_no) return String(meta.order_no);
+  const titleMatch = String(item.title || '').match(/L-[A-Za-z0-9-]+/);
+  if (titleMatch) return titleMatch[0];
+  const notesMatch = String(item.notes || '').match(/L-[A-Za-z0-9-]+/);
+  return notesMatch ? notesMatch[0] : '';
 }
 
 function safeJson(value) {
@@ -422,12 +475,8 @@ const styles = StyleSheet.create({
   overdueText: { color: '#b91c1c' },
   sectionTitle: { marginTop: 24, marginBottom: 10, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   platformCard: { backgroundColor: '#fff', borderRadius: 22, padding: 18, marginBottom: 10, borderWidth: 1, borderColor: '#e2e8f0' },
-  overdueCard: { backgroundColor: '#fef2f2', borderColor: '#ef4444' },
-  receivedCard: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
   platformName: { color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   platformText: { marginTop: 6, color: '#64748b', textAlign: 'right' },
-  overdueBadge: { marginTop: 8, color: '#991b1b', backgroundColor: '#fee2e2', borderRadius: 12, padding: 8, textAlign: 'right', fontWeight: '900' },
-  receivedBadge: { marginTop: 8, color: '#166534', backgroundColor: '#dcfce7', borderRadius: 12, padding: 8, textAlign: 'right', fontWeight: '900' },
   backButton: { alignSelf: 'flex-end', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   backText: { color: '#0f172a', fontWeight: '900' },
   formCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 24, padding: 18, borderWidth: 1, borderColor: '#e2e8f0' },
@@ -449,11 +498,30 @@ const styles = StyleSheet.create({
   saveText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   cancelButton: { marginTop: 10, backgroundColor: '#f8fafc', borderRadius: 18, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
   cancelText: { color: '#0f172a', fontWeight: '900' },
-  cardActions: { marginTop: 14, flexDirection: 'row-reverse', gap: 8 },
-  receiveButton: { flex: 1, backgroundColor: '#166534', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
-  receiveText: { color: '#fff', fontWeight: '900' },
-  editButton: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
-  editText: { color: '#0f172a', fontWeight: '900' },
-  deleteButton: { marginTop: 10, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
-  deleteText: { color: '#be123c', fontWeight: '900' },
+  moneyMoonCard: { backgroundColor: '#fff', borderRadius: 18, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  moneyMoonOverdueCard: { backgroundColor: '#fff7f7', borderColor: '#fecaca' },
+  moneyMoonReceivedCard: { backgroundColor: '#f7fff9', borderColor: '#bbf7d0' },
+  moneyMoonTopRow: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  moneyMoonTitleBlock: { flex: 1, alignItems: 'flex-end' },
+  moneyMoonBadgesRow: { flexDirection: 'row-reverse', gap: 6, marginBottom: 6 },
+  categoryMiniBadge: { minWidth: 28, textAlign: 'center', backgroundColor: '#ecfeff', color: '#0891b2', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, overflow: 'hidden', fontWeight: '900', fontSize: 12 },
+  statusMiniBadge: { backgroundColor: '#eef2ff', color: '#4338ca', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden', fontWeight: '900', fontSize: 12 },
+  statusOverdueBadge: { backgroundColor: '#fee2e2', color: '#b91c1c' },
+  statusReceivedBadge: { backgroundColor: '#dcfce7', color: '#166534' },
+  orderLabel: { color: '#94a3b8', fontSize: 11, fontWeight: '800', textAlign: 'right' },
+  orderNumber: { marginTop: 2, color: '#0f172a', fontSize: 13, fontWeight: '900', textAlign: 'right' },
+  moneyMoonAmountBlock: { alignItems: 'flex-start', minWidth: 82 },
+  moneyMoonAmount: { color: '#06b6d4', fontSize: 19, fontWeight: '900', textAlign: 'left' },
+  moneyMoonCurrency: { marginTop: -2, color: '#64748b', fontSize: 11, fontWeight: '800', textAlign: 'left' },
+  compactStatsRow: { marginTop: 10, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7 },
+  compactStatBox: { flexGrow: 1, flexBasis: '47%', backgroundColor: '#f8fafc', borderRadius: 13, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: '#edf2f7' },
+  compactStatLabel: { color: '#94a3b8', fontSize: 10, fontWeight: '800', textAlign: 'right' },
+  compactStatValue: { marginTop: 2, color: '#334155', fontSize: 12, fontWeight: '900', textAlign: 'right' },
+  iconActionsRow: { marginTop: 10, flexDirection: 'row-reverse', gap: 8, justifyContent: 'flex-start' },
+  iconActionButton: { width: 42, height: 38, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  receiveIconButton: { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' },
+  editIconButton: { backgroundColor: '#eef6ff', borderColor: '#bfdbfe' },
+  deleteIconButton: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  iconActionText: { color: '#0f172a', fontSize: 19, fontWeight: '900' },
+  deleteIconText: { color: '#be123c' },
 });
