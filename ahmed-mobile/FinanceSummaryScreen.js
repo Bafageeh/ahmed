@@ -10,55 +10,21 @@ import {
 } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
-
-const labels = {
-  income: {
-    monthly_installments_total: 'مجموع الأقساط الشهرية',
-    monthly_profit_total: 'إجمالي الربح الشهري',
-    ahmed_monthly_profit: 'ربح أحمد الشهري',
-    ali_monthly_profit: 'ربح علي الشهري',
-  },
-  portfolio: {
-    remaining_installments_total: 'إجمالي المتبقي من الأقساط',
-    remaining_principal_total: 'رأس المال المتبقي',
-    ahmed_total_profit: 'إجمالي ربح أحمد',
-  },
-  counts: {
-    clients_total: 'إجمالي العملاء',
-    clients_active: 'النشطين',
-    clients_stuck: 'المتعثرين',
-    clients_done: 'المنتهين',
-    clients_court: 'قضايا',
-    clients_overdue: 'عملاء متأخرين',
-    overdue_installments: 'عدد الأقساط المتأخرة',
-  },
-  alerts: {
-    overdue_amount: 'مبلغ الأقساط المتأخرة',
-  },
-};
-
 const money = (value, currency = 'SAR') => `${Number(value || 0).toFixed(2)} ${currency === 'SAR' ? 'ر.س' : currency}`;
-const count = (value) => String(Number(value || 0));
 
 export default function FinanceSummaryScreen({ onBack }) {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState(false);
+  const [updatingKey, setUpdatingKey] = useState(null);
   const [message, setMessage] = useState('');
 
   const currency = summary?.currency || 'SAR';
+  const metrics = Array.isArray(summary?.metrics) ? summary.metrics : [];
+  const visibleMetrics = useMemo(() => metrics.filter((metric) => metric.visible !== false), [metrics]);
+  const hiddenMetrics = useMemo(() => metrics.filter((metric) => metric.visible === false), [metrics]);
+  const incomeMetrics = visibleMetrics.filter((metric) => metric.group === 'income');
+  const portfolioMetrics = visibleMetrics.filter((metric) => metric.group === 'portfolio');
   const period = summary?.period || {};
-
-  const topCards = useMemo(() => [
-    {
-      label: labels.income.ahmed_monthly_profit,
-      value: money(summary?.income?.ahmed_monthly_profit, currency),
-    },
-    {
-      label: labels.income.monthly_installments_total,
-      value: money(summary?.income?.monthly_installments_total, currency),
-    },
-  ], [summary, currency]);
 
   const loadSummary = async () => {
     setLoading(true);
@@ -74,33 +40,44 @@ export default function FinanceSummaryScreen({ onBack }) {
 
       setSummary(json.data || null);
     } catch (error) {
-      setMessage('تعذر تحميل بيانات Finance');
+      setMessage('تعذر جلب بيانات Finance.');
+      setSummary(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const syncSummary = async () => {
-    setSyncing(true);
-    setMessage('جاري مزامنة بيانات Finance...');
+  const toggleMetric = async (metric) => {
+    const nextVisible = metric.visible === false;
+    setUpdatingKey(metric.key);
+    setMessage('');
+
+    setSummary((current) => {
+      if (!current?.metrics) return current;
+      return {
+        ...current,
+        metrics: current.metrics.map((item) =>
+          item.key === metric.key ? { ...item, visible: nextVisible } : item
+        ),
+      };
+    });
 
     try {
-      const response = await fetch(`${API_URL}/income/linked/finance/summary/sync`, {
+      const response = await fetch(`${API_URL}/income/linked/finance/visibility`, {
         method: 'POST',
-        headers: { Accept: 'application/json' },
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ key: metric.key, visible: nextVisible }),
       });
       const json = await response.json();
 
       if (!response.ok) {
-        throw new Error(json?.message || 'sync failed');
+        throw new Error(json?.message || 'visibility failed');
       }
-
-      setSummary(json?.data?.summary || summary);
-      setMessage('تم تحديث وحفظ بيانات Finance داخل أحمد');
     } catch (error) {
-      setMessage('تعذر مزامنة بيانات Finance');
+      setMessage('تعذر حفظ حالة الإظهار للبطاقة.');
+      await loadSummary();
     } finally {
-      setSyncing(false);
+      setUpdatingKey(null);
     }
   };
 
@@ -117,52 +94,66 @@ export default function FinanceSummaryScreen({ onBack }) {
 
         <View style={styles.header}>
           <Text style={styles.badge}>Finance</Text>
-          <Text style={styles.title}>قيم Finance في أحمد</Text>
-          <Text style={styles.subtitle}>عرض مباشر للأقساط والأرباح والعملاء والتنبيهات من تطبيق Finance.</Text>
+          <Text style={styles.title}>الدخل والتمويل من Finance</Text>
+          <Text style={styles.subtitle}>مصدر البيانات: Finance لحساب أحمد admin@pm.sa. القيم مستوردة للعرض فقط ولا تُعدل يدويًا داخل أحمد.</Text>
         </View>
 
         {loading ? (
           <View style={styles.loadingCard}>
             <ActivityIndicator />
-            <Text style={styles.loadingText}>جاري تحميل بيانات Finance...</Text>
+            <Text style={styles.loadingText}>جاري جلب بيانات Finance...</Text>
           </View>
         ) : null}
 
         {!loading && summary ? (
           <>
-            <View style={styles.summaryRow}>
-              {topCards.map((item) => (
-                <View key={item.label} style={styles.summaryCard}>
-                  <Text style={styles.summaryValue}>{item.value}</Text>
-                  <Text style={styles.summaryLabel}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
-
             <View style={styles.syncCard}>
-              <Text style={styles.syncTitle}>آخر تحديث</Text>
-              <Text style={styles.syncText}>{summary.synced_at || '-'}</Text>
+              <Text style={styles.syncTitle}>مصدر البيانات</Text>
+              <Text style={styles.syncText}>Finance</Text>
+              <Text style={styles.syncText}>الحساب: {summary.source_email || 'admin@pm.sa'}</Text>
+              <Text style={styles.syncText}>آخر مزامنة من Finance: {summary.synced_at || '-'}</Text>
               <Text style={styles.syncText}>الفترة: {period.from || '-'} إلى {period.to || '-'}</Text>
               {!!message && <Text style={styles.message}>{message}</Text>}
-              <TouchableOpacity style={styles.saveButton} onPress={syncSummary} disabled={syncing}>
-                <Text style={styles.saveText}>{syncing ? 'جاري المزامنة...' : 'تحديث وحفظ في أحمد'}</Text>
+              <TouchableOpacity style={styles.refreshButton} onPress={loadSummary}>
+                <Text style={styles.refreshText}>تحديث القراءة من Finance</Text>
               </TouchableOpacity>
             </View>
 
-            <Section title="الدخل" data={summary.income} labelMap={labels.income} currency={currency} formatter={money} />
-            <Section title="المحفظة" data={summary.portfolio} labelMap={labels.portfolio} currency={currency} formatter={money} />
-            <Section title="العملاء والحالات" data={summary.counts} labelMap={labels.counts} formatter={count} />
-            <Section title="التنبيهات" data={summary.alerts} labelMap={labels.alerts} currency={currency} formatter={money} danger />
+            <MetricSection
+              title="دخل مستورد من Finance"
+              metrics={incomeMetrics}
+              currency={currency}
+              onToggle={toggleMetric}
+              updatingKey={updatingKey}
+            />
+            <MetricSection
+              title="محفظة / تمويل"
+              metrics={portfolioMetrics}
+              currency={currency}
+              onToggle={toggleMetric}
+              updatingKey={updatingKey}
+            />
+
+            {hiddenMetrics.length > 0 ? (
+              <MetricSection
+                title="بطاقات مخفية"
+                metrics={hiddenMetrics}
+                currency={currency}
+                onToggle={toggleMetric}
+                updatingKey={updatingKey}
+                hidden
+              />
+            ) : null}
           </>
         ) : null}
 
         {!loading && !summary ? (
           <View style={styles.syncCard}>
-            <Text style={styles.syncTitle}>لم تصل بيانات Finance</Text>
-            <Text style={styles.syncText}>تأكد أن endpoint الخاص بـ Finance يعمل، ثم أعد المحاولة.</Text>
+            <Text style={styles.syncTitle}>تعذر جلب بيانات Finance.</Text>
+            <Text style={styles.syncText}>لم يتم حساب أي قيمة داخل أحمد. أعد المحاولة بعد التأكد من توفر رابط Finance.</Text>
             {!!message && <Text style={styles.message}>{message}</Text>}
-            <TouchableOpacity style={styles.saveButton} onPress={loadSummary}>
-              <Text style={styles.saveText}>إعادة التحميل</Text>
+            <TouchableOpacity style={styles.refreshButton} onPress={loadSummary}>
+              <Text style={styles.refreshText}>إعادة المحاولة</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -171,26 +162,49 @@ export default function FinanceSummaryScreen({ onBack }) {
   );
 }
 
-function Section({ title, data = {}, labelMap = {}, currency, formatter, danger }) {
-  const entries = Object.keys(labelMap).map((key) => ({
-    key,
-    label: labelMap[key],
-    value: data?.[key],
-  }));
+function MetricSection({ title, metrics, currency, onToggle, updatingKey, hidden }) {
+  if (!metrics.length) return null;
 
   return (
     <View>
       <Text style={styles.sectionTitle}>{title}</Text>
       <View style={styles.grid}>
-        {entries.map((item) => (
-          <View key={item.key} style={[styles.metricCard, danger && Number(item.value || 0) > 0 && styles.dangerCard]}>
-            <Text style={[styles.metricValue, danger && Number(item.value || 0) > 0 && styles.dangerText]}>
-              {formatter(item.value, currency)}
-            </Text>
-            <Text style={[styles.metricLabel, danger && Number(item.value || 0) > 0 && styles.dangerText]}>{item.label}</Text>
-          </View>
+        {metrics.map((metric) => (
+          <FinanceMetricCard
+            key={metric.key}
+            metric={metric}
+            currency={currency}
+            onToggle={onToggle}
+            updating={updatingKey === metric.key}
+            hidden={hidden}
+          />
         ))}
       </View>
+    </View>
+  );
+}
+
+function FinanceMetricCard({ metric, currency, onToggle, updating, hidden }) {
+  return (
+    <View style={[styles.metricCard, hidden && styles.hiddenMetricCard]}>
+      <View style={styles.metricTopRow}>
+        <Text style={styles.sourcePill}>Finance</Text>
+        <Text style={styles.lockPill}>غير قابل للتعديل</Text>
+      </View>
+      <Text style={[styles.metricValue, hidden && styles.hiddenText]}>{money(metric.amount, metric.currency || currency)}</Text>
+      <Text style={[styles.metricLabel, hidden && styles.hiddenText]}>{metric.title}</Text>
+      <Text style={styles.metricType}>{metric.type}</Text>
+      <Text style={styles.metricPath}>{metric.path}</Text>
+      <TouchableOpacity
+        style={[styles.toggleButton, hidden && styles.showButton]}
+        onPress={() => onToggle(metric)}
+        disabled={updating}
+        activeOpacity={0.82}
+      >
+        <Text style={[styles.toggleText, hidden && styles.showText]}>
+          {updating ? 'جاري الحفظ...' : hidden ? 'إظهار البطاقة' : 'إخفاء البطاقة'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -200,27 +214,32 @@ const styles = StyleSheet.create({
   container: { padding: 18, paddingBottom: 36 },
   header: { marginTop: 18, backgroundColor: '#fff', borderRadius: 28, padding: 24 },
   badge: { alignSelf: 'flex-start', backgroundColor: '#eef6ff', color: '#075985', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '800' },
-  title: { marginTop: 16, fontSize: 31, fontWeight: '900', color: '#0f172a', textAlign: 'right' },
-  subtitle: { marginTop: 8, color: '#475569', fontSize: 16, textAlign: 'right' },
+  title: { marginTop: 16, fontSize: 30, fontWeight: '900', color: '#0f172a', textAlign: 'right' },
+  subtitle: { marginTop: 8, color: '#475569', fontSize: 15, lineHeight: 24, textAlign: 'right' },
   loadingCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 22, padding: 22, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
   loadingText: { marginTop: 10, color: '#64748b', fontWeight: '800' },
   backButton: { alignSelf: 'flex-end', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, borderWidth: 1, borderColor: '#e2e8f0' },
   backText: { color: '#0f172a', fontWeight: '900' },
-  summaryRow: { marginTop: 12, flexDirection: 'row-reverse', gap: 10 },
-  summaryCard: { flex: 1, backgroundColor: '#fff', borderRadius: 20, padding: 18, borderWidth: 1, borderColor: '#e2e8f0' },
-  summaryValue: { color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'right' },
-  summaryLabel: { marginTop: 5, color: '#64748b', textAlign: 'right' },
   syncCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: '#e2e8f0' },
   syncTitle: { color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' },
-  syncText: { marginTop: 6, color: '#64748b', textAlign: 'right' },
+  syncText: { marginTop: 6, color: '#64748b', textAlign: 'right', fontWeight: '700' },
   sectionTitle: { marginTop: 24, marginBottom: 10, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   grid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  metricCard: { width: '48%', backgroundColor: '#fff', borderRadius: 18, padding: 15, borderWidth: 1, borderColor: '#e2e8f0' },
+  metricCard: { width: '48%', backgroundColor: '#fff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: '#e2e8f0' },
+  hiddenMetricCard: { backgroundColor: '#f8fafc', opacity: 0.78 },
+  metricTopRow: { flexDirection: 'row-reverse', gap: 5, flexWrap: 'wrap', marginBottom: 10 },
+  sourcePill: { backgroundColor: '#ecfeff', color: '#0e7490', borderRadius: 999, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: '900' },
+  lockPill: { backgroundColor: '#f1f5f9', color: '#475569', borderRadius: 999, overflow: 'hidden', paddingHorizontal: 8, paddingVertical: 4, fontSize: 10, fontWeight: '900' },
   metricValue: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
-  metricLabel: { marginTop: 6, color: '#64748b', textAlign: 'right', fontWeight: '700' },
-  dangerCard: { backgroundColor: '#fef2f2', borderColor: '#fecaca' },
-  dangerText: { color: '#b91c1c' },
-  message: { marginTop: 12, color: '#075985', textAlign: 'right', fontWeight: '800' },
-  saveButton: { marginTop: 16, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
-  saveText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  metricLabel: { marginTop: 7, color: '#0f172a', textAlign: 'right', fontWeight: '900', lineHeight: 20 },
+  metricType: { marginTop: 5, color: '#64748b', textAlign: 'right', fontSize: 12, fontWeight: '800' },
+  metricPath: { marginTop: 4, color: '#94a3b8', textAlign: 'right', fontSize: 10, fontWeight: '700' },
+  hiddenText: { color: '#64748b' },
+  toggleButton: { marginTop: 12, borderRadius: 14, paddingVertical: 10, alignItems: 'center', backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' },
+  showButton: { backgroundColor: '#ecfdf5', borderColor: '#bbf7d0' },
+  toggleText: { color: '#c2410c', fontWeight: '900', fontSize: 12 },
+  showText: { color: '#166534' },
+  refreshButton: { marginTop: 16, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
+  refreshText: { color: '#fff', fontWeight: '900', fontSize: 16 },
+  message: { marginTop: 12, color: '#b91c1c', textAlign: 'right', fontWeight: '900' },
 });
