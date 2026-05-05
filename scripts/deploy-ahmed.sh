@@ -44,6 +44,12 @@ if [ -d "$API_DIR" ]; then
   php artisan migrate --force
 fi
 
+cd "$PROJECT_PATH"
+if [ -f scripts/patch-moneymoon-topbar.py ]; then
+  log "Patching MoneyMoon mobile UI"
+  python3 scripts/patch-moneymoon-topbar.py
+fi
+
 if [ -d "$WEB_DIR" ]; then
   log "Building React web app"
   cd "$WEB_DIR"
