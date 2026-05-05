@@ -9,9 +9,7 @@ API_DIR="$PROJECT_PATH/ahmed-api"
 WEB_DIR="$PROJECT_PATH/ahmed-web"
 MOBILE_DIR="$PROJECT_PATH/ahmed-mobile"
 
-log() {
-  echo "[Ahmed Deploy] $1"
-}
+log() { echo "[Ahmed Deploy] $1"; }
 
 log "Starting deployment in $PROJECT_PATH"
 
@@ -25,7 +23,6 @@ cd "$PROJECT_PATH"
 log "Fetching latest main branch"
 git fetch origin main
 git reset --hard origin/main
-git clean -fd --exclude='ahmed-api/.env' --exclude='ahmed-mobile/.env' --exclude='ahmed-api/storage' --exclude='ahmed-api/vendor' --exclude='ahmed-web/node_modules' --exclude='ahmed-mobile/node_modules'
 
 if [ -d "$API_DIR" ]; then
   log "Installing Laravel dependencies"
@@ -45,30 +42,18 @@ if [ -d "$API_DIR" ]; then
 fi
 
 cd "$PROJECT_PATH"
-if [ -f scripts/patch-moneymoon-topbar.py ]; then
-  log "Patching MoneyMoon mobile UI top bar"
-  python3 scripts/patch-moneymoon-topbar.py
-fi
-
-if [ -f scripts/patch-moneymoon-add-edit-flow.py ]; then
-  log "Patching MoneyMoon add screen and inline edit flow"
-  python3 scripts/patch-moneymoon-add-edit-flow.py
-fi
-
-if [ -f scripts/patch-moneymoon-compact-inline-edit.py ]; then
-  log "Patching MoneyMoon compact inline edit form"
-  python3 scripts/patch-moneymoon-compact-inline-edit.py
-fi
-
-if [ -f scripts/patch-basic-income-compact.py ]; then
-  log "Patching basic income compact UI"
-  python3 scripts/patch-basic-income-compact.py
-fi
-
-if [ -f scripts/patch-income-linked-sync-ui.py ]; then
-  log "Patching income linked sync UI"
-  python3 scripts/patch-income-linked-sync-ui.py
-fi
+for patch in \
+  scripts/patch-moneymoon-topbar.py \
+  scripts/patch-moneymoon-add-edit-flow.py \
+  scripts/patch-moneymoon-compact-inline-edit.py \
+  scripts/patch-basic-income-compact.py \
+  scripts/patch-income-linked-sync-ui.py
+  do
+    if [ -f "$patch" ]; then
+      log "Running $patch"
+      python3 "$patch"
+    fi
+  done
 
 if [ -d "$WEB_DIR" ]; then
   log "Building React web app"
@@ -94,7 +79,7 @@ if [ -d "$MOBILE_DIR" ]; then
   cd "$PROJECT_PATH"
   log "Restarting Expo development server"
   chmod +x scripts/restart-expo-ahmed.sh
-  bash scripts/restart-expo-ahmed.sh
+  bash scripts/restart-expo-ahmed.sh || log "Expo restart failed; deployment continues"
 fi
 
 if command -v php >/dev/null 2>&1 && [ -d "$API_DIR" ]; then
