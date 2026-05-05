@@ -30,6 +30,7 @@ Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::cla
 Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);
 Route::get('/income/basic', [IncomeController::class, 'index']);
 Route::post('/income/basic', [IncomeController::class, 'store']);
+Route::delete('/income/basic/{id}', [IncomeController::class, 'destroy']);
 Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
 Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
 Route::post('/income/linked/finance/summary/sync', [LinkedIncomeController::class, 'syncFinanceSummary']);
