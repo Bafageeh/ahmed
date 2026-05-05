@@ -292,6 +292,13 @@ class LinkedIncomeController extends Controller
                 'type' => 'دخل مستورد من Finance',
                 'group' => 'income',
             ],
+            'active_monthly_installments' => [
+                'path' => 'portfolio.active_monthly_installments',
+                'title' => 'القسط الشهري النشط',
+                'description' => 'مجموع الأقساط الشهرية للعملاء النشطين والمتأخرين فقط، مع استبعاد المتعثرين والقضايا والمنتهين والملغيين. المتأخر يدخل في الحساب لأنه ليس متعثرًا.',
+                'type' => 'قيمة مستوردة من Finance',
+                'group' => 'portfolio',
+            ],
             'remaining_installments_total' => [
                 'path' => 'portfolio.remaining_installments_total',
                 'title' => 'إجمالي المتبقي من الأقساط',
