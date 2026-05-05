@@ -109,7 +109,6 @@ class LinkedIncomeController extends Controller
         }
 
         $sourceId = $this->incomeSourceId('أرباح موني مون', 'SAR', 'moneymoon');
-
         $investments = DB::table('investment_opportunities')
             ->where('platform_id', $platformId)
             ->where('investment_type', 'moneymoon')
@@ -133,22 +132,13 @@ class LinkedIncomeController extends Controller
         $savedId = null;
 
         if ($totalProfit > 0) {
-            $savedId = $this->upsertTransaction(
-                $sourceId,
-                'moneymoon',
-                $reference,
-                $label,
-                $totalProfit,
-                'SAR',
-                $transactionDate,
-                [
-                    'source' => 'moneymoon_profit_total_auto',
-                    'investment_count' => $investmentCount,
-                    'total_expected_profit' => $totalProfit,
-                    'aggregation' => 'one_card_total',
-                    'synced_at' => now()->toDateTimeString(),
-                ]
-            );
+            $savedId = $this->upsertTransaction($sourceId, 'moneymoon', $reference, $label, $totalProfit, 'SAR', $transactionDate, [
+                'source' => 'moneymoon_profit_total_auto',
+                'investment_count' => $investmentCount,
+                'total_expected_profit' => $totalProfit,
+                'aggregation' => 'one_card_total',
+                'synced_at' => now()->toDateTimeString(),
+            ]);
         }
 
         return response()->json([
@@ -179,23 +169,16 @@ class LinkedIncomeController extends Controller
 
         foreach ($viewData['metrics'] as $metric) {
             $reference = 'finance-summary-' . $metric['key'] . '-' . $transactionDate;
-            $saved[] = $this->upsertTransaction(
-                $sourceId,
-                'finance',
-                $reference,
-                $metric['title'],
-                (float) $metric['amount'],
-                $currency,
-                $transactionDate,
-                [
-                    'source' => 'finance_summary',
-                    'source_email' => 'admin@pm.sa',
-                    'metric' => $metric['key'],
-                    'path' => $metric['path'],
-                    'type' => $metric['type'],
-                    'synced_at' => $viewData['synced_at'],
-                ]
-            );
+            $saved[] = $this->upsertTransaction($sourceId, 'finance', $reference, $metric['title'], (float) $metric['amount'], $currency, $transactionDate, [
+                'source' => 'finance_summary',
+                'source_email' => 'admin@pm.sa',
+                'metric' => $metric['key'],
+                'path' => $metric['path'],
+                'type' => $metric['type'],
+                'description' => $metric['description'] ?? null,
+                'details' => $metric['details'] ?? [],
+                'synced_at' => $viewData['synced_at'],
+            ]);
         }
 
         return response()->json([
@@ -254,10 +237,22 @@ class LinkedIncomeController extends Controller
         $metrics = [];
 
         foreach ($this->financeMetricDefinitions() as $key => $definition) {
+            $details = [];
+
+            foreach (($definition['details'] ?? []) as $detail) {
+                $details[] = [
+                    'path' => $detail['path'],
+                    'title' => $detail['title'],
+                    'amount' => round((float) data_get($payload, $detail['path'], 0), 2),
+                    'currency' => $payload['currency'] ?? 'SAR',
+                ];
+            }
+
             $metrics[] = [
                 'key' => $key,
                 'path' => $definition['path'],
                 'title' => $definition['title'],
+                'description' => $definition['description'] ?? null,
                 'type' => $definition['type'],
                 'group' => $definition['group'],
                 'amount' => round((float) data_get($payload, $definition['path'], 0), 2),
@@ -266,6 +261,7 @@ class LinkedIncomeController extends Controller
                 'source_email' => 'admin@pm.sa',
                 'editable' => false,
                 'visible' => $visibility[$key] ?? true,
+                'details' => $details,
             ];
         }
 
@@ -310,9 +306,26 @@ class LinkedIncomeController extends Controller
             ],
             'ahmed_total_profit' => [
                 'path' => 'portfolio.ahmed_total_profit',
-                'title' => 'إجمالي ربح أحمد',
+                'title' => 'إجمالي ربح أحمد من العملاء النشطين',
                 'type' => 'محفظة / تمويل',
                 'group' => 'portfolio',
+            ],
+            'ahmed_net_profit_after_stuck_deduction' => [
+                'path' => 'portfolio.ahmed_net_profit_after_stuck_deduction',
+                'title' => 'صافي ربح أحمد بعد خصم المتعثرين',
+                'description' => 'إجمالي ربح أحمد من العملاء النشطين مطروحًا منه ربح أحمد من العملاء المتعثرين.',
+                'type' => 'قيمة مستوردة من Finance',
+                'group' => 'portfolio',
+                'details' => [
+                    [
+                        'path' => 'portfolio.ahmed_total_profit',
+                        'title' => 'إجمالي ربح أحمد من العملاء النشطين',
+                    ],
+                    [
+                        'path' => 'portfolio.ahmed_stuck_profit_deduction',
+                        'title' => 'خصم ربح العملاء المتعثرين',
+                    ],
+                ],
             ],
         ];
     }
