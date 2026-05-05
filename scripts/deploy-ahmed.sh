@@ -46,8 +46,13 @@ fi
 
 cd "$PROJECT_PATH"
 if [ -f scripts/patch-moneymoon-topbar.py ]; then
-  log "Patching MoneyMoon mobile UI"
+  log "Patching MoneyMoon mobile UI top bar"
   python3 scripts/patch-moneymoon-topbar.py
+fi
+
+if [ -f scripts/patch-moneymoon-add-edit-flow.py ]; then
+  log "Patching MoneyMoon add screen and inline edit flow"
+  python3 scripts/patch-moneymoon-add-edit-flow.py
 fi
 
 if [ -d "$WEB_DIR" ]; then
