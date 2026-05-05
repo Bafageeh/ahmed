@@ -91,47 +91,54 @@ class LinkedIncomeController extends Controller
         }
 
         $sourceId = $this->incomeSourceId('أرباح موني مون', 'SAR', 'moneymoon');
+
         $investments = DB::table('investment_opportunities')
             ->where('platform_id', $platformId)
             ->where('investment_type', 'moneymoon')
             ->where('expected_profit_amount', '>', 0)
-            ->orderByDesc('id')
             ->get();
 
-        $saved = [];
+        $totalProfit = round((float) $investments->sum(fn ($investment) => (float) $investment->expected_profit_amount), 2);
+        $investmentCount = $investments->count();
+        $transactionDate = now()->toDateString();
+        $reference = 'moneymoon-profits-total';
+        $label = 'إجمالي أرباح موني مون';
 
-        foreach ($investments as $investment) {
-            $metadata = $this->metadata($investment->metadata ?? null);
-            $orderNo = $this->orderNumber($investment, $metadata) ?: ('investment-' . $investment->id);
-            $transactionDate = $investment->maturity_date ?: $investment->start_date ?: now()->toDateString();
-            $label = 'ربح موني مون - ' . $orderNo;
-            $reference = 'moneymoon-profit-' . $orderNo;
+        DB::table('financial_transactions')
+            ->where('external_app_key', 'moneymoon')
+            ->where(function ($query) use ($reference) {
+                $query->where('reference_number', 'like', 'moneymoon-profit-%')
+                    ->orWhere('reference_number', $reference);
+            })
+            ->delete();
 
-            $saved[] = $this->upsertTransaction(
+        $savedId = null;
+
+        if ($totalProfit > 0) {
+            $savedId = $this->upsertTransaction(
                 $sourceId,
                 'moneymoon',
                 $reference,
                 $label,
-                (float) $investment->expected_profit_amount,
+                $totalProfit,
                 'SAR',
                 $transactionDate,
                 [
-                    'source' => 'moneymoon_profit_auto',
-                    'investment_id' => $investment->id,
-                    'order_no' => $orderNo,
-                    'category' => $metadata['category'] ?? null,
-                    'profit_rate' => $investment->expected_rate ?? ($metadata['profit_rate'] ?? null),
-                    'principal_amount' => $investment->principal_amount,
-                    'maturity_date' => $investment->maturity_date,
-                    'status' => $investment->status,
+                    'source' => 'moneymoon_profit_total_auto',
+                    'investment_count' => $investmentCount,
+                    'total_expected_profit' => $totalProfit,
+                    'aggregation' => 'one_card_total',
+                    'synced_at' => now()->toDateTimeString(),
                 ]
             );
         }
 
         return response()->json([
             'data' => [
-                'saved_count' => count($saved),
-                'saved_ids' => $saved,
+                'saved_count' => $savedId ? 1 : 0,
+                'saved_ids' => $savedId ? [$savedId] : [],
+                'total_profit' => $totalProfit,
+                'investment_count' => $investmentCount,
             ],
         ]);
     }
