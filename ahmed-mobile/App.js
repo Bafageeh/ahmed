@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -23,31 +24,14 @@ const isOverdue = (item) => Boolean(item.maturity_date && item.maturity_date < t
 export default function App() {
   const [screen, setScreen] = useState('home');
 
-  if (screen === 'ta3meed') {
-    return <Ta3meedScreen onBack={() => setScreen('home')} />;
-  }
-
-  if (screen === 'moneymoon') {
-    return <MoneyMoonScreen onBack={() => setScreen('home')} />;
-  }
-
-  if (screen === 'income') {
-    return <BasicIncomeScreen onBack={() => setScreen('home')} />;
-  }
-
-  if (screen === 'finance') {
-    return <FinanceSummaryScreen onBack={() => setScreen('home')} />;
-  }
+  if (screen === 'ta3meed') return <Ta3meedScreen onBack={() => setScreen('home')} />;
+  if (screen === 'moneymoon') return <MoneyMoonScreen onBack={() => setScreen('home')} />;
+  if (screen === 'income') return <BasicIncomeScreen onBack={() => setScreen('home')} />;
+  if (screen === 'finance') return <FinanceSummaryScreen onBack={() => setScreen('home')} />;
 
   const openPlatform = (name) => {
-    if (name === 'تعميد') {
-      setScreen('ta3meed');
-      return;
-    }
-
-    if (name === 'موني مون') {
-      setScreen('moneymoon');
-    }
+    if (name === 'تعميد') setScreen('ta3meed');
+    if (name === 'موني مون') setScreen('moneymoon');
   };
 
   return (
@@ -83,12 +67,7 @@ export default function App() {
 
         <Text style={styles.sectionTitle}>منصات الاستثمار</Text>
         {platforms.map((name) => (
-          <TouchableOpacity
-            key={name}
-            activeOpacity={0.85}
-            onPress={() => openPlatform(name)}
-            style={styles.platformCard}
-          >
+          <TouchableOpacity key={name} activeOpacity={0.85} onPress={() => openPlatform(name)} style={styles.platformCard}>
             <Text style={styles.platformName}>{name}</Text>
             <Text style={styles.platformText}>
               {name === 'تعميد'
@@ -112,10 +91,7 @@ function BasicIncomeScreen({ onBack }) {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const totalIncome = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.amount || 0), 0),
-    [items]
-  );
+  const totalIncome = useMemo(() => items.reduce((sum, item) => sum + Number(item.amount || 0), 0), [items]);
 
   const loadItems = async () => {
     try {
@@ -132,15 +108,8 @@ function BasicIncomeScreen({ onBack }) {
   }, []);
 
   const saveIncome = async () => {
-    if (!incomeType.trim()) {
-      setMessage('ادخل نوع الدخل');
-      return;
-    }
-
-    if (!amount || Number(amount) <= 0) {
-      setMessage('ادخل المبلغ بشكل صحيح');
-      return;
-    }
+    if (!incomeType.trim()) return setMessage('ادخل نوع الدخل');
+    if (!amount || Number(amount) <= 0) return setMessage('ادخل المبلغ بشكل صحيح');
 
     setSaving(true);
     setMessage('جاري الحفظ...');
@@ -149,16 +118,10 @@ function BasicIncomeScreen({ onBack }) {
       const response = await fetch(`${API_URL}/income/basic`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          income_type: incomeType.trim(),
-          amount: Number(amount),
-          notes: notes || null,
-        }),
+        body: JSON.stringify({ income_type: incomeType.trim(), amount: Number(amount), notes: notes || null }),
       });
 
-      if (!response.ok) {
-        throw new Error('save failed');
-      }
+      if (!response.ok) throw new Error('save failed');
 
       setIncomeType('');
       setAmount('');
@@ -175,10 +138,7 @@ function BasicIncomeScreen({ onBack }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>رجوع</Text>
-        </TouchableOpacity>
-
+        <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backText}>رجوع</Text></TouchableOpacity>
         <View style={styles.header}>
           <Text style={styles.badge}>أساسيات الحساب</Text>
           <Text style={styles.title}>الدخل الأساسي</Text>
@@ -186,69 +146,34 @@ function BasicIncomeScreen({ onBack }) {
         </View>
 
         <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{items.length}</Text>
-            <Text style={styles.summaryLabel}>سجلات دخل</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{totalIncome.toFixed(2)}</Text>
-            <Text style={styles.summaryLabel}>إجمالي الدخل</Text>
-          </View>
+          <View style={styles.summaryCard}><Text style={styles.summaryValue}>{items.length}</Text><Text style={styles.summaryLabel}>سجلات دخل</Text></View>
+          <View style={styles.summaryCard}><Text style={styles.summaryValue}>{totalIncome.toFixed(2)}</Text><Text style={styles.summaryLabel}>إجمالي الدخل</Text></View>
         </View>
 
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>إضافة دخل أساسي</Text>
-
           <Text style={styles.inputLabel}>نوع الدخل</Text>
-          <TextInput
-            value={incomeType}
-            onChangeText={setIncomeType}
-            placeholder="مثال: راتب، إيجار، عمولة"
-            style={styles.input}
-          />
-
+          <TextInput value={incomeType} onChangeText={setIncomeType} placeholder="مثال: راتب، إيجار، عمولة" style={styles.input} />
           <Text style={styles.inputLabel}>المبلغ</Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            placeholder="مثال: 5000"
-            style={styles.input}
-          />
-
+          <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="مثال: 5000" style={styles.input} />
           <Text style={styles.inputLabel}>ملاحظات</Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="اختياري"
-            style={[styles.input, styles.notesInput]}
-            multiline
-          />
-
+          <TextInput value={notes} onChangeText={setNotes} placeholder="اختياري" style={[styles.input, styles.notesInput]} multiline />
           {!!message && <Text style={styles.message}>{message}</Text>}
-
-          <TouchableOpacity style={styles.saveButton} onPress={saveIncome} disabled={saving}>
-            <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : 'حفظ الدخل'}</Text>
-          </TouchableOpacity>
+          <TouchableOpacity style={styles.saveButton} onPress={saveIncome} disabled={saving}><Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : 'حفظ الدخل'}</Text></TouchableOpacity>
         </View>
 
         <Text style={styles.sectionTitle}>سجلات الدخل</Text>
         {items.length === 0 ? (
-          <View style={styles.platformCard}>
-            <Text style={styles.platformName}>لا يوجد دخل مسجل</Text>
-            <Text style={styles.platformText}>أضف أول دخل من النموذج بالأعلى.</Text>
+          <View style={styles.platformCard}><Text style={styles.platformName}>لا يوجد دخل مسجل</Text><Text style={styles.platformText}>أضف أول دخل من النموذج بالأعلى.</Text></View>
+        ) : items.map((item) => (
+          <View key={String(item.id)} style={styles.platformCard}>
+            <Text style={styles.platformName}>{item.income_type || 'دخل'}</Text>
+            <Text style={styles.platformText}>المبلغ: {Number(item.amount || 0).toFixed(2)} ر.س</Text>
+            <Text style={styles.platformText}>التاريخ: {item.transaction_date || '-'}</Text>
+            <Text style={styles.platformText}>الحالة: {item.status || '-'}</Text>
+            {item.description ? <Text style={styles.platformText}>ملاحظات: {item.description}</Text> : null}
           </View>
-        ) : (
-          items.map((item) => (
-            <View key={String(item.id)} style={styles.platformCard}>
-              <Text style={styles.platformName}>{item.income_type || 'دخل'}</Text>
-              <Text style={styles.platformText}>المبلغ: {Number(item.amount || 0).toFixed(2)} ر.س</Text>
-              <Text style={styles.platformText}>التاريخ: {item.transaction_date || '-'}</Text>
-              <Text style={styles.platformText}>الحالة: {item.status || '-'}</Text>
-              {item.description ? <Text style={styles.platformText}>ملاحظات: {item.description}</Text> : null}
-            </View>
-          ))
-        )}
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -265,22 +190,11 @@ function MoneyMoonScreen({ onBack }) {
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
   const [receivingId, setReceivingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
-  const total = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.principal_amount || 0), 0),
-    [items]
-  );
-
-  const totalProfit = useMemo(
-    () => items.reduce((sum, item) => sum + Number(item.expected_profit_amount || 0), 0),
-    [items]
-  );
-
-  const overdueCount = useMemo(
-    () => items.filter((item) => isOverdue(item)).length,
-    [items]
-  );
-
+  const total = useMemo(() => items.reduce((sum, item) => sum + Number(item.principal_amount || 0), 0), [items]);
+  const totalProfit = useMemo(() => items.reduce((sum, item) => sum + Number(item.expected_profit_amount || 0), 0), [items]);
+  const overdueCount = useMemo(() => items.filter((item) => isOverdue(item)).length, [items]);
   const formExpectedProfit = calcProfit(amount, category);
 
   const loadItems = async () => {
@@ -318,35 +232,21 @@ function MoneyMoonScreen({ onBack }) {
   };
 
   const saveInvestment = async () => {
-    if (!amount || Number(amount) <= 0) {
-      setMessage('ادخل مبلغ الاستثمار بشكل صحيح');
-      return;
-    }
+    if (!amount || Number(amount) <= 0) return setMessage('ادخل مبلغ الاستثمار بشكل صحيح');
 
     setSaving(true);
     setMessage(editingId ? 'جاري حفظ التعديل...' : 'جاري الحفظ...');
 
     try {
-      const url = editingId
-        ? `${API_URL}/moneymoon/investments/${editingId}`
-        : `${API_URL}/moneymoon/investments`;
+      const url = editingId ? `${API_URL}/moneymoon/investments/${editingId}` : `${API_URL}/moneymoon/investments`;
       const method = editingId ? 'PUT' : 'POST';
-
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          amount: Number(amount),
-          category,
-          investment_date: investmentDate,
-          maturity_date: maturityDate || null,
-          notes: notes || null,
-        }),
+        body: JSON.stringify({ amount: Number(amount), category, investment_date: investmentDate, maturity_date: maturityDate || null, notes: notes || null }),
       });
 
-      if (!response.ok) {
-        throw new Error('save failed');
-      }
+      if (!response.ok) throw new Error('save failed');
 
       resetForm();
       setMessage(editingId ? 'تم تعديل بطاقة موني مون' : 'تم حفظ استثمار موني مون');
@@ -363,15 +263,8 @@ function MoneyMoonScreen({ onBack }) {
     setMessage('جاري تسجيل الاستلام...');
 
     try {
-      const response = await fetch(`${API_URL}/moneymoon/investments/${item.id}/receive`, {
-        method: 'POST',
-        headers: { Accept: 'application/json' },
-      });
-
-      if (!response.ok) {
-        throw new Error('receive failed');
-      }
-
+      const response = await fetch(`${API_URL}/moneymoon/investments/${item.id}/receive`, { method: 'POST', headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('receive failed');
       setMessage('تم اعتبار الاستثمار مستلمًا');
       await loadItems();
     } catch (error) {
@@ -381,133 +274,101 @@ function MoneyMoonScreen({ onBack }) {
     }
   };
 
+  const deleteInvestment = async (item) => {
+    setDeletingId(item.id);
+    setMessage('جاري حذف الاستثمار...');
+
+    try {
+      const response = await fetch(`${API_URL}/moneymoon/investments/${item.id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('delete failed');
+
+      if (editingId === item.id) resetForm();
+      setItems((current) => current.filter((investment) => investment.id !== item.id));
+      setMessage('تم حذف الاستثمار');
+      await loadItems();
+    } catch (error) {
+      setMessage('تعذر حذف الاستثمار');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const confirmDeleteInvestment = (item) => {
+    Alert.alert(
+      'حذف الاستثمار',
+      'هل تريد حذف هذا الاستثمار من موني مون؟ لا يمكن التراجع عن الحذف.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        { text: 'حذف', style: 'destructive', onPress: () => deleteInvestment(item) },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backText}>رجوع</Text>
-        </TouchableOpacity>
-
+        <TouchableOpacity style={styles.backButton} onPress={onBack}><Text style={styles.backText}>رجوع</Text></TouchableOpacity>
         <View style={styles.header}>
           <Text style={styles.badge}>موني مون</Text>
           <Text style={styles.title}>إدارة موني مون</Text>
-          <Text style={styles.subtitle}>إضافة وتعديل واستلام استثمارات موني مون من داخل التطبيق.</Text>
+          <Text style={styles.subtitle}>إضافة وتعديل واستلام وحذف استثمارات موني مون من داخل التطبيق.</Text>
         </View>
 
         <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{items.length}</Text>
-            <Text style={styles.summaryLabel}>استثمارات</Text>
-          </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{total.toFixed(2)}</Text>
-            <Text style={styles.summaryLabel}>إجمالي موني مون</Text>
-          </View>
+          <View style={styles.summaryCard}><Text style={styles.summaryValue}>{items.length}</Text><Text style={styles.summaryLabel}>استثمارات</Text></View>
+          <View style={styles.summaryCard}><Text style={styles.summaryValue}>{total.toFixed(2)}</Text><Text style={styles.summaryLabel}>إجمالي موني مون</Text></View>
         </View>
 
         <View style={styles.summaryRow}>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryValue}>{totalProfit.toFixed(2)}</Text>
-            <Text style={styles.summaryLabel}>إجمالي الربح المتوقع</Text>
-          </View>
-          <View style={[styles.summaryCard, overdueCount > 0 && styles.overdueSummary]}>
-            <Text style={[styles.summaryValue, overdueCount > 0 && styles.overdueText]}>{overdueCount}</Text>
-            <Text style={[styles.summaryLabel, overdueCount > 0 && styles.overdueText]}>متأخر غير مستلم</Text>
-          </View>
+          <View style={styles.summaryCard}><Text style={styles.summaryValue}>{totalProfit.toFixed(2)}</Text><Text style={styles.summaryLabel}>إجمالي الربح المتوقع</Text></View>
+          <View style={[styles.summaryCard, overdueCount > 0 && styles.overdueSummary]}><Text style={[styles.summaryValue, overdueCount > 0 && styles.overdueText]}>{overdueCount}</Text><Text style={[styles.summaryLabel, overdueCount > 0 && styles.overdueText]}>متأخر غير مستلم</Text></View>
         </View>
 
         <View style={styles.formCard}>
           <Text style={styles.formTitle}>{editingId ? 'تعديل بطاقة استثمار' : 'إضافة استثمار جديد'}</Text>
-
           <Text style={styles.inputLabel}>المبلغ المستثمر</Text>
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="decimal-pad"
-            placeholder="مثال: 1000"
-            style={styles.input}
-          />
-
+          <TextInput value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="مثال: 1000" style={styles.input} />
           <Text style={styles.inputLabel}>الفئة</Text>
           <View style={styles.categoryRow}>
             {['A', 'B', 'C', 'D'].map((item) => (
-              <TouchableOpacity
-                key={item}
-                onPress={() => setCategory(item)}
-                style={[styles.categoryButton, category === item && styles.categoryActive]}
-              >
+              <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.categoryButton, category === item && styles.categoryActive]}>
                 <Text style={[styles.categoryText, category === item && styles.categoryTextActive]}>{item}</Text>
                 <Text style={[styles.categoryRate, category === item && styles.categoryTextActive]}>{categoryProfit(item)}%</Text>
               </TouchableOpacity>
             ))}
           </View>
-
-          <View style={styles.profitBox}>
-            <Text style={styles.profitTitle}>الربح المتوقع لهذه العملية</Text>
-            <Text style={styles.profitValue}>{formExpectedProfit.toFixed(2)} ر.س</Text>
-          </View>
-
+          <View style={styles.profitBox}><Text style={styles.profitTitle}>الربح المتوقع لهذه العملية</Text><Text style={styles.profitValue}>{formExpectedProfit.toFixed(2)} ر.س</Text></View>
           <Text style={styles.inputLabel}>تاريخ الاستثمار</Text>
-          <TextInput
-            value={investmentDate}
-            onChangeText={setInvestmentDate}
-            placeholder="YYYY-MM-DD"
-            style={styles.input}
-          />
-
+          <TextInput value={investmentDate} onChangeText={setInvestmentDate} placeholder="YYYY-MM-DD" style={styles.input} />
           <Text style={styles.inputLabel}>تاريخ الاستحقاق</Text>
-          <TextInput
-            value={maturityDate}
-            onChangeText={setMaturityDate}
-            placeholder="اتركه فارغًا ليكون بعد شهر عند الإضافة"
-            style={styles.input}
-          />
-
+          <TextInput value={maturityDate} onChangeText={setMaturityDate} placeholder="اتركه فارغًا ليكون بعد شهر عند الإضافة" style={styles.input} />
           <Text style={styles.inputLabel}>ملاحظات</Text>
-          <TextInput
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="اختياري"
-            style={[styles.input, styles.notesInput]}
-            multiline
-          />
-
+          <TextInput value={notes} onChangeText={setNotes} placeholder="اختياري" style={[styles.input, styles.notesInput]} multiline />
           {!!message && <Text style={styles.message}>{message}</Text>}
-
-          <TouchableOpacity style={styles.saveButton} onPress={saveInvestment} disabled={saving}>
-            <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديل' : 'حفظ الاستثمار'}</Text>
-          </TouchableOpacity>
-
-          {editingId ? (
-            <TouchableOpacity style={styles.cancelButton} onPress={resetForm}>
-              <Text style={styles.cancelText}>إلغاء التعديل</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity style={styles.saveButton} onPress={saveInvestment} disabled={saving}><Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديل' : 'حفظ الاستثمار'}</Text></TouchableOpacity>
+          {editingId ? <TouchableOpacity style={styles.cancelButton} onPress={resetForm}><Text style={styles.cancelText}>إلغاء التعديل</Text></TouchableOpacity> : null}
         </View>
 
         <Text style={styles.sectionTitle}>استثمارات موني مون</Text>
         {items.length === 0 ? (
-          <View style={styles.platformCard}>
-            <Text style={styles.platformName}>لا توجد استثمارات بعد</Text>
-            <Text style={styles.platformText}>أضف أول استثمار من النموذج بالأعلى.</Text>
-          </View>
-        ) : (
-          items.map((item) => (
-            <MoneyMoonCard
-              key={String(item.id)}
-              item={item}
-              onEdit={() => startEdit(item)}
-              onReceive={() => receiveInvestment(item)}
-              receiving={receivingId === item.id}
-            />
-          ))
-        )}
+          <View style={styles.platformCard}><Text style={styles.platformName}>لا توجد استثمارات بعد</Text><Text style={styles.platformText}>أضف أول استثمار من النموذج بالأعلى.</Text></View>
+        ) : items.map((item) => (
+          <MoneyMoonCard
+            key={String(item.id)}
+            item={item}
+            onEdit={() => startEdit(item)}
+            onReceive={() => receiveInvestment(item)}
+            onDelete={() => confirmDeleteInvestment(item)}
+            receiving={receivingId === item.id}
+            deleting={deletingId === item.id}
+          />
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function MoneyMoonCard({ item, onEdit, onReceive, receiving }) {
+function MoneyMoonCard({ item, onEdit, onReceive, onDelete, receiving, deleting }) {
   const meta = safeJson(item.metadata);
   const category = meta.category || '-';
   const rate = Number(item.expected_rate || meta.profit_rate || categoryProfit(category));
@@ -528,15 +389,12 @@ function MoneyMoonCard({ item, onEdit, onReceive, receiving }) {
       <Text style={styles.platformText}>الحالة: {received ? 'مستلم' : item.status || '-'}</Text>
 
       <View style={styles.cardActions}>
-        {!received ? (
-          <TouchableOpacity style={styles.receiveButton} onPress={onReceive} disabled={receiving}>
-            <Text style={styles.receiveText}>{receiving ? 'جاري التسجيل...' : 'تم الاستلام'}</Text>
-          </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity style={styles.editButton} onPress={onEdit}>
-          <Text style={styles.editText}>تعديل البطاقة</Text>
-        </TouchableOpacity>
+        {!received ? <TouchableOpacity style={styles.receiveButton} onPress={onReceive} disabled={receiving || deleting}><Text style={styles.receiveText}>{receiving ? 'جاري التسجيل...' : 'تم الاستلام'}</Text></TouchableOpacity> : null}
+        <TouchableOpacity style={styles.editButton} onPress={onEdit} disabled={deleting}><Text style={styles.editText}>تعديل البطاقة</Text></TouchableOpacity>
       </View>
+      <TouchableOpacity style={styles.deleteButton} onPress={onDelete} disabled={deleting}>
+        <Text style={styles.deleteText}>{deleting ? 'جاري الحذف...' : 'حذف الاستثمار'}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -596,4 +454,6 @@ const styles = StyleSheet.create({
   receiveText: { color: '#fff', fontWeight: '900' },
   editButton: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
   editText: { color: '#0f172a', fontWeight: '900' },
+  deleteButton: { marginTop: 10, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
+  deleteText: { color: '#be123c', fontWeight: '900' },
 });
