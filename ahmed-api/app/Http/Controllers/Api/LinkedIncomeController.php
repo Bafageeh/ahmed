@@ -38,13 +38,31 @@ class LinkedIncomeController extends Controller
 
     public function financeSummary(): JsonResponse
     {
-        $response = $this->fetchFinanceSummary();
+        $payload = $this->fetchFinanceSummary();
 
-        if ($response instanceof JsonResponse) {
-            return $response;
+        if ($payload instanceof JsonResponse) {
+            return $payload;
         }
 
-        return response()->json(['data' => $response]);
+        return response()->json(['data' => $this->financeViewData($payload)]);
+    }
+
+    public function updateFinanceVisibility(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'key' => ['required', 'string', 'max:100'],
+            'visible' => ['required', 'boolean'],
+        ]);
+
+        if (! array_key_exists($data['key'], $this->financeMetricDefinitions())) {
+            return response()->json(['message' => 'Unknown Finance metric'], 422);
+        }
+
+        $settings = $this->financeVisibilitySettings();
+        $settings[$data['key']] = (bool) $data['visible'];
+        $this->saveFinanceVisibilitySettings($settings);
+
+        return response()->json(['data' => ['visible_metrics' => $settings]]);
     }
 
     public function syncFinanceMetric(Request $request): JsonResponse
@@ -153,46 +171,37 @@ class LinkedIncomeController extends Controller
 
         $this->upsertFinanceLink($this->financeSummaryUrl, 'finance_summary');
 
-        $income = $payload['income'] ?? [];
-        $portfolio = $payload['portfolio'] ?? [];
-        $counts = $payload['counts'] ?? [];
-        $alerts = $payload['alerts'] ?? [];
-        $currency = $payload['currency'] ?? 'SAR';
+        $viewData = $this->financeViewData($payload);
+        $currency = $viewData['currency'] ?? 'SAR';
         $transactionDate = data_get($payload, 'period.to', now()->toDateString());
-
-        $metrics = [
-            'monthly_installments_total' => ['group' => 'income', 'label' => 'مجموع الأقساط الشهرية', 'amount' => $income['monthly_installments_total'] ?? 0],
-            'monthly_profit_total' => ['group' => 'income', 'label' => 'إجمالي الربح الشهري', 'amount' => $income['monthly_profit_total'] ?? 0],
-            'ahmed_monthly_profit' => ['group' => 'income', 'label' => 'ربح أحمد الشهري', 'amount' => $income['ahmed_monthly_profit'] ?? 0],
-            'ali_monthly_profit' => ['group' => 'income', 'label' => 'ربح علي الشهري', 'amount' => $income['ali_monthly_profit'] ?? 0],
-            'remaining_installments_total' => ['group' => 'portfolio', 'label' => 'إجمالي المتبقي من الأقساط', 'amount' => $portfolio['remaining_installments_total'] ?? 0],
-            'remaining_principal_total' => ['group' => 'portfolio', 'label' => 'رأس المال المتبقي', 'amount' => $portfolio['remaining_principal_total'] ?? 0],
-            'ahmed_total_profit' => ['group' => 'portfolio', 'label' => 'إجمالي ربح أحمد', 'amount' => $portfolio['ahmed_total_profit'] ?? 0],
-            'overdue_amount' => ['group' => 'alerts', 'label' => 'مبلغ الأقساط المتأخرة', 'amount' => $alerts['overdue_amount'] ?? 0],
-        ];
-
-        $sourceId = $this->incomeSourceId('ملخص Finance', $currency, 'finance');
+        $sourceId = $this->incomeSourceId('Finance', $currency, 'finance');
         $saved = [];
 
-        foreach ($metrics as $key => $metric) {
-            $reference = 'finance-summary-' . $key . '-' . $transactionDate;
+        foreach ($viewData['metrics'] as $metric) {
+            $reference = 'finance-summary-' . $metric['key'] . '-' . $transactionDate;
             $saved[] = $this->upsertTransaction(
                 $sourceId,
                 'finance',
                 $reference,
-                $metric['label'],
+                $metric['title'],
                 (float) $metric['amount'],
                 $currency,
                 $transactionDate,
-                array_merge($metric, ['metric' => $key, 'payload' => $payload])
+                [
+                    'source' => 'finance_summary',
+                    'source_email' => 'admin@pm.sa',
+                    'metric' => $metric['key'],
+                    'path' => $metric['path'],
+                    'type' => $metric['type'],
+                    'synced_at' => $viewData['synced_at'],
+                ]
             );
         }
 
         return response()->json([
             'data' => [
-                'summary' => $payload,
+                'summary' => $viewData,
                 'saved_metrics' => $saved,
-                'counts' => $counts,
             ],
         ]);
     }
@@ -231,7 +240,7 @@ class LinkedIncomeController extends Controller
 
         if (! $response->successful()) {
             return response()->json([
-                'message' => 'تعذر جلب ملخص Finance',
+                'message' => 'تعذر جلب بيانات Finance',
                 'status' => $response->status(),
             ], 502);
         }
@@ -239,16 +248,121 @@ class LinkedIncomeController extends Controller
         return $response->json('data') ?? [];
     }
 
-    private function upsertFinanceLink(string $endpoint, string $metric): void
+    private function financeViewData(array $payload): array
+    {
+        $visibility = $this->financeVisibilitySettings();
+        $metrics = [];
+
+        foreach ($this->financeMetricDefinitions() as $key => $definition) {
+            $metrics[] = [
+                'key' => $key,
+                'path' => $definition['path'],
+                'title' => $definition['title'],
+                'type' => $definition['type'],
+                'group' => $definition['group'],
+                'amount' => round((float) data_get($payload, $definition['path'], 0), 2),
+                'currency' => $payload['currency'] ?? 'SAR',
+                'source' => 'Finance',
+                'source_email' => 'admin@pm.sa',
+                'editable' => false,
+                'visible' => $visibility[$key] ?? true,
+            ];
+        }
+
+        return [
+            'source' => 'Finance',
+            'source_email' => 'admin@pm.sa',
+            'endpoint' => $this->financeSummaryUrl,
+            'currency' => $payload['currency'] ?? 'SAR',
+            'synced_at' => $payload['synced_at'] ?? null,
+            'period' => $payload['period'] ?? null,
+            'metrics' => $metrics,
+            'visible_metrics' => $visibility,
+        ];
+    }
+
+    private function financeMetricDefinitions(): array
+    {
+        return [
+            'monthly_installments_total' => [
+                'path' => 'income.monthly_installments_total',
+                'title' => 'مجموع الأقساط الشهرية',
+                'type' => 'دخل مستورد من Finance',
+                'group' => 'income',
+            ],
+            'ahmed_monthly_profit' => [
+                'path' => 'income.ahmed_monthly_profit',
+                'title' => 'ربح أحمد الشهري',
+                'type' => 'دخل مستورد من Finance',
+                'group' => 'income',
+            ],
+            'remaining_installments_total' => [
+                'path' => 'portfolio.remaining_installments_total',
+                'title' => 'إجمالي المتبقي من الأقساط',
+                'type' => 'محفظة / تمويل',
+                'group' => 'portfolio',
+            ],
+            'remaining_principal_total' => [
+                'path' => 'portfolio.remaining_principal_total',
+                'title' => 'رأس المال المتبقي',
+                'type' => 'محفظة / تمويل',
+                'group' => 'portfolio',
+            ],
+            'ahmed_total_profit' => [
+                'path' => 'portfolio.ahmed_total_profit',
+                'title' => 'إجمالي ربح أحمد',
+                'type' => 'محفظة / تمويل',
+                'group' => 'portfolio',
+            ],
+        ];
+    }
+
+    private function financeVisibilitySettings(): array
+    {
+        $settings = DB::table('external_app_links')->where('app_key', 'finance')->value('sync_settings');
+        $decoded = json_decode((string) $settings, true);
+        $visibility = is_array($decoded) ? ($decoded['visible_metrics'] ?? []) : [];
+
+        return is_array($visibility) ? $visibility : [];
+    }
+
+    private function saveFinanceVisibilitySettings(array $visibility): void
     {
         DB::table('external_app_links')->updateOrInsert(
             ['app_key' => 'finance'],
             [
-                'name' => 'تطبيق Finance',
+                'name' => 'Finance',
+                'source_table' => 'finance_api',
+                'sync_settings' => json_encode([
+                    'endpoint' => $this->financeSummaryUrl,
+                    'metric' => 'finance_summary',
+                    'source_email' => 'admin@pm.sa',
+                    'visible_metrics' => $visibility,
+                ], JSON_UNESCAPED_UNICODE),
+                'last_synced_at' => now(),
+                'is_active' => true,
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+    }
+
+    private function upsertFinanceLink(string $endpoint, string $metric): void
+    {
+        $existingSettings = DB::table('external_app_links')->where('app_key', 'finance')->value('sync_settings');
+        $decoded = json_decode((string) $existingSettings, true);
+        $visibleMetrics = is_array($decoded) ? ($decoded['visible_metrics'] ?? []) : [];
+
+        DB::table('external_app_links')->updateOrInsert(
+            ['app_key' => 'finance'],
+            [
+                'name' => 'Finance',
                 'source_table' => 'finance_api',
                 'sync_settings' => json_encode([
                     'endpoint' => $endpoint,
                     'metric' => $metric,
+                    'source_email' => 'admin@pm.sa',
+                    'visible_metrics' => $visibleMetrics,
                 ], JSON_UNESCAPED_UNICODE),
                 'last_synced_at' => now(),
                 'is_active' => true,
