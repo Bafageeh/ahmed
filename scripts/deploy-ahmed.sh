@@ -65,6 +65,11 @@ if [ -f scripts/patch-basic-income-compact.py ]; then
   python3 scripts/patch-basic-income-compact.py
 fi
 
+if [ -f scripts/patch-income-linked-sync-ui.py ]; then
+  log "Patching income linked sync UI"
+  python3 scripts/patch-income-linked-sync-ui.py
+fi
+
 if [ -d "$WEB_DIR" ]; then
   log "Building React web app"
   cd "$WEB_DIR"
