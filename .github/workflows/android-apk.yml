@@ -1,0 +1,55 @@
+name: Build Ahmed Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ahmed-mobile/**'
+      - '.github/workflows/android-apk.yml'
+
+jobs:
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ahmed-mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        working-directory: ahmed-mobile
+        run: npm install
+
+      - name: Write environment
+        working-directory: ahmed-mobile
+        run: echo "EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api" > .env
+
+      - name: Prebuild Android project
+        working-directory: ahmed-mobile
+        run: npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Build release APK
+        working-directory: ahmed-mobile/android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ahmed-android-apk
+          path: ahmed-mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
