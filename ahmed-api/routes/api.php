@@ -21,6 +21,7 @@ Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index
 Route::get('/moneymoon/investments', [MoneyMoonController::class, 'index']);
 Route::post('/moneymoon/investments', [MoneyMoonController::class, 'store']);
 Route::put('/moneymoon/investments/{id}', [MoneyMoonController::class, 'update']);
+Route::delete('/moneymoon/investments/{id}', [MoneyMoonController::class, 'destroy']);
 Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonController::class, 'receive']);
 Route::get('/ta3meed/investments', [Ta3meedController::class, 'index']);
 Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);
