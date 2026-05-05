@@ -34,4 +34,6 @@ Route::delete('/income/basic/{id}', [IncomeController::class, 'destroy']);
 Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
 Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
 Route::post('/income/linked/finance/summary/sync', [LinkedIncomeController::class, 'syncFinanceSummary']);
+Route::post('/income/linked/finance/card/sync', [LinkedIncomeController::class, 'syncFinanceMetric']);
 Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
+Route::post('/income/linked/moneymoon/profits/sync', [LinkedIncomeController::class, 'syncMoneyMoonProfits']);
