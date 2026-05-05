@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'ahmed-mobile/**'
+      - 'scripts/patch-*.py'
       - '.github/workflows/android-apk.yml'
 
 jobs:
@@ -38,6 +39,14 @@ jobs:
       - name: Write environment
         working-directory: ahmed-mobile
         run: echo "EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api" > .env
+
+      - name: Apply mobile UI patches
+        run: |
+          python3 scripts/patch-moneymoon-topbar.py || true
+          python3 scripts/patch-moneymoon-add-edit-flow.py || true
+          python3 scripts/patch-moneymoon-compact-inline-edit.py || true
+          python3 scripts/patch-basic-income-compact.py || true
+          python3 scripts/patch-income-linked-sync-ui.py || true
 
       - name: Prebuild Android project
         working-directory: ahmed-mobile
