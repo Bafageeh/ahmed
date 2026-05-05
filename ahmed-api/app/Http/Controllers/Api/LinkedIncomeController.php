@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
@@ -46,6 +47,95 @@ class LinkedIncomeController extends Controller
         return response()->json(['data' => $response]);
     }
 
+    public function syncFinanceMetric(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'key' => ['required', 'string', 'max:100'],
+            'label' => ['required', 'string', 'max:255'],
+            'amount' => ['required', 'numeric'],
+            'group' => ['nullable', 'string', 'max:100'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'transaction_date' => ['nullable', 'date'],
+        ]);
+
+        $currency = $data['currency'] ?? 'SAR';
+        $transactionDate = $data['transaction_date'] ?? now()->toDateString();
+        $sourceId = $this->incomeSourceId('Finance - ' . $data['label'], $currency, 'finance');
+        $reference = 'finance-card-' . $data['key'] . '-' . $transactionDate;
+
+        $id = $this->upsertTransaction(
+            $sourceId,
+            'finance',
+            $reference,
+            $data['label'],
+            (float) $data['amount'],
+            $currency,
+            $transactionDate,
+            [
+                'source' => 'finance_card_button',
+                'metric' => $data['key'],
+                'group' => $data['group'] ?? null,
+                'label' => $data['label'],
+            ]
+        );
+
+        return response()->json(['data' => DB::table('financial_transactions')->where('id', $id)->first()]);
+    }
+
+    public function syncMoneyMoonProfits(): JsonResponse
+    {
+        $platformId = DB::table('investment_platforms')->where('code', 'moneymoon')->value('id');
+
+        if (! $platformId) {
+            return response()->json(['message' => 'MoneyMoon platform not found'], 404);
+        }
+
+        $sourceId = $this->incomeSourceId('أرباح موني مون', 'SAR', 'moneymoon');
+        $investments = DB::table('investment_opportunities')
+            ->where('platform_id', $platformId)
+            ->where('investment_type', 'moneymoon')
+            ->where('expected_profit_amount', '>', 0)
+            ->orderByDesc('id')
+            ->get();
+
+        $saved = [];
+
+        foreach ($investments as $investment) {
+            $metadata = $this->metadata($investment->metadata ?? null);
+            $orderNo = $this->orderNumber($investment, $metadata) ?: ('investment-' . $investment->id);
+            $transactionDate = $investment->maturity_date ?: $investment->start_date ?: now()->toDateString();
+            $label = 'ربح موني مون - ' . $orderNo;
+            $reference = 'moneymoon-profit-' . $orderNo;
+
+            $saved[] = $this->upsertTransaction(
+                $sourceId,
+                'moneymoon',
+                $reference,
+                $label,
+                (float) $investment->expected_profit_amount,
+                'SAR',
+                $transactionDate,
+                [
+                    'source' => 'moneymoon_profit_auto',
+                    'investment_id' => $investment->id,
+                    'order_no' => $orderNo,
+                    'category' => $metadata['category'] ?? null,
+                    'profit_rate' => $investment->expected_rate ?? ($metadata['profit_rate'] ?? null),
+                    'principal_amount' => $investment->principal_amount,
+                    'maturity_date' => $investment->maturity_date,
+                    'status' => $investment->status,
+                ]
+            );
+        }
+
+        return response()->json([
+            'data' => [
+                'saved_count' => count($saved),
+                'saved_ids' => $saved,
+            ],
+        ]);
+    }
+
     public function syncFinanceSummary(): JsonResponse
     {
         $payload = $this->fetchFinanceSummary();
@@ -74,13 +164,14 @@ class LinkedIncomeController extends Controller
             'overdue_amount' => ['group' => 'alerts', 'label' => 'مبلغ الأقساط المتأخرة', 'amount' => $alerts['overdue_amount'] ?? 0],
         ];
 
-        $sourceId = $this->incomeSourceId('ملخص Finance', $currency);
+        $sourceId = $this->incomeSourceId('ملخص Finance', $currency, 'finance');
         $saved = [];
 
         foreach ($metrics as $key => $metric) {
             $reference = 'finance-summary-' . $key . '-' . $transactionDate;
             $saved[] = $this->upsertTransaction(
                 $sourceId,
+                'finance',
                 $reference,
                 $metric['label'],
                 (float) $metric['amount'],
@@ -116,10 +207,10 @@ class LinkedIncomeController extends Controller
 
         $this->upsertFinanceLink($this->financeInstallmentsUrl, 'ahmad_installments_income');
 
-        $sourceId = $this->incomeSourceId($label, $payload['currency'] ?? 'SAR');
+        $sourceId = $this->incomeSourceId($label, $payload['currency'] ?? 'SAR', 'finance');
         $transactionDate = $payload['to'] ?? now()->toDateString();
         $reference = 'finance-ahmad-installments-' . ($payload['period'] ?? 'monthly') . '-' . $transactionDate;
-        $id = $this->upsertTransaction($sourceId, $reference, $label, $amount, $payload['currency'] ?? 'SAR', $transactionDate, $payload);
+        $id = $this->upsertTransaction($sourceId, 'finance', $reference, $label, $amount, $payload['currency'] ?? 'SAR', $transactionDate, $payload);
 
         return response()->json([
             'data' => DB::table('financial_transactions')->where('id', $id)->first(),
@@ -160,9 +251,9 @@ class LinkedIncomeController extends Controller
         );
     }
 
-    private function incomeSourceId(string $label, string $currency): int
+    private function incomeSourceId(string $label, string $currency, string $linkedAppKey): int
     {
-        $sourceId = DB::table('income_sources')->where('linked_app_key', 'finance')->where('name', $label)->value('id');
+        $sourceId = DB::table('income_sources')->where('linked_app_key', $linkedAppKey)->where('name', $label)->value('id');
 
         if ($sourceId) {
             return (int) $sourceId;
@@ -171,25 +262,25 @@ class LinkedIncomeController extends Controller
         return DB::table('income_sources')->insertGetId([
             'name' => $label,
             'source_type' => 'linked_app',
-            'linked_app_key' => 'finance',
+            'linked_app_key' => $linkedAppKey,
             'default_currency' => $currency,
-            'description' => 'مصدر بيانات مرتبط من تطبيق Finance',
+            'description' => 'مصدر بيانات مرتبط من ' . $linkedAppKey,
             'is_active' => true,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
     }
 
-    private function upsertTransaction(int $sourceId, string $reference, string $label, float $amount, string $currency, string $transactionDate, array $metadata): int
+    private function upsertTransaction(int $sourceId, string $externalAppKey, string $reference, string $label, float $amount, string $currency, string $transactionDate, array $metadata): int
     {
         $existingId = DB::table('financial_transactions')
-            ->where('external_app_key', 'finance')
+            ->where('external_app_key', $externalAppKey)
             ->where('reference_number', $reference)
             ->value('id');
 
         $data = [
             'income_source_id' => $sourceId,
-            'external_app_key' => 'finance',
+            'external_app_key' => $externalAppKey,
             'reference_number' => $reference,
             'transaction_type' => 'linked_income',
             'direction' => 'in',
@@ -209,5 +300,32 @@ class LinkedIncomeController extends Controller
 
         $data['created_at'] = now();
         return DB::table('financial_transactions')->insertGetId($data);
+    }
+
+    private function metadata($value): array
+    {
+        if (is_array($value)) {
+            return $value;
+        }
+
+        $decoded = json_decode((string) $value, true);
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    private function orderNumber(object $investment, array $metadata): string
+    {
+        foreach (['external_order_no', 'order_no', 'order_number'] as $key) {
+            if (! empty($metadata[$key])) {
+                return trim((string) $metadata[$key]);
+            }
+        }
+
+        foreach ([$investment->title ?? '', $investment->notes ?? ''] as $value) {
+            if (preg_match('/L-[A-Za-z0-9-]+/', (string) $value, $matches)) {
+                return trim($matches[0]);
+            }
+        }
+
+        return '';
     }
 }
