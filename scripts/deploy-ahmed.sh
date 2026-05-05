@@ -39,6 +39,9 @@ if [ -d "$API_DIR" ]; then
 
   log "Clearing Laravel caches"
   php artisan optimize:clear
+
+  log "Running Laravel migrations"
+  php artisan migrate --force
 fi
 
 if [ -d "$WEB_DIR" ]; then
