@@ -55,6 +55,11 @@ if [ -f scripts/patch-moneymoon-add-edit-flow.py ]; then
   python3 scripts/patch-moneymoon-add-edit-flow.py
 fi
 
+if [ -f scripts/patch-moneymoon-compact-inline-edit.py ]; then
+  log "Patching MoneyMoon compact inline edit form"
+  python3 scripts/patch-moneymoon-compact-inline-edit.py
+fi
+
 if [ -d "$WEB_DIR" ]; then
   log "Building React web app"
   cd "$WEB_DIR"
