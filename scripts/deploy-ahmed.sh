@@ -60,6 +60,11 @@ if [ -f scripts/patch-moneymoon-compact-inline-edit.py ]; then
   python3 scripts/patch-moneymoon-compact-inline-edit.py
 fi
 
+if [ -f scripts/patch-basic-income-compact.py ]; then
+  log "Patching basic income compact UI"
+  python3 scripts/patch-basic-income-compact.py
+fi
+
 if [ -d "$WEB_DIR" ]; then
   log "Building React web app"
   cd "$WEB_DIR"
