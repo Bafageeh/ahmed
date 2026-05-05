@@ -122,6 +122,32 @@ class MoneyMoonController extends Controller
         return response()->json(['data' => DB::table('investment_opportunities')->where('id', $id)->first()]);
     }
 
+    public function destroy(int $id)
+    {
+        $platform = $this->moneyMoonPlatform();
+
+        if (! $platform) {
+            return response()->json(['message' => 'MoneyMoon platform not found'], 404);
+        }
+
+        $investment = DB::table('investment_opportunities')
+            ->where('id', $id)
+            ->where('platform_id', $platform->id)
+            ->first();
+
+        if (! $investment) {
+            return response()->json(['message' => 'Investment not found'], 404);
+        }
+
+        DB::table('investment_opportunities')->where('id', $id)->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Investment deleted successfully',
+            'deleted_id' => $id,
+        ]);
+    }
+
     public function receive(int $id)
     {
         $platform = $this->moneyMoonPlatform();
