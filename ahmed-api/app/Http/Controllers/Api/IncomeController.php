@@ -85,4 +85,24 @@ class IncomeController extends Controller
 
         return response()->json(['data' => DB::table('financial_transactions')->where('id', $id)->first()], 201);
     }
+
+    public function destroy(int $id)
+    {
+        $transaction = DB::table('financial_transactions')
+            ->where('id', $id)
+            ->where('transaction_type', 'basic_income')
+            ->first();
+
+        if (! $transaction) {
+            return response()->json(['message' => 'Basic income transaction not found'], 404);
+        }
+
+        DB::table('financial_transactions')->where('id', $id)->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Basic income deleted successfully',
+            'deleted_id' => $id,
+        ]);
+    }
 }
