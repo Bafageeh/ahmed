@@ -317,14 +317,19 @@ class LinkedIncomeController extends Controller
                 'type' => 'قيمة مستوردة من Finance',
                 'group' => 'portfolio',
                 'details' => [
-                    [
-                        'path' => 'portfolio.ahmed_total_profit',
-                        'title' => 'إجمالي ربح أحمد من العملاء النشطين',
-                    ],
-                    [
-                        'path' => 'portfolio.ahmed_stuck_profit_deduction',
-                        'title' => 'خصم ربح العملاء المتعثرين',
-                    ],
+                    ['path' => 'portfolio.ahmed_total_profit', 'title' => 'إجمالي ربح أحمد من العملاء النشطين'],
+                    ['path' => 'portfolio.ahmed_stuck_profit_deduction', 'title' => 'خصم ربح العملاء المتعثرين'],
+                ],
+            ],
+            'ahmed_monthly_net_profit_after_stuck_deduction' => [
+                'path' => 'portfolio.ahmed_monthly_net_profit_after_stuck_deduction',
+                'title' => 'صافي ربح أحمد الشهري بعد خصم المتعثرين',
+                'description' => 'مجموع ربح أحمد الشهري من العملاء النشطين مطروحًا منه ربح أحمد الشهري من العملاء المتعثرين.',
+                'type' => 'قيمة مستوردة من Finance',
+                'group' => 'portfolio',
+                'details' => [
+                    ['path' => 'portfolio.ahmed_monthly_profit', 'title' => 'ربح أحمد الشهري من العملاء النشطين'],
+                    ['path' => 'portfolio.ahmed_stuck_monthly_profit_deduction', 'title' => 'خصم ربح العملاء المتعثرين'],
                 ],
             ],
         ];
@@ -434,32 +439,5 @@ class LinkedIncomeController extends Controller
 
         $data['created_at'] = now();
         return DB::table('financial_transactions')->insertGetId($data);
-    }
-
-    private function metadata($value): array
-    {
-        if (is_array($value)) {
-            return $value;
-        }
-
-        $decoded = json_decode((string) $value, true);
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function orderNumber(object $investment, array $metadata): string
-    {
-        foreach (['external_order_no', 'order_no', 'order_number'] as $key) {
-            if (! empty($metadata[$key])) {
-                return trim((string) $metadata[$key]);
-            }
-        }
-
-        foreach ([$investment->title ?? '', $investment->notes ?? ''] as $value) {
-            if (preg_match('/L-[A-Za-z0-9-]+/', (string) $value, $matches)) {
-                return trim($matches[0]);
-            }
-        }
-
-        return '';
     }
 }
