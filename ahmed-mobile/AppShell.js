@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import AppPatched from './AppPatched';
 import StatsDashboardScreen from './StatsDashboardScreen';
 import Ta3meedScreen from './Ta3meedScreen';
+import WealthScreen from './WealthScreen';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const asNumber = (value) => Number(value || 0);
@@ -33,10 +33,17 @@ export default function AppShell() {
     if (tab !== 'investments') setInvestmentScreen('list');
   };
 
+  const openInvestments = () => {
+    setActiveTab('investments');
+    setInvestmentScreen('list');
+  };
+
   const openTa3meedInvestors = () => {
     setActiveTab('investments');
     setInvestmentScreen('ta3meed-investors');
   };
+
+  const isLegacyTa3meedOpen = activeTab === 'investments' && investmentScreen === 'ta3meed';
 
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
@@ -47,16 +54,16 @@ export default function AppShell() {
     }
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} openTa3meedInvestors={openTa3meedInvestors} />;
-    return <AppPatched />;
+    return <WealthScreen openInvestments={openInvestments} />;
   };
 
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      <View style={styles.screenLayer}>
+      <View style={[styles.screenLayer, isLegacyTa3meedOpen && styles.screenLayerNoTabs]}>
         {renderScreen()}
       </View>
-      <BottomTabs activeTab={activeTab} setActiveTab={openTab} />
+      {!isLegacyTa3meedOpen ? <BottomTabs activeTab={activeTab} setActiveTab={openTab} /> : null}
     </View>
   );
 }
@@ -173,7 +180,7 @@ function Ta3meedInvestorsScreen({ onBack }) {
           <View style={styles.headerGlow} />
           <Text style={styles.headerBadge}>🏦 تعميد</Text>
           <Text style={styles.headerTitle}>مستثمرين تعميد</Text>
-          <Text style={styles.headerSubtitle}>رابط مستقل داخل تبويب مزيد العام، بدون تبويب داخلي لتعميد.</Text>
+          <Text style={styles.headerSubtitle}>رابط مستقل داخل تبويب مزيد العام.</Text>
         </View>
 
         {loading ? (
@@ -269,7 +276,7 @@ function MoreScreen({ goTo, openTa3meedInvestors }) {
 
         <View style={styles.menuCard}>
           <MenuRow title="احصائيات" text="احصائيات عامة ولكل منصة" icon="📊" onPress={() => goTo('stats')} />
-          <MenuRow title="ثروتي" text="الشاشة الرئيسية والدخل" icon="💎" onPress={() => goTo('wealth')} />
+          <MenuRow title="ثروتي" text="ممتلكاتي الخاصة وحصصي الاستثمارية" icon="💎" onPress={() => goTo('wealth')} />
           <MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="📋" onPress={() => goTo('reports')} />
           <MenuRow title="استثماراتي" text="منصات الاستثمار فقط" icon="📈" onPress={() => goTo('investments')} />
           <MenuRow title="مستثمرين تعميد" text="إحصائيات وتوزيع مستثمري تعميد" icon="🏦" onPress={openTa3meedInvestors} last />
@@ -305,6 +312,7 @@ function MenuRow({ title, text, icon, onPress, last }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f4f7fb' },
   screenLayer: { flex: 1, paddingBottom: 98, backgroundColor: '#f4f7fb' },
+  screenLayerNoTabs: { paddingBottom: 0 },
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   pageContainer: { padding: 18, paddingBottom: 34 },
   modernHeader: {
