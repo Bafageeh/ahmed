@@ -144,6 +144,74 @@ class Ta3meedMutationController extends Controller
 
     public function storeInvestorAccountEntry(Request $request, string $code)
     {
+        $investor = $this->investorByCode($code);
+        if (! $investor) {
+            return response()->json(['message' => 'Investor not found'], 404);
+        }
+
+        $amount = $this->signedEntryAmount($request);
+
+        DB::table('ta3meed_investor_account_entries')->insert([
+            'investor_id' => $investor->id,
+            'amount' => $amount,
+            'entry_date' => $request->input('entry_date') ?: now()->toDateString(),
+            'notes' => $request->input('notes'),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['data' => $this->readInvestorAccount($investor)], 201);
+    }
+
+    public function updateInvestorAccountEntry(Request $request, string $code, int $entryId)
+    {
+        $investor = $this->investorByCode($code);
+        if (! $investor) {
+            return response()->json(['message' => 'Investor not found'], 404);
+        }
+
+        $entry = DB::table('ta3meed_investor_account_entries')
+            ->where('id', $entryId)
+            ->where('investor_id', $investor->id)
+            ->first();
+
+        if (! $entry) {
+            return response()->json(['message' => 'Entry not found'], 404);
+        }
+
+        DB::table('ta3meed_investor_account_entries')
+            ->where('id', $entryId)
+            ->update([
+                'amount' => $this->signedEntryAmount($request),
+                'entry_date' => $request->input('entry_date') ?: now()->toDateString(),
+                'notes' => $request->input('notes'),
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['data' => $this->readInvestorAccount($investor)]);
+    }
+
+    public function deleteInvestorAccountEntry(string $code, int $entryId)
+    {
+        $investor = $this->investorByCode($code);
+        if (! $investor) {
+            return response()->json(['message' => 'Investor not found'], 404);
+        }
+
+        $deleted = DB::table('ta3meed_investor_account_entries')
+            ->where('id', $entryId)
+            ->where('investor_id', $investor->id)
+            ->delete();
+
+        if (! $deleted) {
+            return response()->json(['message' => 'Entry not found'], 404);
+        }
+
+        return response()->json(['data' => $this->readInvestorAccount($investor)]);
+    }
+
+    private function signedEntryAmount(Request $request): float
+    {
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
             'type' => ['nullable', 'in:deposit,withdrawal'],
@@ -151,26 +219,8 @@ class Ta3meedMutationController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $investor = $this->investorByCode($code);
-        if (! $investor) {
-            return response()->json(['message' => 'Investor not found'], 404);
-        }
-
         $amount = round((float) $data['amount'], 2);
-        if (($data['type'] ?? 'deposit') === 'withdrawal') {
-            $amount *= -1;
-        }
-
-        DB::table('ta3meed_investor_account_entries')->insert([
-            'investor_id' => $investor->id,
-            'amount' => $amount,
-            'entry_date' => $data['entry_date'] ?? now()->toDateString(),
-            'notes' => $data['notes'] ?? null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        return response()->json(['data' => $this->readInvestorAccount($investor)], 201);
+        return (($data['type'] ?? 'deposit') === 'withdrawal') ? $amount * -1 : $amount;
     }
 
     private function platform()
