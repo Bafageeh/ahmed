@@ -36,6 +36,17 @@ jobs:
         working-directory: ahmed-mobile
         run: npm install
 
+      - name: Patch React Native Gradle toolchain resolver
+        working-directory: ahmed-mobile
+        run: |
+          FILE="node_modules/@react-native/gradle-plugin/settings.gradle.kts"
+          if [ -f "$FILE" ]; then
+            sed -i 's/org.gradle.toolchains.foojay-resolver-convention") version "0.5.0"/org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"/g' "$FILE"
+            sed -i 's/org.gradle.toolchains.foojay-resolver-convention") version("0.5.0")/org.gradle.toolchains.foojay-resolver-convention") version("1.0.0")/g' "$FILE"
+            sed -i 's/org.gradle.toolchains.foojay-resolver-convention").version("0.5.0")/org.gradle.toolchains.foojay-resolver-convention").version("1.0.0")/g' "$FILE"
+            grep -n "foojay-resolver-convention" "$FILE" || true
+          fi
+
       - name: Write environment
         working-directory: ahmed-mobile
         run: echo "EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api" > .env
