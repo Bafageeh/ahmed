@@ -29,6 +29,8 @@ Route::put('/ta3meed/investments/{id}', [Ta3meedMutationController::class, 'upda
 Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::class, 'receive']);
 Route::get('/ta3meed/investors/{code}/account', [Ta3meedMutationController::class, 'investorAccount']);
 Route::post('/ta3meed/investors/{code}/account/entries', [Ta3meedMutationController::class, 'storeInvestorAccountEntry']);
+Route::put('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'updateInvestorAccountEntry']);
+Route::delete('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'deleteInvestorAccountEntry']);
 Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);
 Route::get('/income/basic', [IncomeController::class, 'index']);
 Route::post('/income/basic', [IncomeController::class, 'store']);
