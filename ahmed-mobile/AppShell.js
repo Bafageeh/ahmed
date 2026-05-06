@@ -1,9 +1,13 @@
-import React, { useState } from 'react';
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AppPatched from './AppPatched';
 import StatsDashboardScreen from './StatsDashboardScreen';
 import Ta3meedScreen from './Ta3meedScreen';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const asNumber = (value) => Number(value || 0);
+const money = (value) => `${asNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
 
 const tabs = [
   { key: 'stats', label: 'احصائيات', icon: '📊' },
@@ -29,14 +33,20 @@ export default function AppShell() {
     if (tab !== 'investments') setInvestmentScreen('list');
   };
 
+  const openTa3meedInvestors = () => {
+    setActiveTab('investments');
+    setInvestmentScreen('ta3meed-investors');
+  };
+
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'ta3meed-investors') return <Ta3meedInvestorsScreen onBack={() => setInvestmentScreen('list')} />;
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
-    if (activeTab === 'more') return <MoreScreen goTo={openTab} />;
+    if (activeTab === 'more') return <MoreScreen goTo={openTab} openTa3meedInvestors={openTa3meedInvestors} />;
     return <AppPatched />;
   };
 
@@ -122,6 +132,100 @@ function InvestmentsScreen({ openPlatform }) {
   );
 }
 
+function Ta3meedInvestorsScreen({ onBack }) {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`${API_URL}/ta3meed/summary`, { headers: { Accept: 'application/json' } });
+      const json = await response.json();
+      if (!response.ok) throw new Error('summary');
+      setSummary(json.data || null);
+    } catch (loadError) {
+      setError('تعذر تحميل مستثمرين تعميد');
+      setSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const investors = Array.isArray(summary?.investors) ? summary.investors : [];
+  const totalInvested = investors.reduce((total, investor) => total + asNumber(investor.invested), 0);
+  const totalProfit = investors.reduce((total, investor) => total + asNumber(investor.profit), 0);
+
+  return (
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.topLine}>
+          <TouchableOpacity style={styles.roundBackButton} onPress={onBack} activeOpacity={0.84}>
+            <Text style={styles.roundBackText}>‹</Text>
+          </TouchableOpacity>
+          <Text style={styles.topLineTitle}>مستثمرين تعميد</Text>
+        </View>
+
+        <View style={styles.modernHeader}>
+          <View style={styles.headerGlow} />
+          <Text style={styles.headerBadge}>🏦 تعميد</Text>
+          <Text style={styles.headerTitle}>مستثمرين تعميد</Text>
+          <Text style={styles.headerSubtitle}>رابط مستقل داخل تبويب مزيد العام، بدون تبويب داخلي لتعميد.</Text>
+        </View>
+
+        {loading ? (
+          <View style={styles.statusCard}>
+            <ActivityIndicator />
+            <Text style={styles.statusText}>جاري تحميل المستثمرين...</Text>
+          </View>
+        ) : null}
+
+        {!loading && error ? (
+          <View style={styles.statusCard}>
+            <Text style={styles.errorText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={load} activeOpacity={0.84}>
+              <Text style={styles.retryText}>إعادة المحاولة</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {!loading && !error ? (
+          <>
+            <View style={styles.investorTotalsRow}>
+              <View style={styles.investorTotalCard}>
+                <Text style={styles.investorTotalValue}>{money(totalInvested)}</Text>
+                <Text style={styles.investorTotalLabel}>إجمالي استثمارات المستثمرين</Text>
+              </View>
+              <View style={styles.investorTotalCard}>
+                <Text style={styles.investorTotalValue}>{money(totalProfit)}</Text>
+                <Text style={styles.investorTotalLabel}>إجمالي الأرباح المتوقعة</Text>
+              </View>
+            </View>
+
+            {investors.length === 0 ? (
+              <View style={styles.statusCard}>
+                <Text style={styles.statusText}>لا توجد بيانات مستثمرين بعد.</Text>
+              </View>
+            ) : investors.map((investor) => (
+              <View key={investor.name} style={styles.investorCard}>
+                <View style={styles.investorAvatar}><Text style={styles.investorAvatarText}>{String(investor.name || 'م').slice(0, 1)}</Text></View>
+                <View style={styles.investorInfo}>
+                  <Text style={styles.investorName}>{investor.name}</Text>
+                  <Text style={styles.investorMeta}>الاستثمار: {money(investor.invested)}</Text>
+                  <Text style={styles.investorMeta}>الربح المتوقع: {money(investor.profit)}</Text>
+                </View>
+              </View>
+            ))}
+          </>
+        ) : null}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
 function ReportsScreen({ goTo }) {
   return (
     <SafeAreaView style={styles.safe}>
@@ -152,7 +256,7 @@ function ReportsScreen({ goTo }) {
   );
 }
 
-function MoreScreen({ goTo }) {
+function MoreScreen({ goTo, openTa3meedInvestors }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
@@ -167,7 +271,8 @@ function MoreScreen({ goTo }) {
           <MenuRow title="احصائيات" text="احصائيات عامة ولكل منصة" icon="📊" onPress={() => goTo('stats')} />
           <MenuRow title="ثروتي" text="الشاشة الرئيسية والدخل" icon="💎" onPress={() => goTo('wealth')} />
           <MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="📋" onPress={() => goTo('reports')} />
-          <MenuRow title="استثماراتي" text="منصات الاستثمار فقط" icon="📈" onPress={() => goTo('investments')} last />
+          <MenuRow title="استثماراتي" text="منصات الاستثمار فقط" icon="📈" onPress={() => goTo('investments')} />
+          <MenuRow title="مستثمرين تعميد" text="إحصائيات وتوزيع مستثمري تعميد" icon="🏦" onPress={openTa3meedInvestors} last />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -238,6 +343,25 @@ const styles = StyleSheet.create({
   },
   headerTitle: { marginTop: 16, color: '#ffffff', fontSize: 34, fontWeight: '900', textAlign: 'right' },
   headerSubtitle: { marginTop: 8, color: '#cbd5e1', lineHeight: 23, textAlign: 'right', fontWeight: '700' },
+  topLine: { marginTop: 4, marginBottom: 10, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
+  roundBackButton: { width: 46, height: 46, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  roundBackText: { color: '#0f172a', fontSize: 34, fontWeight: '900', marginTop: -3 },
+  topLineTitle: { flex: 1, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'center', marginRight: 46 },
+  statusCard: { marginTop: 14, backgroundColor: '#ffffff', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
+  statusText: { marginTop: 8, color: '#64748b', textAlign: 'center', fontWeight: '800' },
+  errorText: { color: '#b91c1c', fontWeight: '900', textAlign: 'center' },
+  retryButton: { marginTop: 12, backgroundColor: '#0f172a', borderRadius: 14, paddingHorizontal: 18, paddingVertical: 11 },
+  retryText: { color: '#fff', fontWeight: '900' },
+  investorTotalsRow: { marginTop: 14, flexDirection: 'row-reverse', gap: 10 },
+  investorTotalCard: { flex: 1, backgroundColor: '#ffffff', borderRadius: 22, padding: 15, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'flex-end' },
+  investorTotalValue: { color: '#0f766e', fontSize: 18, fontWeight: '900', textAlign: 'right' },
+  investorTotalLabel: { marginTop: 6, color: '#64748b', fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  investorCard: { marginTop: 10, backgroundColor: '#ffffff', borderRadius: 22, padding: 15, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  investorAvatar: { width: 52, height: 52, borderRadius: 20, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center' },
+  investorAvatarText: { color: '#ffffff', fontSize: 20, fontWeight: '900' },
+  investorInfo: { flex: 1, alignItems: 'flex-end' },
+  investorName: { color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' },
+  investorMeta: { marginTop: 5, color: '#64748b', fontWeight: '800', textAlign: 'right' },
   platformsGrid: { marginTop: 16, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
   investmentPlatformCard: { flexBasis: '47.5%', flexGrow: 1, minHeight: 176, backgroundColor: '#ffffff', borderRadius: 26, padding: 16, borderWidth: 1, borderColor: '#dbe7e5', alignItems: 'flex-end' },
   disabledPlatformCard: { opacity: 0.72, backgroundColor: '#f8fafc' },
