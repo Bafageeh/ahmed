@@ -3,8 +3,8 @@ import { SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { BottomTabs } from './ta3meed/Ta3meedBottomTabs';
 import { FilterSegment, filters } from './ta3meed/Ta3meedFilters';
 import { Ta3meedHeader } from './ta3meed/Ta3meedHeader';
+import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccounts';
 import { investorOptionsFrom, Ta3meedInvestorFilter } from './ta3meed/Ta3meedInvestorFilter';
-import { Ta3meedInvestorScreen } from './ta3meed/Ta3meedInvestorScreen';
 import { EmptyCard, Ta3meedCard } from './ta3meed/Ta3meedInvestmentCard';
 import { InvestorStats } from './ta3meed/Ta3meedInvestors';
 import { SummaryCard } from './ta3meed/Ta3meedSummaryCards';
@@ -18,7 +18,6 @@ export default function Ta3meedScreen({ onBack }) {
   const [summary, setSummary] = useState(null);
   const [filter, setFilter] = useState('all');
   const [investorFilter, setInvestorFilter] = useState('all');
-  const [selectedInvestor, setSelectedInvestor] = useState(null);
   const [tab, setTab] = useState('investments');
   const [message, setMessage] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
@@ -86,9 +85,7 @@ export default function Ta3meedScreen({ onBack }) {
 
   const handleInvestorFilter = (code) => {
     setInvestorFilter(code);
-    const investor = investors.find((item) => item.code === code) || null;
-    setSelectedInvestor(investor);
-    setTab(code === 'all' ? 'investments' : 'investor');
+    setTab('investments');
   };
 
   const showInfo = (text) => setMessage(text);
@@ -124,7 +121,7 @@ export default function Ta3meedScreen({ onBack }) {
             <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
-          {tab !== 'investors' ? (
+          {tab !== 'investors' && tab !== 'accounts' ? (
             <>
               <View style={styles.filterShell}>
                 {filters.map((item) => (
@@ -138,7 +135,7 @@ export default function Ta3meedScreen({ onBack }) {
           {!!message && <Text style={styles.message}>{message}</Text>}
 
           {tab === 'investors' ? <InvestorStats summary={summary} /> : null}
-          {tab === 'investor' ? <Ta3meedInvestorScreen investor={selectedInvestor} items={items} onSaved={loadData} /> : null}
+          {tab === 'accounts' ? <Ta3meedInvestorAccounts investors={investors} /> : null}
 
           {tab === 'investments' ? (
             <View style={styles.listArea}>
@@ -149,6 +146,7 @@ export default function Ta3meedScreen({ onBack }) {
                   key={String(item.id)}
                   item={item}
                   index={index}
+                  selectedInvestorCode={investorFilter === 'all' ? null : investorFilter}
                   expanded={expandedId === item.id}
                   onToggle={() => setExpandedId((current) => current === item.id ? null : item.id)}
                   onReceive={() => receiveInvestment(item)}
@@ -160,7 +158,7 @@ export default function Ta3meedScreen({ onBack }) {
             </View>
           ) : null}
         </ScrollView>
-        <BottomTabs onHome={onBack} onInfo={showInfo} />
+        <BottomTabs onHome={onBack} onInfo={showInfo} onMore={() => setTab('accounts')} active={tab === 'accounts' ? 'more' : 'investments'} />
       </View>
     </SafeAreaView>
   );
