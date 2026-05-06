@@ -9,11 +9,7 @@ export default function Ta3meedChromeFixedScreen(props) {
       <View style={styles.headerOverlay} pointerEvents="none">
         <View style={styles.backMask} />
 
-        <View style={styles.iconGroup}>
-          <View style={styles.iconButton}><Text style={styles.iconText}>👥</Text></View>
-          <View style={styles.iconButton}><Text style={styles.iconText}>⏷</Text></View>
-          <View style={styles.iconButton}><Text style={styles.iconText}>⌕</Text></View>
-        </View>
+        <View style={styles.searchButton}><Text style={styles.searchIconText}>⌕</Text></View>
 
         <Text style={styles.title}>تعميد</Text>
 
@@ -30,7 +26,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 84,
+    height: 94,
     backgroundColor: '#f3f7f6',
     zIndex: 50,
   },
@@ -38,19 +34,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
-    width: 66,
-    height: 62,
+    width: 250,
+    height: 74,
     borderRadius: 22,
     backgroundColor: '#f3f7f6',
   },
-  iconGroup: {
+  searchButton: {
     position: 'absolute',
-    left: 70,
-    top: 7,
-    flexDirection: 'row',
-    gap: 7,
-  },
-  iconButton: {
+    left: 8,
+    top: 17,
     width: 40,
     height: 40,
     borderRadius: 15,
@@ -68,7 +60,7 @@ const styles = StyleSheet.create({
   moreButton: {
     position: 'absolute',
     right: 8,
-    top: 7,
+    top: 17,
     width: 40,
     height: 40,
     borderRadius: 15,
@@ -83,11 +75,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 1,
   },
-  iconText: {
+  searchIconText: {
     color: '#7b8798',
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '900',
-    lineHeight: 22,
+    lineHeight: 25,
   },
   moreIconText: {
     color: '#7b8798',
@@ -97,13 +89,13 @@ const styles = StyleSheet.create({
   },
   title: {
     position: 'absolute',
-    top: 13,
+    top: 23,
+    left: 58,
     right: 58,
-    left: 210,
     color: '#0f172a',
     fontSize: 28,
     fontWeight: '900',
-    textAlign: 'right',
+    textAlign: 'center',
     lineHeight: 34,
   },
 });
