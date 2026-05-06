@@ -48,7 +48,7 @@ export function Ta3meedCard({ item, index, selectedInvestorCode, onEdit, onRecei
           <Text style={[styles.profitText, overdue && styles.profitOverdue, received && styles.profitReceived]}>{received ? 'ربح متحقق' : 'ربح متوقع'} {money(selectedAllocation?.expected_profit_amount || item.expected_profit_amount, 2)} ر.س</Text>
           <View style={styles.actionsRow}>
             <CircleAction onPress={onDelete}>
-              <Text style={[styles.cardActionSymbol, styles.cardActionDelete]}>🗑</Text>
+              <Text style={[styles.cardActionSymbol, styles.cardActionDelete]}>⌫</Text>
             </CircleAction>
             <CircleAction onPress={received ? onToggle : onReceive} disabled={receiving}>
               <Text style={[styles.cardActionSymbol, styles.cardActionCheck]}>✓</Text>
