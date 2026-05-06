@@ -5,6 +5,7 @@ import { FilterSegment, filters } from './ta3meed/Ta3meedFilters';
 import { Ta3meedHeader } from './ta3meed/Ta3meedHeader';
 import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccounts';
 import { investorOptionsFrom, Ta3meedInvestorFilter } from './ta3meed/Ta3meedInvestorFilter';
+import { Ta3meedFinishedImport } from './ta3meed/Ta3meedFinishedImport';
 import { EmptyCard, Ta3meedCard } from './ta3meed/Ta3meedInvestmentCard';
 import { InvestorStats } from './ta3meed/Ta3meedInvestors';
 import { SummaryCard } from './ta3meed/Ta3meedSummaryCards';
@@ -96,7 +97,7 @@ export default function Ta3meedScreen({ onBack }) {
         <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           <Ta3meedHeader
             onBack={onBack}
-            onAdd={() => showInfo('إضافة استثمار تعميد')}
+            onAdd={() => setTab('finishedImport')}
             onFilter={cycleFilter}
             onSearch={() => setSearchVisible((value) => !value)}
             onToggleInvestors={() => setTab(tab === 'investors' ? 'investments' : 'investors')}
@@ -121,7 +122,7 @@ export default function Ta3meedScreen({ onBack }) {
             <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
-          {tab !== 'investors' && tab !== 'accounts' ? (
+          {tab !== 'investors' && tab !== 'accounts' && tab !== 'finishedImport' ? (
             <>
               <View style={styles.filterShell}>
                 {filters.map((item) => (
@@ -136,6 +137,7 @@ export default function Ta3meedScreen({ onBack }) {
 
           {tab === 'investors' ? <InvestorStats summary={summary} /> : null}
           {tab === 'accounts' ? <Ta3meedInvestorAccounts investors={investors} /> : null}
+          {tab === 'finishedImport' ? <Ta3meedFinishedImport onImported={loadData} onBack={() => setTab('investments')} /> : null}
 
           {tab === 'investments' ? (
             <View style={styles.listArea}>
