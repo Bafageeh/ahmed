@@ -40,9 +40,17 @@ class Ta3meedImportController extends Controller
         $created = 0;
         $updated = 0;
         $skipped = 0;
+        $seenCodes = [];
 
-        DB::transaction(function () use ($rows, $platform, $accountId, $data, &$created, &$updated, &$skipped) {
+        DB::transaction(function () use ($rows, $platform, $accountId, $data, &$created, &$updated, &$skipped, &$seenCodes) {
             foreach ($rows as $row) {
+                $codeKey = mb_strtoupper(trim($row['code']));
+                if (isset($seenCodes[$codeKey])) {
+                    $skipped++;
+                    continue;
+                }
+                $seenCodes[$codeKey] = true;
+
                 $existingId = DB::table('investment_opportunities')
                     ->where('platform_id', $platform->id)
                     ->where('reference_number', $row['code'])
@@ -70,17 +78,7 @@ class Ta3meedImportController extends Controller
                     }
                     $investorId = $this->investorId($investorName);
                     $allocationProfit = $row['principal_amount'] > 0 ? round($row['expected_profit_amount'] * ($amount / $row['principal_amount']), 2) : 0;
-                    DB::table('investment_opportunity_allocations')->insert([
-                        'opportunity_id' => $opportunityId,
-                        'investor_id' => $investorId,
-                        'invested_amount' => $amount,
-                        'expected_profit_amount' => $allocationProfit,
-                        'actual_profit_amount' => $allocationProfit,
-                        'received_amount' => $amount + $allocationProfit,
-                        'status' => 'received',
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    DB::table('investment_opportunity_allocations')->insert($this->allocationPayload($opportunityId, $investorId, $amount, $allocationProfit));
                 }
             }
         });
@@ -201,7 +199,7 @@ class Ta3meedImportController extends Controller
         }
 
         return [
-            'code' => $code,
+            'code' => trim($code),
             'principal_amount' => $principal,
             'expected_profit_amount' => round($profit, 2),
             'actual_profit_amount' => round($profit, 2),
@@ -231,13 +229,13 @@ class Ta3meedImportController extends Controller
             'expected_rate' => $row['expected_rate'],
             'start_date' => $row['start_date'],
             'maturity_date' => $row['maturity_date'],
-            'completed_at' => $row['exit_date'],
             'status' => 'received',
             'profit_distribution' => 'at_maturity',
             'metadata' => json_encode([
                 'category' => $row['category'],
                 'months' => $row['months'],
                 'withdrawal_date' => $row['exit_date'],
+                'exit_date' => $row['exit_date'],
                 'received_amount' => $row['received_amount'],
                 'source' => 'bulk_finished_import',
             ], JSON_UNESCAPED_UNICODE),
@@ -245,8 +243,43 @@ class Ta3meedImportController extends Controller
             'updated_at' => now(),
         ];
 
+        if (Schema::hasColumn('investment_opportunities', 'completed_at')) {
+            $payload['completed_at'] = $row['exit_date'];
+        }
+        if (Schema::hasColumn('investment_opportunities', 'received_at')) {
+            $payload['received_at'] = $row['exit_date'];
+        }
+        if (! Schema::hasColumn('investment_opportunities', 'actual_profit_amount')) {
+            unset($payload['actual_profit_amount']);
+        }
+        if (! Schema::hasColumn('investment_opportunities', 'profit_distribution')) {
+            unset($payload['profit_distribution']);
+        }
+
         if ($withCreatedAt) {
             $payload['created_at'] = now();
+        }
+
+        return $payload;
+    }
+
+    private function allocationPayload(int $opportunityId, int $investorId, float $amount, float $allocationProfit): array
+    {
+        $payload = [
+            'opportunity_id' => $opportunityId,
+            'investor_id' => $investorId,
+            'invested_amount' => $amount,
+            'expected_profit_amount' => $allocationProfit,
+            'status' => 'received',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if (Schema::hasColumn('investment_opportunity_allocations', 'actual_profit_amount')) {
+            $payload['actual_profit_amount'] = $allocationProfit;
+        }
+        if (Schema::hasColumn('investment_opportunity_allocations', 'received_amount')) {
+            $payload['received_amount'] = $amount + $allocationProfit;
         }
 
         return $payload;
