@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class Ta3meedMutationController extends Controller
 {
@@ -105,14 +106,22 @@ class Ta3meedMutationController extends Controller
             return response()->json(['message' => 'Investment not found'], 404);
         }
 
+        $receivedDate = now()->toDateString();
+        $update = [
+            'status' => 'received',
+            'actual_profit_amount' => $investment->expected_profit_amount,
+            'updated_at' => now(),
+        ];
+        if (Schema::hasColumn('investment_opportunities', 'completed_at')) {
+            $update['completed_at'] = $receivedDate;
+        }
+        if (Schema::hasColumn('investment_opportunities', 'received_at')) {
+            $update['received_at'] = $receivedDate;
+        }
+
         DB::table('investment_opportunities')
             ->where('id', $id)
-            ->update([
-                'status' => 'received',
-                'actual_profit_amount' => $investment->expected_profit_amount,
-                'completed_at' => now()->toDateString(),
-                'updated_at' => now(),
-            ]);
+            ->update($update);
 
         $allocations = DB::table('investment_opportunity_allocations')
             ->where('opportunity_id', $id)
