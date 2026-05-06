@@ -1,7 +1,10 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { styles } from './ta3meedStyles';
 import { investorsOf, metaOf, money, n, statusOf, titleOf, today } from './ta3meedUtils';
+
+const ACTION_ICON_COLOR = '#6b7280';
 
 export function Ta3meedCard({ item, index, selectedInvestorCode, onEdit, onReceive, onDelete, receiving, expanded, onToggle }) {
   const meta = metaOf(item.metadata);
@@ -47,18 +50,10 @@ export function Ta3meedCard({ item, index, selectedInvestorCode, onEdit, onRecei
           </View>
           <Text style={[styles.profitText, overdue && styles.profitOverdue, received && styles.profitReceived]}>{received ? 'ربح متحقق' : 'ربح متوقع'} {money(selectedAllocation?.expected_profit_amount || item.expected_profit_amount, 2)} ر.س</Text>
           <View style={styles.actionsRow}>
-            <CircleAction onPress={onDelete}>
-              <Text style={[styles.cardActionSymbol, styles.cardActionDelete]}>⌫</Text>
-            </CircleAction>
-            <CircleAction onPress={received ? onToggle : onReceive} disabled={receiving}>
-              <Text style={[styles.cardActionSymbol, styles.cardActionCheck]}>✓</Text>
-            </CircleAction>
-            <CircleAction onPress={onEdit}>
-              <Text style={[styles.cardActionSymbol, styles.cardActionEdit]}>✎</Text>
-            </CircleAction>
-            <CircleAction onPress={onToggle}>
-              <Text style={[styles.cardActionSymbol, styles.cardActionEye]}>◉</Text>
-            </CircleAction>
+            <CircleAction name="trash-can-outline" onPress={onDelete} accessibilityLabel="حذف" />
+            <CircleAction name={receiving ? 'dots-horizontal' : 'cash-check'} onPress={received ? onToggle : onReceive} disabled={receiving} accessibilityLabel="استلام مبلغ الاستثمار" />
+            <CircleAction name="pencil-outline" onPress={onEdit} accessibilityLabel="تعديل" />
+            <CircleAction name="eye-outline" onPress={onToggle} accessibilityLabel="تفاصيل" />
           </View>
         </View>
       </View>
@@ -87,10 +82,10 @@ function CardDetails({ item, meta, allocations }) {
   );
 }
 
-function CircleAction({ children, onPress, disabled }) {
+function CircleAction({ name, onPress, disabled, accessibilityLabel }) {
   return (
-    <TouchableOpacity style={[styles.circleAction, disabled && styles.disabledAction]} onPress={onPress} disabled={disabled} activeOpacity={0.82}>
-      {children}
+    <TouchableOpacity style={[styles.circleAction, disabled && styles.disabledAction]} onPress={onPress} disabled={disabled} activeOpacity={0.82} accessibilityLabel={accessibilityLabel}>
+      <MaterialCommunityIcons name={name} size={21} color={ACTION_ICON_COLOR} />
     </TouchableOpacity>
   );
 }
