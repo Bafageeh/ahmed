@@ -146,6 +146,7 @@ class Ta3meedMutationController extends Controller
     {
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'min:0.01'],
+            'type' => ['nullable', 'in:deposit,withdrawal'],
             'entry_date' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
         ]);
@@ -155,9 +156,14 @@ class Ta3meedMutationController extends Controller
             return response()->json(['message' => 'Investor not found'], 404);
         }
 
+        $amount = round((float) $data['amount'], 2);
+        if (($data['type'] ?? 'deposit') === 'withdrawal') {
+            $amount *= -1;
+        }
+
         DB::table('ta3meed_investor_account_entries')->insert([
             'investor_id' => $investor->id,
-            'amount' => round((float) $data['amount'], 2),
+            'amount' => $amount,
             'entry_date' => $data['entry_date'] ?? now()->toDateString(),
             'notes' => $data['notes'] ?? null,
             'created_at' => now(),
