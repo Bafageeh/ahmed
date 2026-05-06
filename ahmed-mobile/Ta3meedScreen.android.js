@@ -3,11 +3,13 @@ import { SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
 import { BottomTabs } from './ta3meed/Ta3meedBottomTabs';
 import { FilterSegment, filters } from './ta3meed/Ta3meedFilters';
 import { Ta3meedHeader } from './ta3meed/Ta3meedHeader';
+import { investorOptionsFrom, Ta3meedInvestorFilter } from './ta3meed/Ta3meedInvestorFilter';
+import { Ta3meedInvestorScreen } from './ta3meed/Ta3meedInvestorScreen';
 import { EmptyCard, Ta3meedCard } from './ta3meed/Ta3meedInvestmentCard';
 import { InvestorStats } from './ta3meed/Ta3meedInvestors';
 import { SummaryCard } from './ta3meed/Ta3meedSummaryCards';
 import { styles } from './ta3meed/ta3meedStyles';
-import { money, n, searchable, statusOf, today } from './ta3meed/ta3meedUtils';
+import { investorCodesOf, money, n, searchable, statusOf, today } from './ta3meed/ta3meedUtils';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 
@@ -15,6 +17,8 @@ export default function Ta3meedScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [investorFilter, setInvestorFilter] = useState('all');
+  const [selectedInvestor, setSelectedInvestor] = useState(null);
   const [tab, setTab] = useState('investments');
   const [message, setMessage] = useState('');
   const [searchVisible, setSearchVisible] = useState(false);
@@ -22,6 +26,7 @@ export default function Ta3meedScreen({ onBack }) {
   const [expandedId, setExpandedId] = useState(null);
   const [receivingId, setReceivingId] = useState(null);
 
+  const investors = useMemo(() => investorOptionsFrom(items), [items]);
   const totalInvested = useMemo(() => items.reduce((sum, item) => sum + n(item.principal_amount), 0), [items]);
   const totalProfit = useMemo(() => items.reduce((sum, item) => sum + n(item.expected_profit_amount), 0), [items]);
   const activeCount = useMemo(() => items.filter((item) => statusOf(item, today).key === 'active').length, [items]);
@@ -30,10 +35,11 @@ export default function Ta3meedScreen({ onBack }) {
     return items.filter((item) => {
       const status = statusOf(item, today).key;
       const matchesFilter = filter === 'all' || status === filter;
+      const matchesInvestor = investorFilter === 'all' || investorCodesOf(item).includes(investorFilter);
       const matchesSearch = !keyword || searchable(item).includes(keyword);
-      return matchesFilter && matchesSearch;
+      return matchesFilter && matchesInvestor && matchesSearch;
     });
-  }, [items, filter, search]);
+  }, [items, filter, investorFilter, search]);
 
   const loadData = async () => {
     setMessage('جاري تحميل تعميد...');
@@ -78,6 +84,13 @@ export default function Ta3meedScreen({ onBack }) {
     setFilter(filters[(currentIndex + 1) % filters.length].key);
   };
 
+  const handleInvestorFilter = (code) => {
+    setInvestorFilter(code);
+    const investor = investors.find((item) => item.code === code) || null;
+    setSelectedInvestor(investor);
+    setTab(code === 'all' ? 'investments' : 'investor');
+  };
+
   const showInfo = (text) => setMessage(text);
 
   return (
@@ -111,17 +124,21 @@ export default function Ta3meedScreen({ onBack }) {
             <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
-          {tab === 'investments' ? (
-            <View style={styles.filterShell}>
-              {filters.map((item) => (
-                <FilterSegment key={item.key} filter={item} active={filter === item.key} onPress={() => setFilter(item.key)} />
-              ))}
-            </View>
+          {tab !== 'investors' ? (
+            <>
+              <View style={styles.filterShell}>
+                {filters.map((item) => (
+                  <FilterSegment key={item.key} filter={item} active={filter === item.key} onPress={() => setFilter(item.key)} />
+                ))}
+              </View>
+              <Ta3meedInvestorFilter investors={investors} selected={investorFilter} onSelect={handleInvestorFilter} />
+            </>
           ) : null}
 
           {!!message && <Text style={styles.message}>{message}</Text>}
 
           {tab === 'investors' ? <InvestorStats summary={summary} /> : null}
+          {tab === 'investor' ? <Ta3meedInvestorScreen investor={selectedInvestor} items={items} onSaved={loadData} /> : null}
 
           {tab === 'investments' ? (
             <View style={styles.listArea}>
