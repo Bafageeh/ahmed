@@ -42,10 +42,12 @@ function InvestorAccount({ investor, onBack }) {
   const [entryDate, setEntryDate] = useState(todayText());
   const [notes, setNotes] = useState('');
   const [entryType, setEntryType] = useState('deposit');
+  const [editingEntryId, setEditingEntryId] = useState(null);
   const [message, setMessage] = useState('');
 
   const entries = account?.entries || [];
   const balance = useMemo(() => n(account?.balance), [account]);
+  const isEditing = Boolean(editingEntryId);
 
   const loadAccount = async () => {
     setMessage('جاري تحميل الحساب...');
@@ -64,29 +66,64 @@ function InvestorAccount({ investor, onBack }) {
     loadAccount();
   }, [investor.code]);
 
+  const resetForm = () => {
+    setAmount('');
+    setNotes('');
+    setEntryDate(todayText());
+    setEntryType('deposit');
+    setEditingEntryId(null);
+  };
+
+  const startEdit = (entry) => {
+    const value = n(entry.amount);
+    setEditingEntryId(entry.id);
+    setAmount(String(Math.abs(value)));
+    setEntryType(value < 0 ? 'withdrawal' : 'deposit');
+    setEntryDate(entry.entry_date || todayText());
+    setNotes(entry.notes || '');
+    setMessage('تم فتح حركة الرصيد للتعديل');
+  };
+
   const saveEntry = async () => {
     const value = n(amount);
     if (!value) {
       setMessage('أدخل المبلغ أولًا');
       return;
     }
-    setMessage(entryType === 'withdrawal' ? 'جاري تسجيل السحب...' : 'جاري إضافة الرصيد...');
+    setMessage(isEditing ? 'جاري حفظ التعديل...' : (entryType === 'withdrawal' ? 'جاري تسجيل السحب...' : 'جاري إضافة الرصيد...'));
     try {
-      const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account/entries`, {
-        method: 'POST',
+      const url = isEditing
+        ? `${API_URL}/ta3meed/investors/${investor.code}/account/entries/${editingEntryId}`
+        : `${API_URL}/ta3meed/investors/${investor.code}/account/entries`;
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ amount: value, type: entryType, entry_date: entryDate || todayText(), notes: notes || null }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'entry failed');
-      setAmount('');
-      setNotes('');
-      setEntryDate(todayText());
-      setEntryType('deposit');
+      resetForm();
       setAccount(json.data || null);
-      setMessage(entryType === 'withdrawal' ? 'تم تسجيل السحب من حساب المستثمر' : 'تمت إضافة الرصيد لحساب المستثمر');
+      setMessage(isEditing ? 'تم تعديل حركة الرصيد' : (entryType === 'withdrawal' ? 'تم تسجيل السحب من حساب المستثمر' : 'تمت إضافة الرصيد لحساب المستثمر'));
     } catch {
       setMessage('تعذر حفظ الحركة');
+    }
+  };
+
+  const deleteEntry = async (entry) => {
+    setMessage('جاري حذف الحركة...');
+    try {
+      const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account/entries/${entry.id}`, {
+        method: 'DELETE',
+        headers: { Accept: 'application/json' },
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || 'delete failed');
+      if (editingEntryId === entry.id) resetForm();
+      setAccount(json.data || null);
+      setMessage('تم حذف حركة الرصيد');
+    } catch {
+      setMessage('تعذر حذف الحركة');
     }
   };
 
@@ -100,7 +137,7 @@ function InvestorAccount({ investor, onBack }) {
       {!!message && <Text style={styles.message}>{message}</Text>}
 
       <View style={styles.investorPaymentCard}>
-        <Text style={styles.investorPaymentTitle}>{entryType === 'withdrawal' ? 'تسجيل سحب من الرصيد' : 'إضافة رصيد جديد'}</Text>
+        <Text style={styles.investorPaymentTitle}>{isEditing ? 'تعديل حركة رصيد' : (entryType === 'withdrawal' ? 'تسجيل سحب من الرصيد' : 'إضافة رصيد جديد')}</Text>
         <View style={styles.investorEntryTypeRow}>
           <EntryTypeButton label="إضافة" active={entryType === 'deposit'} onPress={() => setEntryType('deposit')} />
           <EntryTypeButton label="سحب" active={entryType === 'withdrawal'} onPress={() => setEntryType('withdrawal')} danger />
@@ -117,8 +154,13 @@ function InvestorAccount({ investor, onBack }) {
           textAlignVertical="top"
         />
         <TouchableOpacity style={[styles.investorPaymentButton, entryType === 'withdrawal' && styles.investorWithdrawButton]} onPress={saveEntry} activeOpacity={0.84}>
-          <Text style={styles.investorPaymentButtonText}>{entryType === 'withdrawal' ? 'تسجيل سحب' : 'إضافة مبلغ'}</Text>
+          <Text style={styles.investorPaymentButtonText}>{isEditing ? 'حفظ التعديل' : (entryType === 'withdrawal' ? 'تسجيل سحب' : 'إضافة مبلغ')}</Text>
         </TouchableOpacity>
+        {isEditing ? (
+          <TouchableOpacity style={styles.investorCancelEditButton} onPress={resetForm} activeOpacity={0.84}>
+            <Text style={styles.investorCancelEditText}>إلغاء التعديل</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       <Text style={styles.panelTitle}>حركات الرصيد</Text>
@@ -126,7 +168,17 @@ function InvestorAccount({ investor, onBack }) {
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد بعد.</Text>
       ) : entries.map((entry) => (
         <View key={entry.id} style={styles.investorPaymentCard}>
-          <Text style={[styles.investorPaymentTitle, n(entry.amount) < 0 && styles.investorWithdrawText]}>{money(entry.amount, 2)} ر.س</Text>
+          <View style={styles.balanceEntryHeader}>
+            <View style={styles.balanceEntryActions}>
+              <TouchableOpacity style={styles.balanceEntryActionButton} onPress={() => startEdit(entry)} activeOpacity={0.84}>
+                <Text style={[styles.balanceEntryActionIcon, styles.balanceEntryEditIcon]}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.balanceEntryActionButton} onPress={() => deleteEntry(entry)} activeOpacity={0.84}>
+                <Text style={[styles.balanceEntryActionIcon, styles.balanceEntryDeleteIcon]}>🗑</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.investorPaymentTitle, n(entry.amount) < 0 && styles.investorWithdrawText]}>{money(entry.amount, 2)} ر.س</Text>
+          </View>
           <Text style={styles.investorPaymentMeta}>التاريخ: {entry.entry_date || '-'}</Text>
           {entry.notes ? <Text style={styles.investorPaymentMeta}>ملاحظات: {entry.notes}</Text> : null}
         </View>
