@@ -2,29 +2,30 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { styles } from './ta3meedStyles';
-import { metaOf, money, n, statusOf, themes, titleOf, today } from './ta3meedUtils';
+import { investorsOf, metaOf, money, n, statusOf, titleOf, today } from './ta3meedUtils';
 
 export function Ta3meedCard({ item, index, onEdit, onReceive, onDelete, receiving, expanded, onToggle }) {
   const meta = metaOf(item.metadata);
   const allocations = Array.isArray(item.allocations) ? item.allocations : [];
+  const investors = investorsOf(item);
   const status = statusOf(item, today);
   const received = status.key === 'received';
   const overdue = status.key === 'overdue';
-  const theme = themes[index % themes.length];
   const date = received ? (meta.received_date || item.received_at || item.maturity_date || '-') : (item.maturity_date || '-');
   const dateText = received ? `تم الاستلام في ${date}` : overdue ? `كان يستحق في ${date}` : `يستحق في ${date}`;
 
   return (
-    <View style={styles.investmentCard}>
+    <View style={[styles.investmentCard, status.key === 'active' && styles.investmentCardActive, status.key === 'overdue' && styles.investmentCardOverdue, status.key === 'received' && styles.investmentCardReceived]}>
       <View style={styles.cardMainRow}>
-        <View style={styles.itemIconWrap}>
-          <View style={[styles.itemIcon, { backgroundColor: theme.bg }]}> 
-            <Text style={styles.itemIconText}>{theme.icon}</Text>
-          </View>
-        </View>
         <View style={styles.itemCenter}>
           <Text style={styles.itemTitle} numberOfLines={1}>{titleOf(item, index)}</Text>
-          <Text style={[styles.statusPill, overdue && styles.statusOverdue, received && styles.statusReceived]}>{status.label}</Text>
+          <View style={styles.investorNamesRow}>
+            {(investors.length ? investors : ['بدون مستثمر']).map((name) => (
+              <View key={name} style={styles.investorNameChip}>
+                <Text style={styles.investorNameText}>{name}</Text>
+              </View>
+            ))}
+          </View>
           <View style={styles.dateRow}>
             <Text style={styles.calendarIcon}>▣</Text>
             <Text style={styles.dateText} numberOfLines={1}>{dateText}</Text>
