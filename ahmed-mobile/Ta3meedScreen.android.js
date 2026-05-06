@@ -14,6 +14,15 @@ import { investorCodesOf, money, n, searchable, statusOf, today } from './ta3mee
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 
+function investorAllocationOf(item, investorCode) {
+  if (!investorCode || investorCode === 'all') return null;
+  const allocations = Array.isArray(item.allocations) ? item.allocations : [];
+  return allocations.find((allocation) => (
+    allocation.investor_code === investorCode ||
+    allocation.investor_name === investorCode
+  )) || null;
+}
+
 export default function Ta3meedScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -27,9 +36,6 @@ export default function Ta3meedScreen({ onBack }) {
   const [receivingId, setReceivingId] = useState(null);
 
   const investors = useMemo(() => investorOptionsFrom(items), [items]);
-  const totalInvested = useMemo(() => items.reduce((sum, item) => sum + n(item.principal_amount), 0), [items]);
-  const totalProfit = useMemo(() => items.reduce((sum, item) => sum + n(item.expected_profit_amount), 0), [items]);
-  const activeCount = useMemo(() => items.filter((item) => statusOf(item, today).key === 'active').length, [items]);
   const filteredItems = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -40,6 +46,20 @@ export default function Ta3meedScreen({ onBack }) {
       return matchesFilter && matchesInvestor && matchesSearch;
     });
   }, [items, filter, investorFilter, search]);
+
+  const filteredSummary = useMemo(() => {
+    return filteredItems.reduce((totals, item) => {
+      const allocation = investorAllocationOf(item, investorFilter);
+      const investedAmount = allocation ? n(allocation.invested_amount) : n(item.principal_amount);
+      const profitAmount = allocation ? n(allocation.expected_profit_amount) : n(item.expected_profit_amount);
+
+      return {
+        totalInvested: totals.totalInvested + investedAmount,
+        totalProfit: totals.totalProfit + profitAmount,
+        count: totals.count + 1,
+      };
+    }, { totalInvested: 0, totalProfit: 0, count: 0 });
+  }, [filteredItems, investorFilter]);
 
   const loadData = async () => {
     setMessage('جاري تحميل تعميد...');
@@ -117,9 +137,9 @@ export default function Ta3meedScreen({ onBack }) {
           ) : null}
 
           <View style={styles.summaryRow}>
-            <SummaryCard icon="♙" iconStyle={styles.greenCircle} label="الاستثمارات النشطة" value={`${summary?.active_count ?? activeCount}`} suffix="استثمار" tint={styles.summaryGreen} />
-            <SummaryCard icon="↗" iconStyle={styles.goldCircle} label="الأرباح المتوقعة" value={money(totalProfit)} prefix="ر.س" tint={styles.summaryGold} />
-            <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
+            <SummaryCard icon="♙" iconStyle={styles.greenCircle} label="الاستثمارات النشطة" value={`${filteredSummary.count}`} suffix="استثمار" tint={styles.summaryGreen} />
+            <SummaryCard icon="↗" iconStyle={styles.goldCircle} label="الأرباح المتوقعة" value={money(filteredSummary.totalProfit)} prefix="ر.س" tint={styles.summaryGold} />
+            <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(filteredSummary.totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
           {tab !== 'investors' && tab !== 'accounts' && tab !== 'finishedImport' ? (
