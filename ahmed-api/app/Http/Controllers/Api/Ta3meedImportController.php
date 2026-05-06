@@ -5,15 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class Ta3meedImportController extends Controller
 {
     private array $investorColumns = [
-        'ahmed' => 'احمد',
+        'ahmed' => 'أحمد',
         'sara' => 'سارة',
         'building' => 'المبنى',
-        'amal' => 'امال',
-        'mother' => 'امي',
+        'amal' => 'أمال',
+        'mother' => 'أمي',
         'father' => 'الوالد',
     ];
 
@@ -33,13 +34,14 @@ class Ta3meedImportController extends Controller
         $rows = $this->parseRows($data['text']);
 
         if (! count($rows)) {
-            return response()->json(['message' => 'لم يتم التعرف على أي استثمار منتهي'], 422);
+            return response()->json(['message' => 'لم يتم التعرف على أي استثمار منتهي. تأكد من وجود الكود والتواريخ والتصنيف.'], 422);
         }
 
         $created = 0;
         $updated = 0;
+        $skipped = 0;
 
-        DB::transaction(function () use ($rows, $platform, $accountId, $data, &$created, &$updated) {
+        DB::transaction(function () use ($rows, $platform, $accountId, $data, &$created, &$updated, &$skipped) {
             foreach ($rows as $row) {
                 $existingId = DB::table('investment_opportunities')
                     ->where('platform_id', $platform->id)
@@ -47,16 +49,17 @@ class Ta3meedImportController extends Controller
                     ->value('id');
 
                 if ($existingId && empty($data['replace_existing'])) {
+                    $skipped++;
                     continue;
                 }
 
                 if ($existingId) {
                     DB::table('investment_opportunity_allocations')->where('opportunity_id', $existingId)->delete();
-                    DB::table('investment_opportunities')->where('id', $existingId)->update($this->opportunityPayload($row, $platform, $accountId));
+                    DB::table('investment_opportunities')->where('id', $existingId)->update($this->opportunityPayload($row, $platform, $accountId, false));
                     $opportunityId = (int) $existingId;
                     $updated++;
                 } else {
-                    $opportunityId = DB::table('investment_opportunities')->insertGetId($this->opportunityPayload($row, $platform, $accountId));
+                    $opportunityId = DB::table('investment_opportunities')->insertGetId($this->opportunityPayload($row, $platform, $accountId, true));
                     $created++;
                 }
 
@@ -87,6 +90,7 @@ class Ta3meedImportController extends Controller
                 'parsed' => count($rows),
                 'created' => $created,
                 'updated' => $updated,
+                'skipped' => $skipped,
             ],
         ]);
     }
@@ -139,8 +143,9 @@ class Ta3meedImportController extends Controller
     {
         $dates = [];
         foreach ($tokens as $index => $token) {
-            if ($this->parseDate($token)) {
-                $dates[] = ['index' => $index, 'date' => $this->parseDate($token)];
+            $date = $this->parseDate($token);
+            if ($date) {
+                $dates[] = ['index' => $index, 'date' => $date];
             }
         }
 
@@ -212,9 +217,9 @@ class Ta3meedImportController extends Controller
         ];
     }
 
-    private function opportunityPayload(array $row, $platform, int $accountId): array
+    private function opportunityPayload(array $row, $platform, int $accountId, bool $withCreatedAt): array
     {
-        return [
+        $payload = [
             'account_id' => $accountId,
             'platform_id' => $platform->id,
             'title' => 'تعميد - ' . $row['code'],
@@ -237,19 +242,26 @@ class Ta3meedImportController extends Controller
                 'source' => 'bulk_finished_import',
             ], JSON_UNESCAPED_UNICODE),
             'notes' => $row['notes'],
-            'created_at' => now(),
             'updated_at' => now(),
         ];
+
+        if ($withCreatedAt) {
+            $payload['created_at'] = now();
+        }
+
+        return $payload;
     }
 
     private function looksLikeCode(string $line): bool
     {
-        return preg_match('/^(?:PB-|INV-|Inv-)?[A-ZА-ЯЁ0-9-]{5,}$/u', trim($line)) === 1;
+        return preg_match('/^(?:PB-|INV-|Inv-|inv-)?[A-ZА-ЯЁ0-9-]{5,}$/u', trim($line)) === 1;
     }
 
     private function isHeader(string $line): bool
     {
-        return in_array(trim($line), ['الكود', 'احمد', 'سارة', 'المبنى', 'امال', 'امي', 'الوالد', 'الشهور', 'نسبة الربح', 'الربح المحقق', 'تصنيف', 'تارخ الاستثمار', 'تاريخ الاستثمار', 'تاريخ الاستحقاق', 'تاريخ الخروج'], true);
+        $normalized = $this->normalizeArabic($line);
+        $headers = ['الكود', 'احمد', 'ساره', 'المبنى', 'امال', 'امي', 'الوالد', 'الشهور', 'نسبه الربح', 'الربح المحقق', 'تصنيف', 'تارخ الاستثمار', 'تاريخ الاستثمار', 'تاريخ الاستحقاق', 'تاريخ الخروج'];
+        return in_array($normalized, $headers, true);
     }
 
     private function isMoney(string $value): bool
@@ -284,42 +296,112 @@ class Ta3meedImportController extends Controller
         if ($id) {
             return (int) $id;
         }
-        return DB::table('investment_accounts')->insertGetId([
+
+        $payload = [
             'platform_id' => $platformId,
-            'display_name' => 'محفظة تعميد',
             'currency' => 'SAR',
-            'wallet_balance' => 0,
-            'total_invested_snapshot' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        if (Schema::hasColumn('investment_accounts', 'display_name')) {
+            $payload['display_name'] = 'محفظة تعميد';
+        }
+        if (Schema::hasColumn('investment_accounts', 'wallet_balance')) {
+            $payload['wallet_balance'] = 0;
+        }
+        if (Schema::hasColumn('investment_accounts', 'total_invested_snapshot')) {
+            $payload['total_invested_snapshot'] = 0;
+        }
+        if (Schema::hasColumn('investment_accounts', 'is_active')) {
+            $payload['is_active'] = true;
+        }
+
+        return DB::table('investment_accounts')->insertGetId($payload);
+    }
+
+    private function investorId(string $name): int
+    {
+        $canonicalName = $this->canonicalInvestorName($name);
+        $code = $this->investorCode($canonicalName);
+        $aliases = $this->investorAliases($canonicalName);
+
+        $existing = DB::table('investment_investors')
+            ->where('code', $code)
+            ->orWhere(function ($query) use ($aliases) {
+                foreach ($aliases as $alias) {
+                    $query->orWhere('name', $alias);
+                }
+            })
+            ->first();
+
+        if ($existing) {
+            DB::table('investment_investors')
+                ->where('id', $existing->id)
+                ->update([
+                    'code' => $code,
+                    'name' => $canonicalName,
+                    'is_active' => true,
+                    'updated_at' => now(),
+                ]);
+            return (int) $existing->id;
+        }
+
+        return DB::table('investment_investors')->insertGetId([
+            'code' => $code,
+            'name' => $canonicalName,
             'is_active' => true,
             'created_at' => now(),
             'updated_at' => now(),
         ]);
     }
 
-    private function investorId(string $name): int
+    private function canonicalInvestorName(string $name): string
     {
-        $codes = [
-            'احمد' => 'ahmed',
+        $normalized = $this->normalizeArabic($name);
+        return match ($normalized) {
+            'احمد' => 'أحمد',
+            'ساره' => 'سارة',
+            'المبنى' => 'المبنى',
+            'امال' => 'أمال',
+            'امي' => 'أمي',
+            'الوالد' => 'الوالد',
+            default => trim($name),
+        };
+    }
+
+    private function investorCode(string $canonicalName): string
+    {
+        return match ($canonicalName) {
             'أحمد' => 'ahmed',
             'سارة' => 'sara',
             'المبنى' => 'building',
-            'امال' => 'amal',
             'أمال' => 'amal',
-            'امي' => 'mother',
             'أمي' => 'mother',
             'الوالد' => 'father',
-        ];
-        $code = $codes[$name] ?? strtolower(trim(str_replace(' ', '_', $name)));
-        $id = DB::table('investment_investors')->where('code', $code)->value('id');
-        if ($id) {
-            return (int) $id;
-        }
-        return DB::table('investment_investors')->insertGetId([
-            'code' => $code,
-            'name' => $name,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+            default => strtolower(trim(str_replace(' ', '_', $canonicalName))),
+        };
+    }
+
+    private function investorAliases(string $canonicalName): array
+    {
+        return match ($canonicalName) {
+            'أحمد' => ['أحمد', 'احمد'],
+            'سارة' => ['سارة', 'ساره'],
+            'المبنى' => ['المبنى', 'المبني'],
+            'أمال' => ['أمال', 'امال', 'أمل', 'امل'],
+            'أمي' => ['أمي', 'امي'],
+            'الوالد' => ['الوالد'],
+            default => [$canonicalName],
+        };
+    }
+
+    private function normalizeArabic(string $value): string
+    {
+        $value = trim($value);
+        $value = str_replace(['أ', 'إ', 'آ'], 'ا', $value);
+        $value = str_replace('ة', 'ه', $value);
+        $value = preg_replace('/\s+/u', ' ', $value);
+        return $value;
     }
 }
