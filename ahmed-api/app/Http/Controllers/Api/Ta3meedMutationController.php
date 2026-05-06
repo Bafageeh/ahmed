@@ -132,6 +132,57 @@ class Ta3meedMutationController extends Controller
         return response()->json(['data' => $this->readInvestment($id)]);
     }
 
+    public function recordInvestorPayment(Request $request, string $code)
+    {
+        $data = $request->validate([
+            'opportunity_id' => ['required', 'integer'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+        ]);
+
+        $platform = $this->platform();
+        if (! $platform) {
+            return response()->json(['message' => 'Ta3meed platform not found'], 404);
+        }
+
+        $investment = DB::table('investment_opportunities')
+            ->where('id', $data['opportunity_id'])
+            ->where('platform_id', $platform->id)
+            ->first();
+
+        if (! $investment) {
+            return response()->json(['message' => 'Investment not found'], 404);
+        }
+
+        $investor = DB::table('investment_investors')
+            ->where('code', $code)
+            ->orWhere('name', $code)
+            ->first();
+
+        if (! $investor) {
+            return response()->json(['message' => 'Investor not found'], 404);
+        }
+
+        $allocation = DB::table('investment_opportunity_allocations')
+            ->where('opportunity_id', $investment->id)
+            ->where('investor_id', $investor->id)
+            ->first();
+
+        if (! $allocation) {
+            return response()->json(['message' => 'Investor allocation not found'], 404);
+        }
+
+        $newReceivedAmount = round(((float) $allocation->received_amount) + ((float) $data['amount']), 2);
+
+        DB::table('investment_opportunity_allocations')
+            ->where('id', $allocation->id)
+            ->update([
+                'received_amount' => $newReceivedAmount,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['data' => $this->readInvestment((int) $investment->id)]);
+    }
+
     private function platform()
     {
         return DB::table('investment_platforms')->where('code', 'ta3meed')->first();
