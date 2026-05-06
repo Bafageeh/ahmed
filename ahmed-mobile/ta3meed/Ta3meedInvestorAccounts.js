@@ -41,6 +41,7 @@ function InvestorAccount({ investor, onBack }) {
   const [amount, setAmount] = useState('');
   const [entryDate, setEntryDate] = useState(todayText());
   const [notes, setNotes] = useState('');
+  const [entryType, setEntryType] = useState('deposit');
   const [message, setMessage] = useState('');
 
   const entries = account?.entries || [];
@@ -69,22 +70,23 @@ function InvestorAccount({ investor, onBack }) {
       setMessage('أدخل المبلغ أولًا');
       return;
     }
-    setMessage('جاري إضافة الرصيد...');
+    setMessage(entryType === 'withdrawal' ? 'جاري تسجيل السحب...' : 'جاري إضافة الرصيد...');
     try {
       const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account/entries`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ amount: value, entry_date: entryDate || todayText(), notes: notes || null }),
+        body: JSON.stringify({ amount: value, type: entryType, entry_date: entryDate || todayText(), notes: notes || null }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'entry failed');
       setAmount('');
       setNotes('');
       setEntryDate(todayText());
+      setEntryType('deposit');
       setAccount(json.data || null);
-      setMessage('تمت إضافة الرصيد لحساب المستثمر');
+      setMessage(entryType === 'withdrawal' ? 'تم تسجيل السحب من حساب المستثمر' : 'تمت إضافة الرصيد لحساب المستثمر');
     } catch {
-      setMessage('تعذر إضافة الرصيد');
+      setMessage('تعذر حفظ الحركة');
     }
   };
 
@@ -98,12 +100,24 @@ function InvestorAccount({ investor, onBack }) {
       {!!message && <Text style={styles.message}>{message}</Text>}
 
       <View style={styles.investorPaymentCard}>
-        <Text style={styles.investorPaymentTitle}>إضافة رصيد جديد</Text>
+        <Text style={styles.investorPaymentTitle}>{entryType === 'withdrawal' ? 'تسجيل سحب من الرصيد' : 'إضافة رصيد جديد'}</Text>
+        <View style={styles.investorEntryTypeRow}>
+          <EntryTypeButton label="إضافة" active={entryType === 'deposit'} onPress={() => setEntryType('deposit')} />
+          <EntryTypeButton label="سحب" active={entryType === 'withdrawal'} onPress={() => setEntryType('withdrawal')} danger />
+        </View>
         <TextInput value={amount} onChangeText={setAmount} placeholder="المبلغ" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.investorPaymentInput} />
-        <TextInput value={entryDate} onChangeText={setEntryDate} placeholder="تاريخ الإضافة YYYY-MM-DD" placeholderTextColor="#94a3b8" style={styles.investorPaymentInput} />
-        <TextInput value={notes} onChangeText={setNotes} placeholder="ملاحظات" placeholderTextColor="#94a3b8" style={styles.investorPaymentInput} />
-        <TouchableOpacity style={styles.investorPaymentButton} onPress={saveEntry} activeOpacity={0.84}>
-          <Text style={styles.investorPaymentButtonText}>إضافة مبلغ</Text>
+        <TextInput value={entryDate} onChangeText={setEntryDate} placeholder="تاريخ الحركة YYYY-MM-DD" placeholderTextColor="#94a3b8" style={styles.investorPaymentInput} />
+        <TextInput
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="ملاحظات"
+          placeholderTextColor="#94a3b8"
+          style={[styles.investorPaymentInput, styles.investorNotesInput]}
+          multiline
+          textAlignVertical="top"
+        />
+        <TouchableOpacity style={[styles.investorPaymentButton, entryType === 'withdrawal' && styles.investorWithdrawButton]} onPress={saveEntry} activeOpacity={0.84}>
+          <Text style={styles.investorPaymentButtonText}>{entryType === 'withdrawal' ? 'تسجيل سحب' : 'إضافة مبلغ'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -112,11 +126,19 @@ function InvestorAccount({ investor, onBack }) {
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد بعد.</Text>
       ) : entries.map((entry) => (
         <View key={entry.id} style={styles.investorPaymentCard}>
-          <Text style={styles.investorPaymentTitle}>{money(entry.amount, 2)} ر.س</Text>
+          <Text style={[styles.investorPaymentTitle, n(entry.amount) < 0 && styles.investorWithdrawText]}>{money(entry.amount, 2)} ر.س</Text>
           <Text style={styles.investorPaymentMeta}>التاريخ: {entry.entry_date || '-'}</Text>
           {entry.notes ? <Text style={styles.investorPaymentMeta}>ملاحظات: {entry.notes}</Text> : null}
         </View>
       ))}
     </View>
+  );
+}
+
+function EntryTypeButton({ label, active, onPress, danger }) {
+  return (
+    <TouchableOpacity style={[styles.investorEntryTypeButton, active && styles.investorEntryTypeButtonActive, danger && active && styles.investorEntryTypeButtonDanger]} onPress={onPress} activeOpacity={0.84}>
+      <Text style={[styles.investorEntryTypeText, active && styles.investorEntryTypeTextActive]}>{label}</Text>
+    </TouchableOpacity>
   );
 }
