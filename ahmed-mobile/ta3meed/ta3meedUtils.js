@@ -2,16 +2,6 @@ export const today = () => new Date().toISOString().slice(0, 10);
 export const n = (value) => Number(value || 0);
 export const money = (value, digits = 0) => n(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
 
-const fallbackTitles = ['استثمار شركة ألف', 'استثمار مصنع النور', 'استثمار الواحة العقارية', 'استثمار السوق الذكي', 'استثمار المستقبل'];
-
-export const themes = [
-  { bg: '#007371', icon: '▥' },
-  { bg: '#6d5aa7', icon: '▤' },
-  { bg: '#ff8a00', icon: '▦' },
-  { bg: '#05a5a3', icon: '▱' },
-  { bg: '#2e72bd', icon: '◇' },
-];
-
 export function metaOf(value) {
   try {
     return typeof value === 'string' ? JSON.parse(value) : value || {};
@@ -36,14 +26,36 @@ export function statusOf(item, currentDate = today) {
   return { key: 'active', label: 'نشط' };
 }
 
-export function titleOf(item, index) {
-  const meta = metaOf(item.metadata);
-  return item.title || meta.title || meta.name || item.reference_number || fallbackTitles[index % fallbackTitles.length];
+export function titleOf(item) {
+  const raw = item.reference_number || item.title || 'رقم غير مسجل';
+  return String(raw).replace(/^\s*تعميد\s*-\s*/i, '').trim();
+}
+
+export function investorsOf(item) {
+  const allocations = Array.isArray(item.allocations) ? item.allocations : [];
+  return allocations
+    .map((allocation) => allocation.investor_name)
+    .filter(Boolean);
+}
+
+export function investorCodesOf(item) {
+  const allocations = Array.isArray(item.allocations) ? item.allocations : [];
+  return allocations
+    .map((allocation) => allocation.investor_code || allocation.investor_name)
+    .filter(Boolean);
 }
 
 export function searchable(item) {
   const meta = metaOf(item.metadata);
-  return [item.title, item.reference_number, item.notes, item.status, meta.category, item.maturity_date]
+  return [
+    item.title,
+    item.reference_number,
+    item.notes,
+    item.status,
+    meta.category,
+    item.maturity_date,
+    ...investorsOf(item),
+  ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
