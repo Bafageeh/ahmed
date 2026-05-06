@@ -38,10 +38,18 @@ export function Ta3meedCard({ item, index, onEdit, onReceive, onDelete, receivin
           </View>
           <Text style={[styles.profitText, overdue && styles.profitOverdue, received && styles.profitReceived]}>{received ? 'ربح متحقق' : 'ربح متوقع'} {money(item.expected_profit_amount, 2)} ر.س</Text>
           <View style={styles.actionsRow}>
-            <CircleAction tone="delete" onPress={onDelete}><Feather name="trash-2" size={14} color="#ef4444" /></CircleAction>
-            {!received ? <CircleAction tone="receive" onPress={onReceive} disabled={receiving}><Feather name="check" size={16} color="#16a34a" /></CircleAction> : <CircleAction onPress={onToggle}><Feather name="check-circle" size={15} color="#16a34a" /></CircleAction>}
-            <CircleAction tone="edit" onPress={onEdit}><Feather name="edit-2" size={14} color="#2563eb" /></CircleAction>
-            <CircleAction onPress={onToggle}><Feather name="eye" size={14} color="#475569" /></CircleAction>
+            <CircleAction onPress={onDelete}>
+              <Feather name="trash-2" size={18} color="#dc2626" />
+            </CircleAction>
+            <CircleAction onPress={received ? onToggle : onReceive} disabled={receiving}>
+              <Feather name="check-circle" size={19} color="#047857" />
+            </CircleAction>
+            <CircleAction onPress={onEdit}>
+              <Feather name="edit-3" size={18} color="#0f8bdc" />
+            </CircleAction>
+            <CircleAction onPress={onToggle}>
+              <Feather name="eye" size={18} color="#1f2937" />
+            </CircleAction>
           </View>
         </View>
       </View>
