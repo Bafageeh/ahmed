@@ -1,6 +1,5 @@
 import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { styles } from './ta3meedStyles';
 import { investorsOf, metaOf, money, n, statusOf, titleOf, today } from './ta3meedUtils';
 
@@ -49,16 +48,16 @@ export function Ta3meedCard({ item, index, selectedInvestorCode, onEdit, onRecei
           <Text style={[styles.profitText, overdue && styles.profitOverdue, received && styles.profitReceived]}>{received ? 'ربح متحقق' : 'ربح متوقع'} {money(selectedAllocation?.expected_profit_amount || item.expected_profit_amount, 2)} ر.س</Text>
           <View style={styles.actionsRow}>
             <CircleAction onPress={onDelete}>
-              <Feather name="trash-2" size={18} color="#dc2626" />
+              <Text style={[styles.cardActionSymbol, styles.cardActionDelete]}>🗑</Text>
             </CircleAction>
             <CircleAction onPress={received ? onToggle : onReceive} disabled={receiving}>
-              <Feather name="check-circle" size={19} color="#047857" />
+              <Text style={[styles.cardActionSymbol, styles.cardActionCheck]}>✓</Text>
             </CircleAction>
             <CircleAction onPress={onEdit}>
-              <Feather name="edit-3" size={18} color="#0f8bdc" />
+              <Text style={[styles.cardActionSymbol, styles.cardActionEdit]}>✎</Text>
             </CircleAction>
             <CircleAction onPress={onToggle}>
-              <Feather name="eye" size={18} color="#1f2937" />
+              <Text style={[styles.cardActionSymbol, styles.cardActionEye]}>◉</Text>
             </CircleAction>
           </View>
         </View>
