@@ -44,14 +44,8 @@ function getMineFromTa3meed(item) {
   const mine = allocations.filter(isMineAllocation);
   const invested = mine.reduce((total, allocation) => total + asNumber(allocation.invested_amount || allocation.amount), 0);
   const profit = mine.reduce((total, allocation) => total + asNumber(allocation.expected_profit_amount || allocation.profit), 0);
-  const percent = asNumber(item?.principal_amount) > 0 ? (invested / asNumber(item.principal_amount)) * 100 : 0;
 
-  return {
-    allocations: mine,
-    invested,
-    profit,
-    percent,
-  };
+  return { invested, profit };
 }
 
 function getMoneyMoonProfit(item) {
@@ -102,6 +96,11 @@ export default function WealthScreen({ openInvestments }) {
 
   const ta3meedActiveMine = useMemo(() => ta3meedMine.filter(({ item }) => !isReceived(item)), [ta3meedMine]);
   const moneyMoonActive = useMemo(() => moneyMoonItems.filter((item) => !isReceived(item)), [moneyMoonItems]);
+  const overdueCount = useMemo(() => {
+    const ta3meedOverdue = ta3meedActiveMine.filter(({ item }) => isOverdue(item)).length;
+    const moneyMoonOverdue = moneyMoonActive.filter(isOverdue).length;
+    return ta3meedOverdue + moneyMoonOverdue;
+  }, [ta3meedActiveMine, moneyMoonActive]);
 
   const totals = useMemo(() => {
     const ta3meedInvested = ta3meedActiveMine.reduce((total, row) => total + row.mine.invested, 0);
@@ -115,8 +114,12 @@ export default function WealthScreen({ openInvestments }) {
       ta3meedProfit,
       moneyMoonInvested,
       moneyMoonProfit,
+      ta3meedCount: ta3meedActiveMine.length,
+      moneyMoonCount: moneyMoonActive.length,
+      totalCount: ta3meedActiveMine.length + moneyMoonActive.length,
+      overdueCount,
     };
-  }, [ta3meedActiveMine, moneyMoonActive]);
+  }, [ta3meedActiveMine, moneyMoonActive, overdueCount]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -124,8 +127,8 @@ export default function WealthScreen({ openInvestments }) {
         <View style={styles.header}>
           <View style={styles.headerGlow} />
           <Text style={styles.badge}>💎 ثروتي</Text>
-          <Text style={styles.title}>ممتلكاتي الاستثمارية</Text>
-          <Text style={styles.subtitle}>تعرض حصتي الخاصة فقط في تعميد، وكل ممتلكاتي في موني مون.</Text>
+          <Text style={styles.title}>ملخص ممتلكاتي</Text>
+          <Text style={styles.subtitle}>بطاقات إحصائية فقط لحصتي في تعميد وممتلكاتي في موني مون.</Text>
         </View>
 
         {loading ? (
@@ -148,22 +151,17 @@ export default function WealthScreen({ openInvestments }) {
           <SummaryCard icon="💰" label="إجمالي ثروتي النشطة" value={money(totals.totalWealth)} featured />
           <SummaryCard icon="📈" label="أرباحي المتوقعة" value={money(totals.totalProfit)} />
           <SummaryCard icon="🏦" label="حصتي في تعميد" value={money(totals.ta3meedInvested)} />
+          <SummaryCard icon="💵" label="ربحي من تعميد" value={money(totals.ta3meedProfit)} />
           <SummaryCard icon="🌙" label="موني مون" value={money(totals.moneyMoonInvested)} />
+          <SummaryCard icon="✨" label="ربح موني مون" value={money(totals.moneyMoonProfit)} />
+          <SummaryCard icon="🧾" label="عدد استثماراتي النشطة" value={`${totals.totalCount}`} />
+          <SummaryCard icon="⚠️" label="استثمارات متأخرة" value={`${totals.overdueCount}`} danger={totals.overdueCount > 0} />
         </View>
 
-        <SectionTitle title="أملاكي الخاصة في تعميد" count={ta3meedActiveMine.length} />
-        {ta3meedActiveMine.length === 0 ? (
-          <EmptyBox text="لا توجد حصة خاصة باسم أحمد في تعميد حاليًا." />
-        ) : ta3meedActiveMine.map(({ item, mine }) => (
-          <Ta3meedMineCard key={String(item.id)} item={item} mine={mine} />
-        ))}
-
-        <SectionTitle title="أملاكي في موني مون" count={moneyMoonActive.length} />
-        {moneyMoonActive.length === 0 ? (
-          <EmptyBox text="لا توجد استثمارات نشطة في موني مون حاليًا." />
-        ) : moneyMoonActive.map((item) => (
-          <MoneyMoonAssetCard key={String(item.id)} item={item} />
-        ))}
+        <View style={styles.platformCardsRow}>
+          <PlatformSummary icon="🏦" title="تعميد" amount={money(totals.ta3meedInvested)} profit={money(totals.ta3meedProfit)} count={totals.ta3meedCount} />
+          <PlatformSummary icon="🌙" title="موني مون" amount={money(totals.moneyMoonInvested)} profit={money(totals.moneyMoonProfit)} count={totals.moneyMoonCount} />
+        </View>
 
         <TouchableOpacity style={styles.openInvestmentsButton} onPress={openInvestments} activeOpacity={0.84}>
           <Text style={styles.openInvestmentsText}>فتح منصات الاستثمار</Text>
@@ -173,83 +171,36 @@ export default function WealthScreen({ openInvestments }) {
   );
 }
 
-function SummaryCard({ icon, label, value, featured }) {
+function SummaryCard({ icon, label, value, featured, danger }) {
   return (
-    <View style={[styles.summaryCard, featured && styles.featuredSummary]}>
+    <View style={[styles.summaryCard, featured && styles.featuredSummary, danger && styles.dangerSummary]}>
       <Text style={styles.summaryIcon}>{icon}</Text>
-      <Text style={[styles.summaryValue, featured && styles.featuredValue]} numberOfLines={1}>{value}</Text>
-      <Text style={[styles.summaryLabel, featured && styles.featuredLabel]}>{label}</Text>
+      <Text style={[styles.summaryValue, featured && styles.featuredValue, danger && styles.dangerValue]} numberOfLines={1}>{value}</Text>
+      <Text style={[styles.summaryLabel, featured && styles.featuredLabel, danger && styles.dangerLabel]}>{label}</Text>
     </View>
   );
 }
 
-function SectionTitle({ title, count }) {
+function PlatformSummary({ icon, title, amount, profit, count }) {
   return (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <Text style={styles.sectionCount}>{count}</Text>
-    </View>
-  );
-}
-
-function Ta3meedMineCard({ item, mine }) {
-  const meta = readMeta(item.metadata);
-  const overdue = isOverdue(item);
-  return (
-    <View style={[styles.assetCard, overdue && styles.overdueCard]}>
-      <View style={styles.assetTopRow}>
-        <View style={styles.assetIcon}><Text style={styles.assetIconText}>🏦</Text></View>
-        <View style={styles.assetTitleBlock}>
-          <Text style={styles.assetTitle}>{item.reference_number || 'فرصة تعميد'}</Text>
-          <Text style={styles.assetSubtitle}>نسبتي: {mine.percent.toFixed(2)}% · يستحق {item.maturity_date || '-'}</Text>
+    <View style={styles.platformSummaryCard}>
+      <View style={styles.platformTopRow}>
+        <View style={styles.platformIcon}><Text style={styles.platformIconText}>{icon}</Text></View>
+        <View style={styles.platformTitleBlock}>
+          <Text style={styles.platformTitle}>{title}</Text>
+          <Text style={styles.platformCount}>{count} استثمار نشط</Text>
         </View>
       </View>
-      <View style={styles.assetStatsRow}>
-        <MiniStat label="حصتي" value={money(mine.invested)} />
-        <MiniStat label="ربحي" value={money(mine.profit)} />
-        <MiniStat label="التصنيف" value={meta.category || '-'} />
-      </View>
-      {overdue ? <Text style={styles.overdueText}>متأخر</Text> : null}
-    </View>
-  );
-}
-
-function MoneyMoonAssetCard({ item }) {
-  const meta = readMeta(item.metadata);
-  const overdue = isOverdue(item);
-  return (
-    <View style={[styles.assetCard, overdue && styles.overdueCard]}>
-      <View style={styles.assetTopRow}>
-        <View style={styles.assetIcon}><Text style={styles.assetIconText}>🌙</Text></View>
-        <View style={styles.assetTitleBlock}>
-          <Text style={styles.assetTitle}>{meta.order_no || meta.external_order_no || item.reference_number || item.title || 'موني مون'}</Text>
-          <Text style={styles.assetSubtitle}>يستحق {item.maturity_date || '-'}</Text>
+      <View style={styles.platformMiniGrid}>
+        <View style={styles.miniBox}>
+          <Text style={styles.miniValue}>{amount}</Text>
+          <Text style={styles.miniLabel}>المبلغ</Text>
+        </View>
+        <View style={styles.miniBox}>
+          <Text style={styles.miniValue}>{profit}</Text>
+          <Text style={styles.miniLabel}>الربح</Text>
         </View>
       </View>
-      <View style={styles.assetStatsRow}>
-        <MiniStat label="المبلغ" value={money(item.principal_amount)} />
-        <MiniStat label="الربح" value={money(getMoneyMoonProfit(item))} />
-        <MiniStat label="الفئة" value={meta.category || '-'} />
-      </View>
-      {overdue ? <Text style={styles.overdueText}>متأخر</Text> : null}
-    </View>
-  );
-}
-
-function MiniStat({ label, value }) {
-  return (
-    <View style={styles.miniStat}>
-      <Text style={styles.miniValue} numberOfLines={1}>{value}</Text>
-      <Text style={styles.miniLabel}>{label}</Text>
-    </View>
-  );
-}
-
-function EmptyBox({ text }) {
-  return (
-    <View style={styles.emptyBox}>
-      <Text style={styles.emptyIcon}>◇</Text>
-      <Text style={styles.emptyText}>{text}</Text>
     </View>
   );
 }
@@ -270,30 +221,26 @@ const styles = StyleSheet.create({
   summaryGrid: { marginTop: 14, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
   summaryCard: { flexBasis: '47.5%', flexGrow: 1, backgroundColor: '#ffffff', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'flex-end' },
   featuredSummary: { backgroundColor: '#0f766e', borderColor: '#0f766e' },
+  dangerSummary: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
   summaryIcon: { fontSize: 24, marginBottom: 10 },
   summaryValue: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
   summaryLabel: { marginTop: 6, color: '#64748b', fontSize: 12, fontWeight: '800', textAlign: 'right' },
   featuredValue: { color: '#ffffff' },
   featuredLabel: { color: '#ccfbf1' },
-  sectionHeader: { marginTop: 22, marginBottom: 10, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' },
-  sectionCount: { color: '#0f766e', backgroundColor: '#ccfbf1', paddingHorizontal: 11, paddingVertical: 5, borderRadius: 999, overflow: 'hidden', fontWeight: '900' },
-  assetCard: { marginBottom: 10, backgroundColor: '#ffffff', borderRadius: 24, padding: 15, borderWidth: 1, borderColor: '#e2e8f0' },
-  overdueCard: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
-  assetTopRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
-  assetIcon: { width: 54, height: 54, borderRadius: 21, backgroundColor: '#f0fdfa', borderWidth: 1, borderColor: '#ccfbf1', alignItems: 'center', justifyContent: 'center' },
-  assetIconText: { fontSize: 26 },
-  assetTitleBlock: { flex: 1, alignItems: 'flex-end' },
-  assetTitle: { color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' },
-  assetSubtitle: { marginTop: 5, color: '#64748b', fontWeight: '800', textAlign: 'right' },
-  assetStatsRow: { marginTop: 13, flexDirection: 'row-reverse', gap: 8 },
-  miniStat: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 17, padding: 11, borderWidth: 1, borderColor: '#eef2f7', alignItems: 'flex-end' },
+  dangerValue: { color: '#c2410c' },
+  dangerLabel: { color: '#c2410c' },
+  platformCardsRow: { marginTop: 16, gap: 10 },
+  platformSummaryCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 10 },
+  platformTopRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  platformIcon: { width: 52, height: 52, borderRadius: 20, backgroundColor: '#f0fdfa', borderWidth: 1, borderColor: '#ccfbf1', alignItems: 'center', justifyContent: 'center' },
+  platformIconText: { fontSize: 25 },
+  platformTitleBlock: { flex: 1, alignItems: 'flex-end' },
+  platformTitle: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' },
+  platformCount: { marginTop: 4, color: '#64748b', fontWeight: '800', textAlign: 'right' },
+  platformMiniGrid: { marginTop: 13, flexDirection: 'row-reverse', gap: 8 },
+  miniBox: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 17, padding: 11, borderWidth: 1, borderColor: '#eef2f7', alignItems: 'flex-end' },
   miniValue: { color: '#0f172a', fontSize: 14, fontWeight: '900', textAlign: 'right' },
   miniLabel: { marginTop: 4, color: '#64748b', fontSize: 11, fontWeight: '800', textAlign: 'right' },
-  overdueText: { marginTop: 10, alignSelf: 'flex-end', color: '#c2410c', backgroundColor: '#ffedd5', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, overflow: 'hidden', fontWeight: '900' },
-  emptyBox: { backgroundColor: '#ffffff', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
-  emptyIcon: { color: '#94a3b8', fontSize: 30, fontWeight: '900' },
-  emptyText: { marginTop: 8, color: '#64748b', textAlign: 'center', fontWeight: '800' },
-  openInvestmentsButton: { marginTop: 18, backgroundColor: '#0f172a', borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
+  openInvestmentsButton: { marginTop: 8, backgroundColor: '#0f172a', borderRadius: 20, paddingVertical: 15, alignItems: 'center' },
   openInvestmentsText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
 });
