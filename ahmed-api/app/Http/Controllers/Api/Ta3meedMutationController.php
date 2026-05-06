@@ -132,55 +132,39 @@ class Ta3meedMutationController extends Controller
         return response()->json(['data' => $this->readInvestment($id)]);
     }
 
-    public function recordInvestorPayment(Request $request, string $code)
+    public function investorAccount(string $code)
     {
-        $data = $request->validate([
-            'opportunity_id' => ['required', 'integer'],
-            'amount' => ['required', 'numeric', 'min:0.01'],
-        ]);
-
-        $platform = $this->platform();
-        if (! $platform) {
-            return response()->json(['message' => 'Ta3meed platform not found'], 404);
-        }
-
-        $investment = DB::table('investment_opportunities')
-            ->where('id', $data['opportunity_id'])
-            ->where('platform_id', $platform->id)
-            ->first();
-
-        if (! $investment) {
-            return response()->json(['message' => 'Investment not found'], 404);
-        }
-
-        $investor = DB::table('investment_investors')
-            ->where('code', $code)
-            ->orWhere('name', $code)
-            ->first();
-
+        $investor = $this->investorByCode($code);
         if (! $investor) {
             return response()->json(['message' => 'Investor not found'], 404);
         }
 
-        $allocation = DB::table('investment_opportunity_allocations')
-            ->where('opportunity_id', $investment->id)
-            ->where('investor_id', $investor->id)
-            ->first();
+        return response()->json(['data' => $this->readInvestorAccount($investor)]);
+    }
 
-        if (! $allocation) {
-            return response()->json(['message' => 'Investor allocation not found'], 404);
+    public function storeInvestorAccountEntry(Request $request, string $code)
+    {
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'entry_date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        $investor = $this->investorByCode($code);
+        if (! $investor) {
+            return response()->json(['message' => 'Investor not found'], 404);
         }
 
-        $newReceivedAmount = round(((float) $allocation->received_amount) + ((float) $data['amount']), 2);
+        DB::table('ta3meed_investor_account_entries')->insert([
+            'investor_id' => $investor->id,
+            'amount' => round((float) $data['amount'], 2),
+            'entry_date' => $data['entry_date'] ?? now()->toDateString(),
+            'notes' => $data['notes'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
-        DB::table('investment_opportunity_allocations')
-            ->where('id', $allocation->id)
-            ->update([
-                'received_amount' => $newReceivedAmount,
-                'updated_at' => now(),
-            ]);
-
-        return response()->json(['data' => $this->readInvestment((int) $investment->id)]);
+        return response()->json(['data' => $this->readInvestorAccount($investor)], 201);
     }
 
     private function platform()
@@ -212,7 +196,9 @@ class Ta3meedMutationController extends Controller
             'أحمد' => 'ahmed',
             'سارة' => 'sara',
             'أمل' => 'amal',
+            'امال' => 'amal',
             'أمي' => 'mother',
+            'امي' => 'mother',
             'الوالد' => 'father',
         ];
 
@@ -230,6 +216,29 @@ class Ta3meedMutationController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+    }
+
+    private function investorByCode(string $code)
+    {
+        return DB::table('investment_investors')
+            ->where('code', $code)
+            ->orWhere('name', $code)
+            ->first();
+    }
+
+    private function readInvestorAccount($investor): array
+    {
+        $entries = DB::table('ta3meed_investor_account_entries')
+            ->where('investor_id', $investor->id)
+            ->orderByDesc('entry_date')
+            ->orderByDesc('id')
+            ->get();
+
+        return [
+            'investor' => $investor,
+            'balance' => round((float) $entries->sum('amount'), 2),
+            'entries' => $entries,
+        ];
     }
 
     private function readInvestment(int $id)
