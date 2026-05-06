@@ -2,14 +2,14 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { styles } from './ta3meedStyles';
 
-export function BottomTabs({ onHome, onInfo }) {
+export function BottomTabs({ onHome, onInfo, onMore, active = 'investments' }) {
   return (
     <View pointerEvents="box-none" style={styles.bottomWrap}>
       <View style={styles.bottomBar}>
-        <BottomItem icon="▦" label="المزيد" onPress={() => onInfo('تبويب المزيد')} />
+        <BottomItem icon="▦" label="المزيد" active={active === 'more'} onPress={onMore || (() => onInfo('تبويب المزيد'))} />
         <BottomItem icon="▭" label="محفظتي" onPress={() => onInfo('تبويب محفظتي')} />
         <View style={styles.centerSpace} />
-        <BottomItem icon="◔" label="استثماراتي" active onPress={() => onInfo('أنت الآن في استثماراتي')} />
+        <BottomItem icon="◔" label="استثماراتي" active={active === 'investments'} onPress={() => onInfo('أنت الآن في استثماراتي')} />
         <BottomItem icon="⌂" label="الرئيسية" onPress={onHome} />
       </View>
       <TouchableOpacity style={styles.centerFab} activeOpacity={0.86} onPress={() => onInfo('لوحة الاستثمارات')}>
