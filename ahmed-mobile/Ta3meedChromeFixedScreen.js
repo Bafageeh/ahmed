@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Ta3meedScreen from './Ta3meedScreen';
+import UiIcon, { ICON_COLOR } from './UiIcon';
 
 export default function Ta3meedChromeFixedScreen(props) {
   return (
@@ -9,11 +10,11 @@ export default function Ta3meedChromeFixedScreen(props) {
       <View style={styles.headerOverlay} pointerEvents="none">
         <View style={styles.backMask} />
 
-        <View style={styles.searchButton}><Text style={styles.searchIconText}>⌕</Text></View>
+        <View style={styles.searchButton}><UiIcon name="search" size={21} color={ICON_COLOR} /></View>
 
         <Text style={styles.title}>تعميد</Text>
 
-        <View style={styles.moreButton}><Text style={styles.moreIconText}>⋮</Text></View>
+        <View style={styles.moreButton}><UiIcon name="more" size={22} color={ICON_COLOR} /></View>
       </View>
     </View>
   );
@@ -74,18 +75,6 @@ const styles = StyleSheet.create({
     shadowRadius: 7,
     shadowOffset: { width: 0, height: 3 },
     elevation: 1,
-  },
-  searchIconText: {
-    color: '#7b8798',
-    fontSize: 22,
-    fontWeight: '900',
-    lineHeight: 25,
-  },
-  moreIconText: {
-    color: '#7b8798',
-    fontSize: 23,
-    fontWeight: '900',
-    lineHeight: 25,
   },
   title: {
     position: 'absolute',
