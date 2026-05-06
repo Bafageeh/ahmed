@@ -6,6 +6,30 @@ import { money, n } from './ta3meedUtils';
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const todayText = () => new Date().toISOString().slice(0, 10);
 
+function normalizeDate(value) {
+  const text = String(value || '').trim();
+  const parts = text.split(/[-\/]/).map((part) => part.trim());
+  if (parts.length !== 3) return text || todayText();
+  const [day, month, year] = parts;
+  if (year.length === 4) return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  return text;
+}
+
+function parseBulkLine(line) {
+  const trimmed = String(line || '').trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})\s+(-?[\d,]+(?:\.\d+)?)\s*(.*)$/);
+  if (!match) return null;
+  const amount = n(match[2].replace(/,/g, ''));
+  if (!amount) return null;
+  return {
+    entry_date: normalizeDate(match[1]),
+    amount: Math.abs(amount),
+    type: amount < 0 ? 'withdrawal' : 'deposit',
+    notes: match[3]?.trim() || null,
+  };
+}
+
 export function Ta3meedInvestorAccounts({ investors }) {
   const [selected, setSelected] = useState(null);
 
@@ -42,6 +66,8 @@ function InvestorAccount({ investor, onBack }) {
   const [entryDate, setEntryDate] = useState(todayText());
   const [notes, setNotes] = useState('');
   const [entryType, setEntryType] = useState('deposit');
+  const [bulkText, setBulkText] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [message, setMessage] = useState('');
 
@@ -110,6 +136,37 @@ function InvestorAccount({ investor, onBack }) {
     }
   };
 
+  const importBulkEntries = async () => {
+    const parsed = bulkText.split(/\n+/).map(parseBulkLine).filter(Boolean);
+    if (!parsed.length) {
+      setMessage('لم يتم التعرف على أي سطر. الصيغة: 05-10-2024 10,000 ملاحظة');
+      return;
+    }
+    setBulkBusy(true);
+    setMessage(`جاري استيراد ${parsed.length} حركة...`);
+    try {
+      let lastAccount = null;
+      for (const entry of parsed) {
+        const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account/entries`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(entry),
+        });
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.message || 'bulk failed');
+        lastAccount = json.data || lastAccount;
+      }
+      setAccount(lastAccount || account);
+      setBulkText('');
+      setMessage(`تم استيراد ${parsed.length} حركة بنجاح`);
+    } catch {
+      setMessage('تعذر استيراد بعض الحركات. راجع الصيغة ثم حاول مرة أخرى.');
+      await loadAccount();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const deleteEntry = async (entry) => {
     setMessage('جاري حذف الحركة...');
     try {
@@ -161,6 +218,23 @@ function InvestorAccount({ investor, onBack }) {
             <Text style={styles.investorCancelEditText}>إلغاء التعديل</Text>
           </TouchableOpacity>
         ) : null}
+      </View>
+
+      <View style={styles.investorPaymentCard}>
+        <Text style={styles.investorPaymentTitle}>استيراد جماعي</Text>
+        <Text style={styles.investorPaymentMeta}>الصيغة لكل سطر: التاريخ المبلغ الملاحظة. مثال: 05-10-2024 10,000 استثمار</Text>
+        <TextInput
+          value={bulkText}
+          onChangeText={setBulkText}
+          placeholder={'05-10-2024 10,000\n11-11-2024 15,000\n18-04-2025 -1,000 ملاحظة'}
+          placeholderTextColor="#94a3b8"
+          style={[styles.investorPaymentInput, styles.investorBulkInput]}
+          multiline
+          textAlignVertical="top"
+        />
+        <TouchableOpacity style={styles.investorPaymentButton} onPress={importBulkEntries} disabled={bulkBusy} activeOpacity={0.84}>
+          <Text style={styles.investorPaymentButtonText}>{bulkBusy ? 'جاري الاستيراد...' : 'استيراد الحركات'}</Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.panelTitle}>حركات الرصيد</Text>
