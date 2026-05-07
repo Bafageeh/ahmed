@@ -46,3 +46,6 @@ Route::post('/income/linked/finance/card/sync', [LinkedIncomeController::class, 
 Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
 Route::post('/income/linked/moneymoon/profits/sync', [LinkedIncomeController::class, 'syncMoneyMoonProfits']);
 Route::get('/wa/status', [WhatsAppController::class, 'status']);
+Route::get('/wa/messages', [WhatsAppController::class, 'index']);
+Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
+Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
