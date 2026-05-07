@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\MoneyMoonController;
 use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
 use App\Http\Controllers\Api\Ta3meedMutationController;
+use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -44,3 +45,4 @@ Route::post('/income/linked/finance/summary/sync', [LinkedIncomeController::clas
 Route::post('/income/linked/finance/card/sync', [LinkedIncomeController::class, 'syncFinanceMetric']);
 Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
 Route::post('/income/linked/moneymoon/profits/sync', [LinkedIncomeController::class, 'syncMoneyMoonProfits']);
+Route::get('/wa/status', [WhatsAppController::class, 'status']);
