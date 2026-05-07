@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Services\WhatsAppService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Throwable;
 
 class WhatsAppController extends Controller
@@ -16,9 +15,9 @@ class WhatsAppController extends Controller
         return response()->json([
             'ok' => true,
             'configured' => $whatsApp->enabled(),
-            'phone_number_id' => config('services.whatsapp.phone_number_id') ? 'configured' : null,
-            'business_account_id' => config('services.whatsapp.business_account_id') ? 'configured' : null,
-            'api_version' => config('services.whatsapp.api_version', 'v25.0'),
+            'phone_number_id' => env('WHATSAPP_PHONE_NUMBER_ID') ? 'configured' : null,
+            'business_account_id' => env('WHATSAPP_BUSINESS_ACCOUNT_ID') ? 'configured' : null,
+            'api_version' => env('WHATSAPP_API_VERSION', 'v25.0'),
         ]);
     }
 
@@ -35,7 +34,7 @@ class WhatsAppController extends Controller
             'direction' => 'outbound',
             'status' => 'sending',
             'message_type' => 'text',
-            'from_phone' => config('services.whatsapp.from_phone'),
+            'from_phone' => env('WHATSAPP_FROM_PHONE'),
             'to_phone' => $whatsApp->normalizeSaudiPhone($data['to_phone']),
             'body' => $data['body'],
             'scheduled_at' => now(),
@@ -94,7 +93,7 @@ class WhatsAppController extends Controller
             'direction' => 'outbound',
             'status' => 'pending',
             'message_type' => 'text',
-            'from_phone' => config('services.whatsapp.from_phone'),
+            'from_phone' => env('WHATSAPP_FROM_PHONE'),
             'to_phone' => $whatsApp->normalizeSaudiPhone($data['to_phone']),
             'body' => $data['body'],
             'scheduled_at' => $data['scheduled_at'] ?? now(),
@@ -131,7 +130,7 @@ class WhatsAppController extends Controller
         $token = $request->query('hub_verify_token', $request->query('hub.verify_token'));
         $challenge = $request->query('hub_challenge', $request->query('hub.challenge'));
 
-        if ($mode === 'subscribe' && hash_equals((string) config('services.whatsapp.webhook_verify_token'), (string) $token)) {
+        if ($mode === 'subscribe' && hash_equals((string) env('WHATSAPP_WEBHOOK_VERIFY_TOKEN'), (string) $token)) {
             return response($challenge, 200)->header('Content-Type', 'text/plain');
         }
 
@@ -187,7 +186,7 @@ class WhatsAppController extends Controller
 
     private function authorizeInternalRequest(Request $request): void
     {
-        $secret = (string) config('services.whatsapp.internal_secret');
+        $secret = (string) env('WHATSAPP_INTERNAL_SECRET');
 
         if ($secret === '') {
             return;
