@@ -103,14 +103,14 @@ class WhatsAppService
             ->timeout((int) env('WHATSAPP_HTTP_TIMEOUT', 15))
             ->post($this->messagesEndpoint(), $payload);
 
-        $json = $response->json() ?? [];
+        $json = $response->json();
 
         if (! $response->successful()) {
-            $message = data_get($json, 'error.message') ?: 'فشل إرسال رسالة واتساب.';
-            throw new RuntimeException($message);
+            $message = data_get($json, 'error.message') ?: $response->body() ?: 'فشل إرسال رسالة واتساب.';
+            throw new RuntimeException('WhatsApp API HTTP ' . $response->status() . ': ' . $message);
         }
 
-        return $json;
+        return is_array($json) ? $json : [];
     }
 
     private function messagesEndpoint(): string
