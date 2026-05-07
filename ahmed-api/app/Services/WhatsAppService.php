@@ -10,7 +10,7 @@ class WhatsAppService
 {
     public function enabled(): bool
     {
-        return filled($this->accessToken()) && filled($this->phoneNumberId());
+        return filled($this->apiKey()) && filled($this->phoneNumberId());
     }
 
     public function normalizeSaudiPhone(?string $phone): string
@@ -34,7 +34,7 @@ class WhatsAppService
         }
 
         if (! Str::startsWith($phone, '966')) {
-            $phone = ltrim((string) config('services.whatsapp.default_country_code', '966'), '+') . $phone;
+            $phone = ltrim((string) env('WHATSAPP_DEFAULT_COUNTRY_CODE', '966'), '+') . $phone;
         }
 
         return $phone;
@@ -46,7 +46,7 @@ class WhatsAppService
             throw new RuntimeException('إعدادات واتساب غير مكتملة.');
         }
 
-        $payload = [
+        return $this->postMessage([
             'messaging_product' => 'whatsapp',
             'recipient_type' => 'individual',
             'to' => $this->normalizeSaudiPhone($toPhone),
@@ -55,9 +55,7 @@ class WhatsAppService
                 'preview_url' => false,
                 'body' => $body,
             ],
-        ];
-
-        return $this->postMessage($payload);
+        ]);
     }
 
     public function sendTemplate(string $toPhone, string $templateName, array $parameters = [], string $language = 'ar'): array
@@ -99,10 +97,10 @@ class WhatsAppService
 
     private function postMessage(array $payload): array
     {
-        $response = Http::withToken($this->accessToken())
+        $response = Http::withToken($this->apiKey())
             ->acceptJson()
             ->asJson()
-            ->timeout((int) config('services.whatsapp.timeout', 15))
+            ->timeout((int) env('WHATSAPP_HTTP_TIMEOUT', 15))
             ->post($this->messagesEndpoint(), $payload);
 
         $json = $response->json() ?? [];
@@ -117,19 +115,19 @@ class WhatsAppService
 
     private function messagesEndpoint(): string
     {
-        $version = config('services.whatsapp.api_version', 'v25.0');
+        $version = env('WHATSAPP_API_VERSION', 'v25.0');
         $phoneNumberId = $this->phoneNumberId();
 
         return "https://graph.facebook.com/{$version}/{$phoneNumberId}/messages";
     }
 
-    private function accessToken(): ?string
+    private function apiKey(): ?string
     {
-        return config('services.whatsapp.access_token');
+        return env('WHATSAPP_API_KEY');
     }
 
     private function phoneNumberId(): ?string
     {
-        return config('services.whatsapp.phone_number_id');
+        return env('WHATSAPP_PHONE_NUMBER_ID');
     }
 }
