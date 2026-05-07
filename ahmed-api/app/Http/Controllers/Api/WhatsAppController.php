@@ -55,13 +55,7 @@ class WhatsAppController extends Controller
                 'updated_at' => now(),
             ]);
 
-            return response()->json([
-                'ok' => true,
-                'data' => [
-                    'id' => $messageId,
-                    'provider_message_id' => $providerMessageId,
-                ],
-            ]);
+            return response()->json(['ok' => true, 'data' => ['id' => $messageId, 'provider_message_id' => $providerMessageId]]);
         } catch (Throwable $exception) {
             DB::table('whatsapp_messages')->where('id', $messageId)->update([
                 'status' => 'failed',
@@ -70,10 +64,61 @@ class WhatsAppController extends Controller
                 'updated_at' => now(),
             ]);
 
-            return response()->json([
-                'ok' => false,
-                'message' => $exception->getMessage(),
-            ], 422);
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function sendTemplate(Request $request, WhatsAppService $whatsApp)
+    {
+        $this->authorizeInternalRequest($request);
+
+        $data = $request->validate([
+            'to_phone' => ['required', 'string', 'max:30'],
+            'template_name' => ['required', 'string', 'max:255'],
+            'language' => ['nullable', 'string', 'max:10'],
+            'parameters' => ['nullable', 'array'],
+        ]);
+
+        $language = $data['language'] ?? 'ar';
+        $parameters = $data['parameters'] ?? [];
+
+        $messageId = DB::table('whatsapp_messages')->insertGetId([
+            'direction' => 'outbound',
+            'status' => 'sending',
+            'message_type' => 'template',
+            'from_phone' => env('WHATSAPP_FROM_PHONE'),
+            'to_phone' => $whatsApp->normalizeSaudiPhone($data['to_phone']),
+            'template_name' => $data['template_name'],
+            'language' => $language,
+            'parameters' => json_encode(array_values($parameters)),
+            'scheduled_at' => now(),
+            'attempts' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        try {
+            $response = $whatsApp->sendTemplate($data['to_phone'], $data['template_name'], $parameters, $language);
+            $providerMessageId = data_get($response, 'messages.0.id');
+
+            DB::table('whatsapp_messages')->where('id', $messageId)->update([
+                'status' => 'sent',
+                'sent_at' => now(),
+                'provider_message_id' => $providerMessageId,
+                'response_payload' => json_encode($response),
+                'updated_at' => now(),
+            ]);
+
+            return response()->json(['ok' => true, 'data' => ['id' => $messageId, 'provider_message_id' => $providerMessageId]]);
+        } catch (Throwable $exception) {
+            DB::table('whatsapp_messages')->where('id', $messageId)->update([
+                'status' => 'failed',
+                'failed_at' => now(),
+                'error_message' => $exception->getMessage(),
+                'updated_at' => now(),
+            ]);
+
+            return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
         }
     }
 
@@ -103,13 +148,7 @@ class WhatsAppController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json([
-            'ok' => true,
-            'data' => [
-                'id' => $id,
-                'status' => 'pending',
-            ],
-        ], 201);
+        return response()->json(['ok' => true, 'data' => ['id' => $id, 'status' => 'pending']], 201);
     }
 
     public function index(Request $request)
@@ -117,10 +156,7 @@ class WhatsAppController extends Controller
         $limit = min((int) $request->query('limit', 50), 100);
 
         return response()->json([
-            'data' => DB::table('whatsapp_messages')
-                ->orderByDesc('id')
-                ->limit($limit)
-                ->get(),
+            'data' => DB::table('whatsapp_messages')->orderByDesc('id')->limit($limit)->get(),
         ]);
     }
 
@@ -139,48 +175,6 @@ class WhatsAppController extends Controller
 
     public function webhook(Request $request)
     {
-        $payload = $request->all();
-        $entries = data_get($payload, 'entry', []);
-
-        foreach ($entries as $entry) {
-            foreach (data_get($entry, 'changes', []) as $change) {
-                $value = data_get($change, 'value', []);
-
-                foreach (data_get($value, 'statuses', []) as $status) {
-                    $providerMessageId = data_get($status, 'id');
-                    $statusValue = data_get($status, 'status');
-
-                    DB::table('whatsapp_webhook_events')->insert([
-                        'event_type' => 'status:' . $statusValue,
-                        'provider_message_id' => $providerMessageId,
-                        'payload' => json_encode($status),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-
-                    if ($providerMessageId) {
-                        DB::table('whatsapp_messages')
-                            ->where('provider_message_id', $providerMessageId)
-                            ->update([
-                                'status' => $statusValue ?: 'sent',
-                                'updated_at' => now(),
-                            ]);
-                    }
-                }
-
-                foreach (data_get($value, 'messages', []) as $message) {
-                    DB::table('whatsapp_webhook_events')->insert([
-                        'event_type' => 'message:' . data_get($message, 'type'),
-                        'provider_message_id' => data_get($message, 'id'),
-                        'from_phone' => data_get($message, 'from'),
-                        'payload' => json_encode($message),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                }
-            }
-        }
-
         return response()->json(['ok' => true]);
     }
 
