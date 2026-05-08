@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
 use App\Http\Controllers\Api\Ta3meedMutationController;
 use App\Http\Controllers\Api\WhatsAppController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Str;
 
 Route::get('/health', function () {
     return response()->json([
@@ -16,6 +18,15 @@ Route::get('/health', function () {
         'app' => 'Ahmed API',
         'version' => '1.0.0',
         'time' => now()->toDateTimeString(),
+    ]);
+});
+
+Route::post('/data-deletion', function (Request $request) {
+    $confirmationCode = 'delete-' . Str::lower(Str::random(16));
+
+    return response()->json([
+        'url' => 'https://ahmed.pm.sa/datadeletion?code=' . $confirmationCode,
+        'confirmation_code' => $confirmationCode,
     ]);
 });
 
