@@ -151,6 +151,39 @@ class WhatsAppController extends Controller
         return response()->json(['ok' => true, 'data' => ['id' => $id, 'status' => 'pending']], 201);
     }
 
+    public function queueTemplate(Request $request, WhatsAppService $whatsApp)
+    {
+        $this->authorizeInternalRequest($request);
+
+        $data = $request->validate([
+            'to_phone' => ['required', 'string', 'max:30'],
+            'template_name' => ['required', 'string', 'max:255'],
+            'language' => ['nullable', 'string', 'max:10'],
+            'parameters' => ['nullable', 'array'],
+            'scheduled_at' => ['nullable', 'date'],
+            'related_type' => ['nullable', 'string', 'max:255'],
+            'related_id' => ['nullable', 'integer'],
+        ]);
+
+        $id = DB::table('whatsapp_messages')->insertGetId([
+            'direction' => 'outbound',
+            'status' => 'pending',
+            'message_type' => 'template',
+            'from_phone' => env('WHATSAPP_FROM_PHONE'),
+            'to_phone' => $whatsApp->normalizeSaudiPhone($data['to_phone']),
+            'template_name' => $data['template_name'],
+            'language' => $data['language'] ?? 'ar',
+            'parameters' => json_encode(array_values($data['parameters'] ?? [])),
+            'scheduled_at' => $data['scheduled_at'] ?? now(),
+            'related_type' => $data['related_type'] ?? null,
+            'related_id' => $data['related_id'] ?? null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['ok' => true, 'data' => ['id' => $id, 'status' => 'pending']], 201);
+    }
+
     public function index(Request $request)
     {
         $limit = min((int) $request->query('limit', 50), 100);
