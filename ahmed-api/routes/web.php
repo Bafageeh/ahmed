@@ -49,7 +49,7 @@ Route::get('/privacy-policy', function () {
 HTML)->header('Content-Type', 'text/html; charset=UTF-8');
 });
 
-Route::get('/data-deletion', function () {
+$dataDeletionPage = function () {
     return response(<<<'HTML'
 <!doctype html>
 <html lang="ar" dir="rtl">
@@ -76,7 +76,10 @@ Route::get('/data-deletion', function () {
 </body>
 </html>
 HTML)->header('Content-Type', 'text/html; charset=UTF-8');
-});
+};
+
+Route::get('/data-deletion', $dataDeletionPage);
+Route::get('/datadeletion', $dataDeletionPage);
 
 Route::get('/terms', function () {
     return response(<<<'HTML'
@@ -117,4 +120,4 @@ Route::get('/{any?}', function () {
 
     return response('<h1>Ahmed Web is not built yet.</h1>', 200)
         ->header('Content-Type', 'text/html; charset=UTF-8');
-})->where('any', '^(?!api|webapp|storage|favicon.ico|robots.txt|privacy-policy|data-deletion|terms).*$');
+})->where('any', '^(?!api|webapp|storage|favicon.ico|robots.txt|privacy-policy|data-deletion|datadeletion|terms).*$');
