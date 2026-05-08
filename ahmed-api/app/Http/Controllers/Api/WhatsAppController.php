@@ -208,6 +208,61 @@ class WhatsAppController extends Controller
 
     public function webhook(Request $request)
     {
+        $payload = $request->all();
+        $entries = data_get($payload, 'entry', []);
+
+        foreach ($entries as $entry) {
+            foreach (data_get($entry, 'changes', []) as $change) {
+                $field = data_get($change, 'field');
+                $value = data_get($change, 'value', []);
+
+                foreach (data_get($value, 'statuses', []) as $status) {
+                    $providerMessageId = data_get($status, 'id');
+                    $statusValue = data_get($status, 'status', 'unknown');
+                    $errorMessage = collect(data_get($status, 'errors', []))
+                        ->map(fn ($error) => trim((string) data_get($error, 'title') . ' ' . (string) data_get($error, 'message')))
+                        ->filter()
+                        ->implode(' | ');
+
+                    DB::table('whatsapp_webhook_events')->insert([
+                        'event_type' => 'status:' . $statusValue,
+                        'provider_message_id' => $providerMessageId,
+                        'from_phone' => data_get($status, 'recipient_id'),
+                        'payload' => json_encode($status),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    if ($providerMessageId) {
+                        $updates = [
+                            'status' => $statusValue,
+                            'updated_at' => now(),
+                        ];
+
+                        if ($statusValue === 'failed') {
+                            $updates['failed_at'] = now();
+                            $updates['error_message'] = $errorMessage ?: json_encode(data_get($status, 'errors', []));
+                        }
+
+                        DB::table('whatsapp_messages')
+                            ->where('provider_message_id', $providerMessageId)
+                            ->update($updates);
+                    }
+                }
+
+                foreach (data_get($value, 'messages', []) as $message) {
+                    DB::table('whatsapp_webhook_events')->insert([
+                        'event_type' => 'message:' . data_get($message, 'type', $field),
+                        'provider_message_id' => data_get($message, 'id'),
+                        'from_phone' => data_get($message, 'from'),
+                        'payload' => json_encode($message),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
+        }
+
         return response()->json(['ok' => true]);
     }
 
