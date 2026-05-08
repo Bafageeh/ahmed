@@ -51,3 +51,5 @@ Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
 Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
 Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
 Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
+Route::get('/wa/webhook', [WhatsAppController::class, 'verifyWebhook']);
+Route::post('/wa/webhook', [WhatsAppController::class, 'webhook']);
