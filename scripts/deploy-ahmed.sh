@@ -65,10 +65,9 @@ if [ -d "$MOBILE_DIR" ]; then
   cd "$MOBILE_DIR"
   echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 
-  if [ ! -d node_modules ]; then
-    log "Installing mobile dependencies"
-    npm install --legacy-peer-deps
-  fi
+  log "Installing or repairing mobile dependencies"
+  npm install --legacy-peer-deps
+  npm ls @expo/vector-icons >/dev/null 2>&1 || npm install @expo/vector-icons --legacy-peer-deps
 
   mkdir -p "$RUNTIME_BASE/.cache" "$RUNTIME_BASE/.tmp"
   LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
@@ -80,9 +79,13 @@ if [ -d "$MOBILE_DIR" ]; then
   fi
   pkill -f "expo.*--port $EXPO_PORT" || true
   pkill -f "metro.*$EXPO_PORT" || true
+  pkill -f "React Native DevTools" || true
 
   export BROWSER=none
+  export CI=1
   export EXPO_NO_TELEMETRY=1
+  export EXPO_NO_DEVTOOLS=1
+  export ELECTRON_DISABLE_SANDBOX=1
   export REACT_NATIVE_PACKAGER_HOSTNAME="$DOMAIN"
   export XDG_CACHE_HOME="$RUNTIME_BASE/.cache"
   export TMPDIR="$RUNTIME_BASE/.tmp"
@@ -91,10 +94,10 @@ if [ -d "$MOBILE_DIR" ]; then
 
   nohup npx expo start --clear --go --host lan --port "$EXPO_PORT" > "$LOG_FILE" 2>&1 &
   echo $! > "$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.pid"
-  sleep 5
+  sleep 8
 
   log "Expo log: $LOG_FILE"
-  tail -n 40 "$LOG_FILE" || true
+  tail -n 60 "$LOG_FILE" || true
 fi
 
 if command -v php >/dev/null 2>&1 && [ -d "$API_DIR" ]; then
