@@ -21,7 +21,7 @@ jobs:
           host: ${{ secrets.AHMED_SSH_HOST }}
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
-          port: ${{ secrets.AHMED_SSH_PORT || '2222' }}
+          port: 2222
           script: |
             set -e
             export AHMED_PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
