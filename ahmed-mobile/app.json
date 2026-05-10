@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ahmed",
     "slug": "ahmed",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "scheme": "ahmed",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "sa.pm.ahmed",
-      "versionCode": 2
+      "versionCode": 3
     },
     "extra": {
       "apiUrl": "https://ahmed.pm.sa/api"
