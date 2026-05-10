@@ -10,6 +10,8 @@ const iconMap = {
   save: ['MaterialCommunityIcons', 'content-save-outline'],
   edit: ['MaterialCommunityIcons', 'pencil-outline'],
   delete: ['MaterialCommunityIcons', 'trash-can-outline'],
+  receive: ['MaterialCommunityIcons', 'cash-check'],
+  complete: ['MaterialCommunityIcons', 'check-decagram-outline'],
   search: ['Ionicons', 'search-outline'],
   filter: ['MaterialCommunityIcons', 'filter-variant'],
   refresh: ['MaterialCommunityIcons', 'refresh'],
