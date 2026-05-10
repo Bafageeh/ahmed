@@ -3,9 +3,15 @@ set -euo pipefail
 
 PROJECT_PATH="${AHMED_PROJECT_PATH:-/mnt/home-storage/home/pmsa/apps/ahmed}"
 DOMAIN="${AHMED_DOMAIN:-ahmed.pm.sa}"
+EXPO_PORT="${AHMED_EXPO_PORT:-8082}"
 API_DIR="$PROJECT_PATH/ahmed-api"
 WEB_DIR="$PROJECT_PATH/ahmed-web"
 MOBILE_DIR="$PROJECT_PATH/ahmed-mobile"
+RUNTIME_BASE="/home/pmsa/apps"
+
+if [ ! -d "$RUNTIME_BASE" ]; then
+  RUNTIME_BASE="$PROJECT_PATH/.runtime"
+fi
 
 log() { echo "[Ahmed Deploy] $1"; }
 
@@ -36,10 +42,10 @@ if [ -d "$API_DIR" ]; then
 fi
 
 cd "$PROJECT_PATH"
-for patch in scripts/patch-moneymoon-topbar.py scripts/patch-moneymoon-add-edit-flow.py scripts/patch-moneymoon-compact-inline-edit.py scripts/patch-basic-income-compact.py scripts/patch-income-linked-sync-ui.py; do
+for patch in scripts/patch-moneymoon-topbar.py scripts/patch-moneymoon-add-edit-flow.py scripts/patch-moneymoon-compact-inline-edit.py scripts/patch-basic-income-compact.py scripts/patch-income-linked-sync-ui.py scripts/patch-ahmed-icons.py; do
   if [ -f "$patch" ]; then
     log "Running $patch"
-    python3 "$patch"
+    python3 "$patch" || true
   fi
 done
 
@@ -55,12 +61,40 @@ if [ -d "$WEB_DIR" ]; then
 fi
 
 if [ -d "$MOBILE_DIR" ]; then
-  log "Preparing mobile env only"
+  log "Starting Expo on port $EXPO_PORT"
   cd "$MOBILE_DIR"
-  if [ ! -f .env ]; then
-    echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
+  echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
+
+  if [ ! -d node_modules ]; then
+    log "Installing mobile dependencies"
+    npm install --legacy-peer-deps
   fi
-  log "Skipping npm install and Expo restart during deploy to avoid cache permission failures"
+
+  mkdir -p "$RUNTIME_BASE/.cache" "$RUNTIME_BASE/.tmp"
+  LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
+  touch "$LOG_FILE"
+  : > "$LOG_FILE"
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -tiTCP:"$EXPO_PORT" -sTCP:LISTEN | xargs -r kill -9 || true
+  fi
+  pkill -f "expo.*--port $EXPO_PORT" || true
+  pkill -f "metro.*$EXPO_PORT" || true
+
+  export BROWSER=none
+  export EXPO_NO_TELEMETRY=1
+  export REACT_NATIVE_PACKAGER_HOSTNAME="$DOMAIN"
+  export XDG_CACHE_HOME="$RUNTIME_BASE/.cache"
+  export TMPDIR="$RUNTIME_BASE/.tmp"
+  export TMP="$RUNTIME_BASE/.tmp"
+  export TEMP="$RUNTIME_BASE/.tmp"
+
+  nohup npx expo start --clear --go --host lan --port "$EXPO_PORT" > "$LOG_FILE" 2>&1 &
+  echo $! > "$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.pid"
+  sleep 5
+
+  log "Expo log: $LOG_FILE"
+  tail -n 40 "$LOG_FILE" || true
 fi
 
 if command -v php >/dev/null 2>&1 && [ -d "$API_DIR" ]; then
@@ -73,3 +107,4 @@ fi
 log "Deployment finished"
 log "Web: https://$DOMAIN"
 log "API: https://$DOMAIN/api/health"
+log "Expo: exp://$DOMAIN:$EXPO_PORT"
