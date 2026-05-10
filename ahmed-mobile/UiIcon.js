@@ -1,9 +1,9 @@
 import React from 'react';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-export const ICON_COLOR = '#64748b';
-export const ICON_COLOR_SOFT = '#94a3b8';
-export const ICON_COLOR_DARK = '#475569';
+export const ICON_COLOR = '#7c3aed';
+export const ICON_COLOR_SOFT = '#38bdf8';
+export const ICON_COLOR_DARK = '#312e81';
 
 const iconMap = {
   add: ['MaterialCommunityIcons', 'plus-circle-outline'],
