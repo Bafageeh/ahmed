@@ -26,7 +26,7 @@ jobs:
             set -e
             export AHMED_PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
             export AHMED_DOMAIN="ahmed.pm.sa"
-            export AHMED_EXPO_PORT="8083"
+            export AHMED_EXPO_PORT="8082"
 
             if [ -z "$AHMED_PROJECT_PATH" ]; then
               export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
