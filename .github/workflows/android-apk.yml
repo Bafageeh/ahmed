@@ -64,6 +64,7 @@ jobs:
           python3 scripts/patch-moneymoon-compact-inline-edit.py || true
           python3 scripts/patch-basic-income-compact.py || true
           python3 scripts/patch-income-linked-sync-ui.py || true
+          python3 scripts/patch-ahmed-icons.py || true
 
       - name: Prebuild Android project
         working-directory: ahmed-mobile
