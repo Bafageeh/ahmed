@@ -16,10 +16,10 @@ const tabs = [
 ];
 
 const investmentPlatforms = [
-  { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد، المستثمرين، الاستلام، والمتأخرات.' },
-  { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون النشطة والمستلمة.' },
-  { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'جاهزة لإضافة فرص دينار وحساباتها.', disabled: true },
-  { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'جاهزة لإضافة فرص ترميز ومتابعتها.', disabled: true },
+  { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد، المستثمرين، الاستلام، والمتأخرات.', color: '#14b8a6' },
+  { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون النشطة والمستلمة.', color: '#7c3aed' },
+  { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'جاهزة لإضافة فرص دينار وحساباتها.', disabled: true, color: '#f59e0b' },
+  { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'جاهزة لإضافة فرص ترميز ومتابعتها.', disabled: true, color: '#0ea5e9' },
 ];
 
 export default function AppShellFixed() {
@@ -58,7 +58,9 @@ export default function AppShellFixed() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
+      <View style={styles.bgBlobOne} />
+      <View style={styles.bgBlobTwo} />
       <View style={[styles.screenLayer, inFullScreenInvestment && styles.screenLayerNoTabs]}>{renderScreen()}</View>
       {!inFullScreenInvestment ? <BottomTabs activeTab={activeTab} setActiveTab={openTab} /> : null}
     </View>
@@ -88,7 +90,7 @@ function TabButton({ tab, active, onPress }) {
   return (
     <TouchableOpacity activeOpacity={0.82} onPress={onPress} style={[styles.tabButton, active && styles.tabButtonActive]}>
       <View style={[styles.tabIconBubble, active && styles.tabIconBubbleActive]}>
-        <UiIcon name={tab.icon} size={21} color={active ? '#ffffff' : ICON_COLOR} />
+        <UiIcon name={tab.icon} size={21} color={active ? '#ffffff' : ICON_COLOR_DARK} />
       </View>
       <Text style={[styles.tabLabel, active && styles.tabLabelActive]} numberOfLines={1}>{tab.label}</Text>
     </TouchableOpacity>
@@ -99,7 +101,7 @@ function InvestmentsScreen({ openPlatform }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
-        <Header badge="استثماراتي" title="منصات الاستثمار" subtitle="هنا تظهر منصات الاستثمار فقط، بدون الدخل الأساسي أو Finance." icon="investments" />
+        <Header badge="استثماراتي" title="منصات الاستثمار" subtitle="بطاقات ملونة لكل منصة مع اختصارات سريعة وواضحة." icon="investments" />
         <View style={styles.platformsGrid}>
           {investmentPlatforms.map((platform) => (
             <TouchableOpacity
@@ -108,10 +110,11 @@ function InvestmentsScreen({ openPlatform }) {
               onPress={() => platform.disabled ? null : openPlatform(platform.key)}
               style={[styles.investmentPlatformCard, platform.disabled && styles.disabledPlatformCard]}
             >
-              <View style={styles.outlineCircle}><UiIcon name={platform.icon} size={29} /></View>
+              <View style={[styles.platformAccent, { backgroundColor: platform.color }]} />
+              <View style={[styles.outlineCircle, { borderColor: `${platform.color}44`, backgroundColor: `${platform.color}16` }]}><UiIcon name={platform.icon} size={29} color={platform.color} /></View>
               <Text style={styles.investmentPlatformName}>{platform.name}</Text>
               <Text style={styles.investmentPlatformText}>{platform.text}</Text>
-              <Text style={[styles.platformOpenText, platform.disabled && styles.platformSoonText]}>{platform.disabled ? 'قريبًا' : 'فتح المنصة'}</Text>
+              <Text style={[styles.platformOpenText, { color: platform.color }, platform.disabled && styles.platformSoonText]}>{platform.disabled ? 'قريبًا' : 'فتح المنصة'}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -138,12 +141,12 @@ function ReportsScreen({ goTo }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
-        <Header badge="مركز التقارير" title="تقارير أحمد" subtitle="مركز التقارير والاختصارات الرئيسية." icon="reports" />
+        <Header badge="مركز التقارير" title="تقارير أحمد" subtitle="اختصارات ملونة للوصول إلى أهم أجزاء التطبيق." icon="reports" />
         <View style={styles.quickGrid}>
-          <QuickAction title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" onPress={() => goTo('stats')} />
-          <QuickAction title="استثماراتي" text="منصات الاستثمار فقط" icon="investments" onPress={() => goTo('investments')} />
-          <QuickAction title="ثروتي" text="الدخل والمنصات العامة" icon="wealth" onPress={() => goTo('wealth')} />
-          <QuickAction title="مزيد" text="إعدادات وروابط" icon="more" onPress={() => goTo('more')} />
+          <QuickAction title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" tone="#14b8a6" onPress={() => goTo('stats')} />
+          <QuickAction title="استثماراتي" text="منصات الاستثمار فقط" icon="investments" tone="#7c3aed" onPress={() => goTo('investments')} />
+          <QuickAction title="ثروتي" text="الدخل والمنصات العامة" icon="wealth" tone="#f97316" onPress={() => goTo('wealth')} />
+          <QuickAction title="مزيد" text="إعدادات وروابط" icon="more" tone="#0ea5e9" onPress={() => goTo('more')} />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -154,13 +157,13 @@ function MoreScreen({ goTo, openTa3meedInvestors }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
-        <Header badge="Ahmed" title="مزيد" subtitle="اختصارات ثابتة للوصول السريع إلى الشاشات الرئيسية." icon="settings" />
+        <Header badge="Ahmed" title="مزيد" subtitle="اختصارات ثابتة بتصميم أوضح وألوان أخف." icon="settings" />
         <View style={styles.menuCard}>
-          <MenuRow title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" onPress={() => goTo('stats')} />
-          <MenuRow title="ثروتي" text="ممتلكاتي الخاصة وحصصي الاستثمارية" icon="wealth" onPress={() => goTo('wealth')} />
-          <MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="reports" onPress={() => goTo('reports')} />
-          <MenuRow title="استثماراتي" text="منصات الاستثمار فقط" icon="investments" onPress={() => goTo('investments')} />
-          <MenuRow title="مستثمرين تعميد" text="إحصائيات وتوزيع مستثمري تعميد" icon="ta3meed" onPress={openTa3meedInvestors} last />
+          <MenuRow title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" tone="#14b8a6" onPress={() => goTo('stats')} />
+          <MenuRow title="ثروتي" text="ممتلكاتي الخاصة وحصصي الاستثمارية" icon="wealth" tone="#f97316" onPress={() => goTo('wealth')} />
+          <MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="reports" tone="#0ea5e9" onPress={() => goTo('reports')} />
+          <MenuRow title="استثماراتي" text="منصات الاستثمار فقط" icon="investments" tone="#7c3aed" onPress={() => goTo('investments')} />
+          <MenuRow title="مستثمرين تعميد" text="إحصائيات وتوزيع مستثمري تعميد" icon="ta3meed" tone="#14b8a6" onPress={openTa3meedInvestors} last />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -170,28 +173,29 @@ function MoreScreen({ goTo, openTa3meedInvestors }) {
 function Header({ badge, title, subtitle, icon }) {
   return (
     <View style={styles.modernHeader}>
-      <View style={styles.headerGlow} />
-      <View style={styles.headerBadgeRow}><UiIcon name={icon} size={18} color="#cbd5e1" /><Text style={styles.headerBadgeText}>{badge}</Text></View>
+      <View style={styles.headerGlowOne} />
+      <View style={styles.headerGlowTwo} />
+      <View style={styles.headerBadgeRow}><UiIcon name={icon} size={18} color="#ffffff" /><Text style={styles.headerBadgeText}>{badge}</Text></View>
       <Text style={styles.headerTitle}>{title}</Text>
       <Text style={styles.headerSubtitle}>{subtitle}</Text>
     </View>
   );
 }
 
-function QuickAction({ title, text, icon, onPress }) {
+function QuickAction({ title, text, icon, tone, onPress }) {
   return (
     <TouchableOpacity activeOpacity={0.84} onPress={onPress} style={styles.quickCard}>
-      <View style={styles.quickIcon}><UiIcon name={icon} size={24} /></View>
+      <View style={[styles.quickIcon, { backgroundColor: `${tone}18`, borderColor: `${tone}33` }]}><UiIcon name={icon} size={24} color={tone} /></View>
       <Text style={styles.quickTitle}>{title}</Text>
       <Text style={styles.quickText}>{text}</Text>
     </TouchableOpacity>
   );
 }
 
-function MenuRow({ title, text, icon, onPress, last }) {
+function MenuRow({ title, text, icon, tone, onPress, last }) {
   return (
     <TouchableOpacity activeOpacity={0.84} onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast]}>
-      <View style={styles.menuIcon}><UiIcon name={icon} size={24} /></View>
+      <View style={[styles.menuIcon, { backgroundColor: `${tone}16`, borderColor: `${tone}33` }]}><UiIcon name={icon} size={24} color={tone} /></View>
       <View style={styles.menuTextBlock}><Text style={styles.menuTitle}>{title}</Text><Text style={styles.menuText}>{text}</Text></View>
       <UiIcon name="back" size={22} color={ICON_COLOR_SOFT} />
     </TouchableOpacity>
@@ -199,49 +203,53 @@ function MenuRow({ title, text, icon, onPress, last }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f4f7fb' },
-  screenLayer: { flex: 1, paddingBottom: 98, backgroundColor: '#f4f7fb' },
+  root: { flex: 1, backgroundColor: '#eef2ff' },
+  bgBlobOne: { position: 'absolute', width: 250, height: 250, borderRadius: 999, backgroundColor: '#ddd6fe', top: -90, right: -80, opacity: 0.75 },
+  bgBlobTwo: { position: 'absolute', width: 210, height: 210, borderRadius: 999, backgroundColor: '#bae6fd', bottom: 40, left: -90, opacity: 0.65 },
+  screenLayer: { flex: 1, paddingBottom: 98, backgroundColor: 'transparent' },
   screenLayerNoTabs: { paddingBottom: 0 },
-  safe: { flex: 1, backgroundColor: '#f4f7fb' },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   pageContainer: { padding: 18, paddingBottom: 34 },
-  modernHeader: { marginTop: 10, backgroundColor: '#0f172a', borderRadius: 30, padding: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#1e293b' },
-  headerGlow: { position: 'absolute', width: 180, height: 180, borderRadius: 999, backgroundColor: '#64748b', opacity: 0.14, top: -70, left: -50 },
-  headerBadgeRow: { alignSelf: 'flex-start', flexDirection: 'row-reverse', gap: 7, alignItems: 'center', backgroundColor: 'rgba(148,163,184,0.18)', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
-  headerBadgeText: { color: '#cbd5e1', fontWeight: '900' },
+  modernHeader: { marginTop: 10, backgroundColor: '#312e81', borderRadius: 32, padding: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#4338ca' },
+  headerGlowOne: { position: 'absolute', width: 190, height: 190, borderRadius: 999, backgroundColor: '#7c3aed', opacity: 0.38, top: -70, left: -45 },
+  headerGlowTwo: { position: 'absolute', width: 160, height: 160, borderRadius: 999, backgroundColor: '#38bdf8', opacity: 0.24, bottom: -70, right: -45 },
+  headerBadgeRow: { alignSelf: 'flex-start', flexDirection: 'row-reverse', gap: 7, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.16)', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
+  headerBadgeText: { color: '#ffffff', fontWeight: '900' },
   headerTitle: { marginTop: 16, color: '#ffffff', fontSize: 34, fontWeight: '900', textAlign: 'right' },
-  headerSubtitle: { marginTop: 8, color: '#cbd5e1', lineHeight: 23, textAlign: 'right', fontWeight: '700' },
+  headerSubtitle: { marginTop: 8, color: '#e0e7ff', lineHeight: 23, textAlign: 'right', fontWeight: '700' },
   topLine: { marginTop: 4, marginBottom: 10, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' },
-  roundBackButton: { width: 46, height: 46, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  topLineTitle: { flex: 1, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'center', marginRight: 46 },
+  roundBackButton: { width: 46, height: 46, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e0e7ff', alignItems: 'center', justifyContent: 'center' },
+  topLineTitle: { flex: 1, color: '#312e81', fontSize: 22, fontWeight: '900', textAlign: 'center', marginRight: 46 },
   platformsGrid: { marginTop: 16, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  investmentPlatformCard: { flexBasis: '47.5%', flexGrow: 1, minHeight: 176, backgroundColor: '#ffffff', borderRadius: 26, padding: 16, borderWidth: 1, borderColor: '#dbe7e5', alignItems: 'flex-end' },
-  disabledPlatformCard: { opacity: 0.72, backgroundColor: '#f8fafc' },
-  outlineCircle: { width: 56, height: 56, borderRadius: 22, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  investmentPlatformName: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' },
+  investmentPlatformCard: { flexBasis: '47.5%', flexGrow: 1, minHeight: 184, backgroundColor: 'rgba(255,255,255,0.94)', borderRadius: 28, padding: 16, borderWidth: 1, borderColor: '#e0e7ff', alignItems: 'flex-end', overflow: 'hidden' },
+  platformAccent: { position: 'absolute', width: 5, top: 16, bottom: 16, right: 0, borderTopLeftRadius: 99, borderBottomLeftRadius: 99 },
+  disabledPlatformCard: { opacity: 0.74, backgroundColor: '#f8fafc' },
+  outlineCircle: { width: 58, height: 58, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1 },
+  investmentPlatformName: { color: '#111827', fontSize: 21, fontWeight: '900', textAlign: 'right' },
   investmentPlatformText: { marginTop: 6, color: '#64748b', lineHeight: 20, fontWeight: '700', textAlign: 'right' },
-  platformOpenText: { marginTop: 'auto', color: ICON_COLOR_DARK, fontWeight: '900', textAlign: 'right' },
+  platformOpenText: { marginTop: 'auto', fontWeight: '900', textAlign: 'right' },
   platformSoonText: { color: '#94a3b8' },
   quickGrid: { marginTop: 14, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  quickCard: { flexBasis: '47.5%', flexGrow: 1, backgroundColor: '#ffffff', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'flex-end' },
-  quickIcon: { width: 42, height: 42, borderRadius: 16, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  quickTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
+  quickCard: { flexBasis: '47.5%', flexGrow: 1, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 26, padding: 16, borderWidth: 1, borderColor: '#e0e7ff', alignItems: 'flex-end' },
+  quickIcon: { width: 44, height: 44, borderRadius: 17, alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 1 },
+  quickTitle: { color: '#111827', fontSize: 18, fontWeight: '900', textAlign: 'right' },
   quickText: { marginTop: 5, color: '#64748b', textAlign: 'right', fontWeight: '700' },
-  menuCard: { marginTop: 16, backgroundColor: '#fff', borderRadius: 26, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden' },
-  menuRow: { padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  menuCard: { marginTop: 16, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 28, borderWidth: 1, borderColor: '#e0e7ff', overflow: 'hidden' },
+  menuRow: { padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#eef2ff' },
   menuRowLast: { borderBottomWidth: 0 },
-  menuIcon: { width: 48, height: 48, borderRadius: 18, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  menuIcon: { width: 50, height: 50, borderRadius: 19, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   menuTextBlock: { flex: 1, alignItems: 'flex-end' },
-  menuTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
+  menuTitle: { color: '#111827', fontSize: 18, fontWeight: '900', textAlign: 'right' },
   menuText: { marginTop: 4, color: '#64748b', fontWeight: '700', textAlign: 'right' },
   tabWrap: { position: 'absolute', left: 12, right: 12, bottom: 12, alignItems: 'center' },
-  tabBar: { width: '100%', minHeight: 78, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 8 },
+  tabBar: { width: '100%', minHeight: 80, borderRadius: 34, backgroundColor: 'rgba(255,255,255,0.97)', borderWidth: 1, borderColor: '#ddd6fe', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 8 },
   tabButton: { flex: 1, minHeight: 58, borderRadius: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 },
-  tabButtonActive: { backgroundColor: '#f8fafc' },
-  tabIconBubble: { width: 35, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  tabButtonActive: { backgroundColor: '#f5f3ff' },
+  tabIconBubble: { width: 36, height: 33, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   tabIconBubbleActive: { backgroundColor: ICON_COLOR },
   tabLabel: { marginTop: 4, color: '#64748b', fontSize: 11, fontWeight: '900', textAlign: 'center' },
   tabLabelActive: { color: ICON_COLOR_DARK },
-  centerTabHit: { flex: 1.05, minHeight: 74, alignItems: 'center', justifyContent: 'center', marginTop: -26 },
-  centerTabButton: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#0f172a', alignItems: 'center', justifyContent: 'center', borderWidth: 5, borderColor: '#ffffff' },
-  centerTabButtonActive: { backgroundColor: ICON_COLOR_DARK },
+  centerTabHit: { flex: 1.05, minHeight: 76, alignItems: 'center', justifyContent: 'center', marginTop: -28 },
+  centerTabButton: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#7c3aed', alignItems: 'center', justifyContent: 'center', borderWidth: 5, borderColor: '#ffffff' },
+  centerTabButtonActive: { backgroundColor: '#312e81' },
 });
