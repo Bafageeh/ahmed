@@ -14,6 +14,11 @@ jobs:
   build-apk:
     name: Build APK
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      CI: true
+      EXPO_NO_TELEMETRY: 1
 
     steps:
       - name: Checkout
@@ -34,7 +39,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ahmed-mobile
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Patch React Native Gradle toolchain resolver
         working-directory: ahmed-mobile
