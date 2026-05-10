@@ -19,6 +19,7 @@ jobs:
     env:
       CI: true
       EXPO_NO_TELEMETRY: 1
+      EXPO_PUBLIC_API_URL: https://ahmed.pm.sa/api
 
     steps:
       - name: Checkout
@@ -56,7 +57,7 @@ jobs:
         working-directory: ahmed-mobile
         run: echo "EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api" > .env
 
-      - name: Apply mobile UI patches
+      - name: Apply optional mobile UI patches
         run: |
           python3 scripts/patch-moneymoon-topbar.py || true
           python3 scripts/patch-moneymoon-add-edit-flow.py || true
@@ -68,13 +69,25 @@ jobs:
         working-directory: ahmed-mobile
         run: npx expo prebuild --platform android --clean --non-interactive
 
+      - name: Make Gradle executable
+        working-directory: ahmed-mobile
+        run: chmod +x android/gradlew
+
       - name: Build release APK
         working-directory: ahmed-mobile/android
         run: ./gradlew assembleRelease --no-daemon
+
+      - name: Collect APK
+        working-directory: ahmed-mobile
+        run: |
+          mkdir -p build-output
+          cp android/app/build/outputs/apk/release/*.apk build-output/ahmed-release.apk
+          ls -lh build-output
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Ahmed-android-apk
-          path: ahmed-mobile/android/app/build/outputs/apk/release/*.apk
+          path: ahmed-mobile/build-output/ahmed-release.apk
           if-no-files-found: error
+          retention-days: 14
