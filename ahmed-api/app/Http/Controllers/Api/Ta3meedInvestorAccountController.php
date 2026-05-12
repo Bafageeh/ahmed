@@ -38,6 +38,7 @@ class Ta3meedInvestorAccountController extends Controller
                 'investment_opportunities.status as opportunity_status',
                 'investment_opportunities.principal_amount',
                 'investment_opportunities.expected_profit_amount as opportunity_expected_profit',
+                'investment_opportunities.expected_rate',
                 'investment_opportunities.maturity_date',
                 'investment_opportunities.metadata',
                 'investment_opportunity_allocations.id as allocation_id',
@@ -51,10 +52,15 @@ class Ta3meedInvestorAccountController extends Controller
             ->orderByDesc('investment_opportunities.id')
             ->get()
             ->map(function ($row) {
-                $row->expected_total = round((float) $row->invested_amount + (float) $row->expected_profit_amount, 2);
-                $row->remaining_amount = max(0, round($row->expected_total - (float) $row->received_amount, 2));
+                $investedAmount = (float) $row->invested_amount;
+                $receivedAmount = (float) $row->received_amount;
+                $expectedProfitAmount = (float) $row->expected_profit_amount;
+                $expectedTotal = $investedAmount + $expectedProfitAmount;
+
+                $row->expected_total = round($expectedTotal, 2);
+                $row->remaining_amount = max(0, round($row->expected_total - $receivedAmount, 2));
                 $row->share_percent = ((float) $row->principal_amount) > 0
-                    ? round(((float) $row->invested_amount / (float) $row->principal_amount) * 100, 6)
+                    ? round(($investedAmount / (float) $row->principal_amount) * 100, 6)
                     : 0;
 
                 $shareRatio = ((float) $row->share_percent) / 100;
@@ -68,6 +74,26 @@ class Ta3meedInvestorAccountController extends Controller
                     : $opportunityProfitShare;
 
                 $row->contribution_profit_amount = $opportunityProfitShare;
+
+                $registeredRate = (float) $row->expected_rate;
+                if ($registeredRate <= 0 && $investedAmount > 0 && $expectedProfitAmount > 0) {
+                    $registeredRate = ($expectedProfitAmount / $investedAmount) * 100;
+                }
+                $row->registered_profit_rate = round($registeredRate, 6);
+
+                $status = strtolower(trim((string) ($row->opportunity_status ?: $row->allocation_status)));
+                $closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
+                $isEnded = in_array($status, $closedStatuses, true) || ((float) $row->remaining_amount) <= 0;
+                $actualReceivedProfit = max(0, $receivedAmount - $investedAmount);
+                $shouldShowActualRate = $isEnded
+                    && $investedAmount > 0
+                    && $actualReceivedProfit > 0
+                    && $expectedTotal > 0
+                    && $receivedAmount < $expectedTotal;
+
+                $row->actual_received_profit_amount = $shouldShowActualRate ? round($actualReceivedProfit, 2) : null;
+                $row->actual_received_profit_rate = $shouldShowActualRate ? round(($actualReceivedProfit / $investedAmount) * 100, 6) : null;
+                $row->show_actual_received_profit_rate = $shouldShowActualRate;
 
                 return $row;
             });
