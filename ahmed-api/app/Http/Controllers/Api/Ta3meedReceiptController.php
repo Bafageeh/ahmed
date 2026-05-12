@@ -123,13 +123,44 @@ class Ta3meedReceiptController extends Controller
     private function record($investment, array $data): array
     {
         return DB::transaction(function () use ($investment, $data) {
+            $amount = round((float) $data['amount'], 2);
+            $receiptType = $data['receipt_type'] ?? 'partial';
+            $receiptDate = $data['receipt_date'] ?? now()->toDateString();
+            $reference = $data['reference_number'] ?? $investment->reference_number;
+            $sourceMessage = $data['source_message'] ?? null;
+
+            $duplicateQuery = DB::table('ta3meed_receipts')
+                ->where('opportunity_id', $investment->id)
+                ->where('reference_number', $reference)
+                ->where('amount', $amount)
+                ->where('receipt_type', $receiptType);
+
+            if ($sourceMessage) {
+                $duplicateQuery->where('source_message', $sourceMessage);
+            } else {
+                $duplicateQuery->where('receipt_date', $receiptDate);
+            }
+
+            $duplicate = $duplicateQuery->orderByDesc('id')->first();
+            if ($duplicate) {
+                $this->recalculate($investment->id, (bool) ($data['force_complete'] ?? false));
+                return [
+                    'id' => $duplicate->id,
+                    'amount' => round((float) $duplicate->amount, 2),
+                    'receipt_type' => $duplicate->receipt_type,
+                    'receipt_date' => $duplicate->receipt_date,
+                    'reference_number' => $duplicate->reference_number,
+                    'duplicate' => true,
+                ];
+            }
+
             $receiptId = DB::table('ta3meed_receipts')->insertGetId([
                 'opportunity_id' => $investment->id,
-                'amount' => round((float) $data['amount'], 2),
-                'receipt_type' => $data['receipt_type'] ?? 'partial',
-                'receipt_date' => $data['receipt_date'] ?? now()->toDateString(),
-                'reference_number' => $data['reference_number'] ?? $investment->reference_number,
-                'source_message' => $data['source_message'] ?? null,
+                'amount' => $amount,
+                'receipt_type' => $receiptType,
+                'receipt_date' => $receiptDate,
+                'reference_number' => $reference,
+                'source_message' => $sourceMessage,
                 'notes' => $data['notes'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -142,8 +173,8 @@ class Ta3meedReceiptController extends Controller
 
             foreach ($allocations as $index => $allocation) {
                 $share = $totalAllocated > 0 ? ((float) $allocation->invested_amount / $totalAllocated) : ($count > 0 ? 1 / $count : 0);
-                $amount = ($index === $count - 1) ? round((float) $data['amount'] - $distributed, 2) : round((float) $data['amount'] * $share, 2);
-                $distributed += $amount;
+                $allocatedAmount = ($index === $count - 1) ? round($amount - $distributed, 2) : round($amount * $share, 2);
+                $distributed += $allocatedAmount;
 
                 DB::table('ta3meed_receipt_allocations')->insert([
                     'receipt_id' => $receiptId,
@@ -151,7 +182,7 @@ class Ta3meedReceiptController extends Controller
                     'allocation_id' => $allocation->id,
                     'investor_id' => $allocation->investor_id,
                     'share_percent' => round($share * 100, 6),
-                    'received_amount' => $amount,
+                    'received_amount' => $allocatedAmount,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -161,10 +192,11 @@ class Ta3meedReceiptController extends Controller
 
             return [
                 'id' => $receiptId,
-                'amount' => round((float) $data['amount'], 2),
-                'receipt_type' => $data['receipt_type'] ?? 'partial',
-                'receipt_date' => $data['receipt_date'] ?? now()->toDateString(),
-                'reference_number' => $data['reference_number'] ?? $investment->reference_number,
+                'amount' => $amount,
+                'receipt_type' => $receiptType,
+                'receipt_date' => $receiptDate,
+                'reference_number' => $reference,
+                'duplicate' => false,
             ];
         });
     }
