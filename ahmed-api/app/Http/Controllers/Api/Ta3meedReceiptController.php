@@ -87,6 +87,28 @@ class Ta3meedReceiptController extends Controller
         return response()->json(['data' => ['receipt' => $receipt, 'investment' => $this->readInvestment($id)]]);
     }
 
+    public function destroy(int $id)
+    {
+        if (! Schema::hasTable('ta3meed_receipts')) {
+            return response()->json(['message' => 'Receipt not found'], 404);
+        }
+
+        $receipt = DB::table('ta3meed_receipts')->where('id', $id)->first();
+        if (! $receipt) {
+            return response()->json(['message' => 'Receipt not found'], 404);
+        }
+
+        DB::transaction(function () use ($receipt) {
+            if (Schema::hasTable('ta3meed_receipt_allocations')) {
+                DB::table('ta3meed_receipt_allocations')->where('receipt_id', $receipt->id)->delete();
+            }
+            DB::table('ta3meed_receipts')->where('id', $receipt->id)->delete();
+            $this->recalculate((int) $receipt->opportunity_id, false);
+        });
+
+        return response()->json(['data' => ['deleted' => true, 'investment' => $this->readInvestment((int) $receipt->opportunity_id)]]);
+    }
+
     private function parseMessage(string $message): array
     {
         $normalized = trim(str_replace(["\u{200f}", "\u{200e}", ','], ['', '', ''], $message));
