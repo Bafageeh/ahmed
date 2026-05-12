@@ -36,6 +36,7 @@ export default function Ta3meedScreen({ onBack }) {
   const [receivingId, setReceivingId] = useState(null);
 
   const investors = useMemo(() => investorOptionsFrom(items), [items]);
+
   const filteredItems = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     return items.filter((item) => {
@@ -109,6 +110,10 @@ export default function Ta3meedScreen({ onBack }) {
     setTab('investments');
   };
 
+  const openInvestors = () => {
+    setTab((current) => (current === 'investors' ? 'investments' : 'investors'));
+  };
+
   const showInfo = (text) => setMessage(text);
 
   return (
@@ -120,7 +125,7 @@ export default function Ta3meedScreen({ onBack }) {
             onAdd={() => setTab('finishedImport')}
             onFilter={cycleFilter}
             onSearch={() => setSearchVisible((value) => !value)}
-            onToggleInvestors={() => setTab(tab === 'investors' ? 'investments' : 'investors')}
+            onToggleInvestors={openInvestors}
           />
 
           {searchVisible ? (
@@ -142,7 +147,7 @@ export default function Ta3meedScreen({ onBack }) {
             <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(filteredSummary.totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
-          {tab !== 'investors' && tab !== 'accounts' && tab !== 'finishedImport' ? (
+          {tab !== 'investors' && tab !== 'finishedImport' ? (
             <>
               <View style={styles.filterShell}>
                 {filters.map((item) => (
@@ -155,9 +160,16 @@ export default function Ta3meedScreen({ onBack }) {
 
           {!!message && <Text style={styles.message}>{message}</Text>}
 
-          {tab === 'investors' ? <InvestorStats summary={summary} /> : null}
-          {tab === 'accounts' ? <Ta3meedInvestorAccounts investors={investors} /> : null}
-          {tab === 'finishedImport' ? <Ta3meedFinishedImport onImported={loadData} onBack={() => setTab('investments')} /> : null}
+          {tab === 'investors' ? (
+            <>
+              <InvestorStats summary={summary} />
+              <Ta3meedInvestorAccounts investors={investors} />
+            </>
+          ) : null}
+
+          {tab === 'finishedImport' ? (
+            <Ta3meedFinishedImport onImported={loadData} onBack={() => setTab('investments')} />
+          ) : null}
 
           {tab === 'investments' ? (
             <View style={styles.listArea}>
@@ -180,7 +192,13 @@ export default function Ta3meedScreen({ onBack }) {
             </View>
           ) : null}
         </ScrollView>
-        <BottomTabs onHome={onBack} onInfo={showInfo} onMore={() => setTab('accounts')} active={tab === 'accounts' ? 'more' : 'investments'} />
+
+        <BottomTabs
+          onHome={onBack}
+          onInfo={showInfo}
+          onMore={openInvestors}
+          active={tab === 'investors' ? 'more' : 'investments'}
+        />
       </View>
     </SafeAreaView>
   );
