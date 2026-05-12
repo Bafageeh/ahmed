@@ -3,13 +3,17 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class Ta3meedInvestorAccountController extends Controller
 {
-    public function show(string $code)
+    public function show(Request $request, string $code)
     {
+        $fromDate = $request->query('from_date');
+        $toDate = $request->query('to_date');
+
         $investor = DB::table('investment_investors')
             ->where('code', $code)
             ->orWhere('name', $code)
@@ -57,11 +61,20 @@ class Ta3meedInvestorAccountController extends Controller
 
         $receiptEntries = collect();
         if (Schema::hasTable('ta3meed_receipt_allocations') && Schema::hasTable('ta3meed_receipts')) {
-            $receiptEntries = DB::table('ta3meed_receipt_allocations')
+            $receiptQuery = DB::table('ta3meed_receipt_allocations')
                 ->join('ta3meed_receipts', 'ta3meed_receipt_allocations.receipt_id', '=', 'ta3meed_receipts.id')
                 ->join('investment_opportunities', 'ta3meed_receipt_allocations.opportunity_id', '=', 'investment_opportunities.id')
                 ->where('ta3meed_receipt_allocations.investor_id', $investor->id)
-                ->where('investment_opportunities.platform_id', $platform->id)
+                ->where('investment_opportunities.platform_id', $platform->id);
+
+            if ($fromDate) {
+                $receiptQuery->whereDate('ta3meed_receipts.receipt_date', '>=', $fromDate);
+            }
+            if ($toDate) {
+                $receiptQuery->whereDate('ta3meed_receipts.receipt_date', '<=', $toDate);
+            }
+
+            $receiptEntries = $receiptQuery
                 ->select([
                     'ta3meed_receipts.id as receipt_id',
                     'ta3meed_receipts.receipt_date',
@@ -80,8 +93,17 @@ class Ta3meedInvestorAccountController extends Controller
 
         $manualEntries = collect();
         if (Schema::hasTable('ta3meed_investor_account_entries')) {
-            $manualEntries = DB::table('ta3meed_investor_account_entries')
-                ->where('investor_id', $investor->id)
+            $manualQuery = DB::table('ta3meed_investor_account_entries')
+                ->where('investor_id', $investor->id);
+
+            if ($fromDate) {
+                $manualQuery->whereDate('entry_date', '>=', $fromDate);
+            }
+            if ($toDate) {
+                $manualQuery->whereDate('entry_date', '<=', $toDate);
+            }
+
+            $manualEntries = $manualQuery
                 ->orderByDesc('entry_date')
                 ->orderByDesc('id')
                 ->get();
@@ -96,8 +118,9 @@ class Ta3meedInvestorAccountController extends Controller
             'received' => round((float) $opportunities->sum('received_amount'), 2),
             'actual_profit' => round((float) $opportunities->sum('actual_profit_amount'), 2),
             'remaining' => round((float) $opportunities->sum('remaining_amount'), 2),
+            'period_received' => round((float) $receiptEntries->sum('received_amount'), 2),
             'manual_balance' => round((float) $manualEntries->sum('amount'), 2),
-            'net_balance' => round((float) $opportunities->sum('received_amount') + (float) $manualEntries->sum('amount'), 2),
+            'net_balance' => round((float) $receiptEntries->sum('received_amount') + (float) $manualEntries->sum('amount'), 2),
             'opportunities_count' => $opportunities->count(),
             'receipts_count' => $receiptEntries->count(),
             'manual_entries_count' => $manualEntries->count(),
@@ -107,6 +130,10 @@ class Ta3meedInvestorAccountController extends Controller
         return response()->json([
             'data' => [
                 'investor' => $investor,
+                'filters' => [
+                    'from_date' => $fromDate,
+                    'to_date' => $toDate,
+                ],
                 'summary' => $summary,
                 'opportunities' => $opportunities,
                 'receipt_entries' => $receiptEntries,
