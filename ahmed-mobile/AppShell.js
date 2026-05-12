@@ -1,14 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import StatsDashboardScreen from './StatsDashboardScreen';
 import Ta3meedScreen from './AppNativeTa3meedCategory';
+import MoneyMoonScreen from './MoneyMoonScreen';
 import WealthScreen from './WealthScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
-
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
-const asNumber = (value) => Number(value || 0);
-const money = (value) => `${asNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س`;
 
 const tabs = [
   { key: 'stats', label: 'احصائيات', icon: 'stats' },
@@ -25,14 +22,15 @@ const investmentPlatforms = [
   { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'جاهزة لإضافة فرص ترميز ومتابعتها.' },
 ];
 
+const activeInvestmentKeys = ['ta3meed', 'moneymoon'];
+
 export default function AppShell() {
   const [activeTab, setActiveTab] = useState('wealth');
   const [investmentScreen, setInvestmentScreen] = useState('list');
 
   const openTab = (tab) => {
     setActiveTab(tab);
-    if (tab === 'investments') setInvestmentScreen('list');
-    if (tab !== 'investments') setInvestmentScreen('list');
+    setInvestmentScreen('list');
   };
 
   const openInvestments = () => {
@@ -45,10 +43,13 @@ export default function AppShell() {
     setInvestmentScreen('ta3meed');
   };
 
+  const inFullScreenInvestment = activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen);
+
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
     if (activeTab === 'investments') {
-      if (investmentScreen === 'ta3meed') return <Ta3meedScreen />;
+      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'moneymoon') return <MoneyMoonScreen onBack={() => setInvestmentScreen('list')} />;
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
@@ -59,8 +60,8 @@ export default function AppShell() {
   return (
     <View style={styles.root}>
       <StatusBar style="dark" />
-      <View style={styles.screenLayer}>{renderScreen()}</View>
-      <BottomTabs activeTab={activeTab} setActiveTab={openTab} />
+      <View style={[styles.screenLayer, inFullScreenInvestment && styles.screenLayerNoTabs]}>{renderScreen()}</View>
+      {!inFullScreenInvestment ? <BottomTabs activeTab={activeTab} setActiveTab={openTab} /> : null}
     </View>
   );
 }
@@ -102,14 +103,23 @@ function InvestmentsScreen({ openPlatform }) {
       <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
         <Header badge="استثماراتي" title="منصات الاستثمار" subtitle="هنا تظهر منصات الاستثمار فقط، بدون الدخل الأساسي أو Finance." icon="investments" />
         <View style={styles.platformsGrid}>
-          {investmentPlatforms.map((platform) => (
-            <TouchableOpacity key={platform.key} activeOpacity={0.84} onPress={() => platform.key === 'ta3meed' ? openPlatform('ta3meed') : null} style={[styles.investmentPlatformCard, platform.key !== 'ta3meed' && styles.disabledPlatformCard]}>
-              <View style={styles.outlineCircle}><UiIcon name={platform.icon} size={29} /></View>
-              <Text style={styles.investmentPlatformName}>{platform.name}</Text>
-              <Text style={styles.investmentPlatformText}>{platform.text}</Text>
-              <Text style={[styles.platformOpenText, platform.key !== 'ta3meed' && styles.platformSoonText]}>{platform.key === 'ta3meed' ? 'فتح المنصة' : 'قريبًا'}</Text>
-            </TouchableOpacity>
-          ))}
+          {investmentPlatforms.map((platform) => {
+            const isActive = activeInvestmentKeys.includes(platform.key);
+            return (
+              <TouchableOpacity
+                key={platform.key}
+                activeOpacity={0.84}
+                onPress={() => isActive ? openPlatform(platform.key) : null}
+                disabled={!isActive}
+                style={[styles.investmentPlatformCard, !isActive && styles.disabledPlatformCard]}
+              >
+                <View style={styles.outlineCircle}><UiIcon name={platform.icon} size={29} /></View>
+                <Text style={styles.investmentPlatformName}>{platform.name}</Text>
+                <Text style={styles.investmentPlatformText}>{platform.text}</Text>
+                <Text style={[styles.platformOpenText, !isActive && styles.platformSoonText]}>{isActive ? 'فتح المنصة' : 'قريبًا'}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -190,6 +200,7 @@ function MenuRow({ title, text, icon, onPress, last }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f4f7fb' },
   screenLayer: { flex: 1, paddingBottom: 98, backgroundColor: '#f4f7fb' },
+  screenLayerNoTabs: { paddingBottom: 0 },
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   pageContainer: { padding: 18, paddingBottom: 34 },
   modernHeader: { marginTop: 10, backgroundColor: '#0f172a', borderRadius: 30, padding: 24, overflow: 'hidden', borderWidth: 1, borderColor: '#1e293b', shadowColor: '#0f172a', shadowOpacity: 0.16, shadowRadius: 22, shadowOffset: { width: 0, height: 12 }, elevation: 4 },
