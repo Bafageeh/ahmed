@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class Ta3meedController extends Controller
 {
@@ -31,11 +32,14 @@ class Ta3meedController extends Controller
                         'investment_investors.code as investor_code',
                         'investment_opportunity_allocations.invested_amount',
                         'investment_opportunity_allocations.expected_profit_amount',
+                        'investment_opportunity_allocations.actual_profit_amount',
                         'investment_opportunity_allocations.received_amount',
                         'investment_opportunity_allocations.status',
                     ])
                     ->orderBy('investment_investors.id')
                     ->get();
+
+                $item->receipts = $this->receipts($item->id);
 
                 return $item;
             });
@@ -132,7 +136,7 @@ class Ta3meedController extends Controller
             ->join('investment_opportunities', 'investment_opportunity_allocations.opportunity_id', '=', 'investment_opportunities.id')
             ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
             ->where('investment_opportunities.platform_id', $platform->id)
-            ->selectRaw('investment_investors.name, sum(invested_amount) as invested, sum(expected_profit_amount) as profit')
+            ->selectRaw('investment_investors.name, sum(invested_amount) as invested, sum(expected_profit_amount) as profit, sum(received_amount) as received')
             ->groupBy('investment_investors.name')
             ->orderBy('investment_investors.name')
             ->get();
@@ -140,11 +144,42 @@ class Ta3meedController extends Controller
         return response()->json([
             'data' => [
                 'active_count' => (clone $opportunities)->where('status', 'active')->count(),
+                'partial_received_count' => (clone $opportunities)->where('status', 'partial_received')->count(),
+                'received_count' => (clone $opportunities)->where('status', 'received')->count(),
                 'total_invested' => round((clone $opportunities)->sum('principal_amount'), 2),
                 'total_expected_profit' => round((clone $opportunities)->sum('expected_profit_amount'), 2),
+                'total_received' => Schema::hasTable('ta3meed_receipts') ? round((float) DB::table('ta3meed_receipts')->sum('amount'), 2) : 0,
                 'investors' => $allocations,
             ],
         ]);
+    }
+
+    private function receipts(int $opportunityId)
+    {
+        if (! Schema::hasTable('ta3meed_receipts')) {
+            return [];
+        }
+
+        return DB::table('ta3meed_receipts')
+            ->where('opportunity_id', $opportunityId)
+            ->orderByDesc('receipt_date')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function ($receipt) {
+                $receipt->allocations = Schema::hasTable('ta3meed_receipt_allocations')
+                    ? DB::table('ta3meed_receipt_allocations')
+                        ->leftJoin('investment_investors', 'ta3meed_receipt_allocations.investor_id', '=', 'investment_investors.id')
+                        ->where('ta3meed_receipt_allocations.receipt_id', $receipt->id)
+                        ->select([
+                            'investment_investors.name as investor_name',
+                            'ta3meed_receipt_allocations.share_percent',
+                            'ta3meed_receipt_allocations.received_amount',
+                        ])
+                        ->get()
+                    : [];
+
+                return $receipt;
+            });
     }
 
     private function platform()
