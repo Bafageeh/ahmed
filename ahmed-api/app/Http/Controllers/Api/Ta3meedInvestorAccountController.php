@@ -87,6 +87,8 @@ class Ta3meedInvestorAccountController extends Controller
                 ->get();
         }
 
+        $timeline = $this->timeline($receiptEntries, $manualEntries);
+
         $summary = [
             'invested' => round((float) $opportunities->sum('invested_amount'), 2),
             'expected_profit' => round((float) $opportunities->sum('expected_profit_amount'), 2),
@@ -95,8 +97,11 @@ class Ta3meedInvestorAccountController extends Controller
             'actual_profit' => round((float) $opportunities->sum('actual_profit_amount'), 2),
             'remaining' => round((float) $opportunities->sum('remaining_amount'), 2),
             'manual_balance' => round((float) $manualEntries->sum('amount'), 2),
+            'net_balance' => round((float) $opportunities->sum('received_amount') + (float) $manualEntries->sum('amount'), 2),
             'opportunities_count' => $opportunities->count(),
             'receipts_count' => $receiptEntries->count(),
+            'manual_entries_count' => $manualEntries->count(),
+            'timeline_count' => $timeline->count(),
         ];
 
         return response()->json([
@@ -106,7 +111,47 @@ class Ta3meedInvestorAccountController extends Controller
                 'opportunities' => $opportunities,
                 'receipt_entries' => $receiptEntries,
                 'manual_entries' => $manualEntries,
+                'timeline' => $timeline,
             ],
         ]);
+    }
+
+    private function timeline($receiptEntries, $manualEntries)
+    {
+        $receiptTimeline = $receiptEntries->map(function ($entry) {
+            return [
+                'id' => 'receipt-' . $entry->receipt_id,
+                'type' => 'receipt',
+                'label' => $entry->receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي',
+                'date' => $entry->receipt_date,
+                'amount' => round((float) $entry->received_amount, 2),
+                'direction' => 'in',
+                'reference_number' => $entry->opportunity_reference ?: $entry->reference_number,
+                'description' => 'استلام من فرصة ' . ($entry->opportunity_reference ?: $entry->reference_number),
+                'payload' => $entry,
+            ];
+        });
+
+        $manualTimeline = $manualEntries->map(function ($entry) {
+            $amount = round((float) $entry->amount, 2);
+            return [
+                'id' => 'manual-' . $entry->id,
+                'type' => 'manual',
+                'label' => $amount >= 0 ? 'إيداع يدوي' : 'سحب يدوي',
+                'date' => $entry->entry_date,
+                'amount' => $amount,
+                'direction' => $amount >= 0 ? 'in' : 'out',
+                'reference_number' => null,
+                'description' => $entry->notes ?: ($amount >= 0 ? 'إيداع يدوي' : 'سحب يدوي'),
+                'payload' => $entry,
+            ];
+        });
+
+        return $receiptTimeline
+            ->merge($manualTimeline)
+            ->sortByDesc(function ($entry) {
+                return ($entry['date'] ?: '0000-00-00') . '-' . $entry['id'];
+            })
+            ->values();
     }
 }
