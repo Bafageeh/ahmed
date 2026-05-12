@@ -3,6 +3,7 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } fr
 import { StatusBar } from 'expo-status-bar';
 import StatsDashboardScreen from './StatsDashboardScreen';
 import Ta3meedScreen from './Ta3meedInvestorDropdownScreen';
+import Ta3meedInvestorAccountsScreen from './Ta3meedInvestorAccountsScreen';
 import MoneyMoonScreen from './MoneyMoonScreen';
 import WealthScreen from './WealthScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
@@ -17,12 +18,13 @@ const tabs = [
 
 const investmentPlatforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد، التصنيفات، المستثمرين، الاستلام، والمتأخرات.' },
+  { key: 'ta3meedAccounts', name: 'حسابات المستثمرين', icon: 'users', text: 'شاشة مستقلة لإضافة رصيد المستثمر وتعديل وحذف حركات الرصيد.' },
   { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون النشطة والمستلمة.' },
   { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'جاهزة لإضافة فرص دينار وحساباتها.' },
   { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'جاهزة لإضافة فرص ترميز ومتابعتها.' },
 ];
 
-const activeInvestmentKeys = ['ta3meed', 'moneymoon'];
+const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'moneymoon'];
 
 export default function AppShell() {
   const [activeTab, setActiveTab] = useState('wealth');
@@ -43,17 +45,23 @@ export default function AppShell() {
     setInvestmentScreen('ta3meed');
   };
 
+  const openTa3meedAccounts = () => {
+    setActiveTab('investments');
+    setInvestmentScreen('ta3meedAccounts');
+  };
+
   const inFullScreenInvestment = activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen);
 
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'moneymoon') return <MoneyMoonScreen onBack={() => setInvestmentScreen('list')} />;
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
-    if (activeTab === 'more') return <MoreScreen goTo={openTab} openTa3meedInvestors={openTa3meedInvestors} />;
+    if (activeTab === 'more') return <MoreScreen goTo={openTab} openTa3meedInvestors={openTa3meedInvestors} openTa3meedAccounts={openTa3meedAccounts} />;
     return <WealthScreen openInvestments={openInvestments} />;
   };
 
@@ -116,7 +124,7 @@ function InvestmentsScreen({ openPlatform }) {
                 <View style={styles.outlineCircle}><UiIcon name={platform.icon} size={29} /></View>
                 <Text style={styles.investmentPlatformName}>{platform.name}</Text>
                 <Text style={styles.investmentPlatformText}>{platform.text}</Text>
-                <Text style={[styles.platformOpenText, !isActive && styles.platformSoonText]}>{isActive ? 'فتح المنصة' : 'قريبًا'}</Text>
+                <Text style={[styles.platformOpenText, !isActive && styles.platformSoonText]}>{isActive ? 'فتح الشاشة' : 'قريبًا'}</Text>
               </TouchableOpacity>
             );
           })}
@@ -149,7 +157,7 @@ function ReportsScreen({ goTo }) {
   );
 }
 
-function MoreScreen({ goTo, openTa3meedInvestors }) {
+function MoreScreen({ goTo, openTa3meedInvestors, openTa3meedAccounts }) {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}>
@@ -159,7 +167,8 @@ function MoreScreen({ goTo, openTa3meedInvestors }) {
           <MenuRow title="ثروتي" text="ممتلكاتي الخاصة وحصصي الاستثمارية" icon="wealth" onPress={() => goTo('wealth')} />
           <MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="reports" onPress={() => goTo('reports')} />
           <MenuRow title="استثماراتي" text="منصات الاستثمار فقط" icon="investments" onPress={() => goTo('investments')} />
-          <MenuRow title="تعميد" text="فرص تعميد والتصنيفات والمستثمرين" icon="ta3meed" onPress={openTa3meedInvestors} last />
+          <MenuRow title="تعميد" text="فرص تعميد والتصنيفات والمستثمرين" icon="ta3meed" onPress={openTa3meedInvestors} />
+          <MenuRow title="حسابات المستثمرين" text="إضافة رصيد وتعديل وحذف حركات المستثمرين" icon="users" onPress={openTa3meedAccounts} last />
         </View>
       </ScrollView>
     </SafeAreaView>
