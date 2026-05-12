@@ -1,3 +1,3 @@
 import { registerRootComponent } from 'expo';
-import App from './AppNativeCleanFixed2';
+import App from './AppNativeTa3meedConfirmDuplicate';
 registerRootComponent(App);
