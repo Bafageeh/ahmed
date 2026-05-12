@@ -57,7 +57,7 @@ jobs:
         working-directory: ahmed-mobile
         run: echo "EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api" > .env
 
-      - name: Apply optional mobile UI patches
+      - name: Apply mobile UI patches
         run: |
           python3 scripts/patch-moneymoon-topbar.py || true
           python3 scripts/patch-moneymoon-add-edit-flow.py || true
@@ -65,6 +65,12 @@ jobs:
           python3 scripts/patch-basic-income-compact.py || true
           python3 scripts/patch-income-linked-sync-ui.py || true
           python3 scripts/patch-ahmed-icons.py || true
+          python3 scripts/patch-ta3meed-receipts-ui.py
+
+      - name: Verify Ta3meed receipts UI patch
+        run: |
+          grep -R "لصق رسالة استلام تعميد" -n ahmed-mobile || (echo "Ta3meed receipt UI patch was not applied" && exit 1)
+          grep -R "اعتماد الدفعة" -n ahmed-mobile || (echo "Ta3meed receipt apply button missing" && exit 1)
 
       - name: Prebuild Android project
         working-directory: ahmed-mobile
