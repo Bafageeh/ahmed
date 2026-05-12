@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Modal, RefreshControl, SafeAreaView, ScrollVi
 import { StatusBar } from 'expo-status-bar';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const CATEGORIES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
 const n = (v) => Number(v || 0);
 const money = (v, d = 0) => `${n(v).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })} ر.س`;
 const pct = (v) => `${n(v).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
@@ -25,9 +26,13 @@ async function apiJson(path, options = {}) {
 function metaOf(item) {
   try { return typeof item?.metadata === 'string' ? JSON.parse(item.metadata || '{}') : item?.metadata || {}; } catch { return {}; }
 }
+function normalizeCategory(value) {
+  const raw = String(value || '').trim().toUpperCase().replace(/\s+/g, '');
+  return CATEGORIES.includes(raw) ? raw : '-';
+}
 function categoryOf(item) {
   const meta = metaOf(item);
-  return String(meta.category || item.category || '-').trim().toUpperCase() || '-';
+  return normalizeCategory(meta.category || item.category);
 }
 function statusOf(item) {
   if (item?.status === 'received' || item?.status === 'completed') return { key: 'received', label: 'مستلم', color: '#2563eb', bg: '#eff6ff' };
@@ -36,9 +41,9 @@ function statusOf(item) {
   return { key: 'active', label: 'نشط', color: '#0f766e', bg: '#ecfdf5' };
 }
 function categoryStyle(cat) {
-  if (cat === 'A') return { bg: '#ecfdf5', color: '#0f766e', label: 'تصنيف A' };
-  if (cat === 'B') return { bg: '#eff6ff', color: '#2563eb', label: 'تصنيف B' };
-  if (cat === 'C') return { bg: '#fff7ed', color: '#c2410c', label: 'تصنيف C' };
+  if (cat.startsWith('A')) return { bg: '#ecfdf5', color: '#0f766e', label: `تصنيف ${cat}` };
+  if (cat.startsWith('B')) return { bg: '#eff6ff', color: '#2563eb', label: `تصنيف ${cat}` };
+  if (cat.startsWith('C')) return { bg: '#fff7ed', color: '#c2410c', label: `تصنيف ${cat}` };
   return { bg: '#f1f5f9', color: '#475569', label: 'بدون تصنيف' };
 }
 
@@ -90,7 +95,7 @@ function Ta3meedScreen({ items, message, setMessage, loading, refreshing, onRefr
     if (category !== 'all' && cat !== category) return false;
     if (!query.trim()) return true;
     const meta = metaOf(item);
-    const text = [item.reference_number, item.status, item.maturity_date, meta.category, ...(item.allocations || []).map((a) => a.investor_name)].filter(Boolean).join(' ').toLowerCase();
+    const text = [item.reference_number, item.status, item.maturity_date, meta.category, cat, ...(item.allocations || []).map((a) => a.investor_name)].filter(Boolean).join(' ').toLowerCase();
     return text.includes(query.trim().toLowerCase());
   }), [items, filter, category, query]);
 
@@ -151,10 +156,10 @@ function Ta3meedScreen({ items, message, setMessage, loading, refreshing, onRefr
     </View>
     <ScrollView contentContainerStyle={s.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
       {search ? <TextInput style={s.search} value={query} onChangeText={setQuery} placeholder="ابحث بالكود أو المستثمر أو التصنيف" textAlign="right" /> : null}
-      <View style={s.hero}><Text style={s.heroTop}>شاشة تعميد</Text><Text style={s.heroTitle}>محفظة تعميد</Text><Text style={s.heroText}>التصنيف A / B / C ظاهر الآن داخل البطاقات وله فلتر مستقل.</Text></View>
+      <View style={s.hero}><Text style={s.heroTop}>شاشة تعميد</Text><Text style={s.heroTitle}>محفظة تعميد</Text><Text style={s.heroText}>التصنيف A+ إلى C- ظاهر داخل البطاقات وله فلتر مستقل.</Text></View>
       <View style={s.grid}><Metric t="إجمالي الاستثمار النشط" v={money(totals.invested)} /><Metric t="الأرباح المتوقعة النشطة" v={money(totals.profit, 2)} /><Metric t="استثمارات نشطة" v={String(totals.active)} /><Metric t="مستلم جزئيًا" v={String(totals.partial)} /><Metric t="إجمالي المستلم" v={money(totals.received, 2)} wide /></View>
       <Text style={s.filterTitle}>فلتر التصنيف</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>{[['all','كل التصنيفات'],['A','A'],['B','B'],['C','C']].map(([k,l]) => <TouchableOpacity key={k} onPress={() => setCategory(k)} style={[s.chip, category === k && s.chipOn]}><Text style={[s.chipText, category === k && s.chipTextOn]}>{l}</Text></TouchableOpacity>)}</ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>{[['all','كل التصنيفات'],...CATEGORIES.map((c)=>[c,c])].map(([k,l]) => <TouchableOpacity key={k} onPress={() => setCategory(k)} style={[s.chip, category === k && s.chipOn]}><Text style={[s.chipText, category === k && s.chipTextOn]}>{l}</Text></TouchableOpacity>)}</ScrollView>
       <Text style={s.filterTitle}>فلتر الحالة</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>{[['all','الكل'],['active','نشط'],['overdue','متأخر'],['partial_received','مستلم جزئيًا'],['received','مستلم']].map(([k,l]) => <TouchableOpacity key={k} onPress={() => setFilter(k)} style={[s.chip, filter === k && s.chipOn]}><Text style={[s.chipText, filter === k && s.chipTextOn]}>{l}</Text></TouchableOpacity>)}</ScrollView>
       {!!message && <Text style={s.msg}>{message}</Text>}{loading ? <ActivityIndicator color="#0f766e" /> : null}
