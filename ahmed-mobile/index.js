@@ -1,3 +1,3 @@
 import { registerRootComponent } from 'expo';
-import App from './AppNativeTa3meedCategory';
+import App from './AppShell';
 registerRootComponent(App);
