@@ -73,6 +73,7 @@ function normalizeAccount(raw, investor) {
     actualProfit: summary.actual_profit !== undefined ? n(summary.actual_profit) : undefined,
     opportunitiesCount: summary.opportunities_count !== undefined ? n(summary.opportunities_count) : undefined,
     entries,
+    timeline: Array.isArray(raw?.timeline) ? raw.timeline : [],
     opportunities: Array.isArray(raw?.opportunities) ? raw.opportunities : [],
     summary,
   };
@@ -108,7 +109,7 @@ export function Ta3meedInvestorAccounts({ investors }) {
   return (
     <View style={styles.investorScreen}>
       <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
-      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشته الخاصة وعرض إحصائيات تعميد، ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات السابقة.</Text>
+      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشته الخاصة وعرض إحصائيات تعميد والحركات المالية، ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات اليدوية.</Text>
       {accountInvestors.map((investor) => (
         <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => setSelected(investor)} activeOpacity={0.84}>
           <Text style={styles.investorAccountButtonText}>شاشة {investor.name} - إحصائيات وحساب الرصيد</Text>
@@ -131,6 +132,7 @@ function InvestorAccount({ investor, onBack }) {
   const [message, setMessage] = useState('');
 
   const entries = account?.entries || [];
+  const timeline = account?.timeline || [];
   const opportunities = account?.opportunities || [];
   const balance = useMemo(() => n(account?.balance), [account]);
   const investorTa3meed = useMemo(() => ta3meedInvestorAmount(account), [account]);
@@ -140,6 +142,7 @@ function InvestorAccount({ investor, onBack }) {
     investor,
     balance: 0,
     entries: [],
+    timeline: [],
     opportunities: [],
     summary: {},
   });
@@ -289,6 +292,22 @@ function InvestorAccount({ investor, onBack }) {
       {account?.netBalance !== undefined ? <Text style={styles.investorPaymentMeta}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}
       {!!message && <Text style={styles.message}>{message}</Text>}
 
+      <Text style={styles.panelTitle}>الحركات المالية لكل مستثمر</Text>
+      <Text style={styles.investorScreenSubtitle}>تشمل استلامات تعميد والإيداعات والسحوبات اليدوية.</Text>
+      {timeline.length === 0 ? (
+        <Text style={styles.investorScreenSubtitle}>لا توجد حركات مالية لهذا المستثمر بعد.</Text>
+      ) : timeline.map((movement, index) => (
+        <View key={movement.id || `${movement.type}-${index}`} style={styles.investorPaymentCard}>
+          <View style={styles.balanceEntryHeader}>
+            <Text style={styles.investorPaymentMeta}>{movement.date || '-'}</Text>
+            <Text style={[styles.investorPaymentTitle, n(movement.amount) < 0 && styles.investorWithdrawText]}>{money(movement.amount, 2)} ر.س</Text>
+          </View>
+          <Text style={styles.investorPaymentMeta}>النوع: {movement.label || (movement.type === 'receipt' ? 'استلام تعميد' : 'حركة يدوية')}</Text>
+          {movement.reference_number ? <Text style={styles.investorPaymentMeta}>المرجع: {movement.reference_number}</Text> : null}
+          {movement.description ? <Text style={styles.investorPaymentMeta}>الوصف: {movement.description}</Text> : null}
+        </View>
+      ))}
+
       <Text style={styles.panelTitle}>تفصيل فرص المستثمر</Text>
       {opportunities.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text>
@@ -350,6 +369,7 @@ function InvestorAccount({ investor, onBack }) {
       </View>
 
       <Text style={styles.panelTitle}>حركات الرصيد اليدوية</Text>
+      <Text style={styles.investorScreenSubtitle}>هذا القسم للتعديل والحذف فقط؛ أما جميع الحركات فتظهر في قسم الحركات المالية أعلاه.</Text>
       {entries.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد يدوية بعد.</Text>
       ) : entries.map((entry) => (
