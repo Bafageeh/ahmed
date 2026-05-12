@@ -91,7 +91,19 @@ class Ta3meedReceiptController extends Controller
     {
         $normalized = trim(str_replace(["\u{200f}", "\u{200e}", ','], ['', '', ''], $message));
         preg_match('/(?:بقيمة|مبلغ)\s*([0-9]+(?:\.[0-9]+)?)/u', $normalized, $amountMatch);
-        preg_match('/(?:الفرصه|الفرصة)\s*(?:رقم)?\s*([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]+)/u', $normalized, $refMatch);
+
+        $reference = null;
+        $patterns = [
+            '/(?:للفرصه|للفرصة|الفرصه|الفرصة)\s*(?:رقم)?\s*([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]+)/u',
+            '/(?:رقم)\s*([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]+)/u',
+            '/\b([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]{2,})\b/u',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $normalized, $match)) {
+                $reference = $match[1];
+                break;
+            }
+        }
 
         $hasCapitalAndProfit = str_contains($normalized, 'رأس المال') || str_contains($normalized, 'راس المال') || str_contains($normalized, 'الأرباح') || str_contains($normalized, 'الارباح');
         $hasFull = str_contains($normalized, 'سداد كلي') || $hasCapitalAndProfit;
@@ -99,7 +111,7 @@ class Ta3meedReceiptController extends Controller
 
         return [
             'amount' => isset($amountMatch[1]) ? round((float) $amountMatch[1], 2) : null,
-            'reference_number' => $refMatch[1] ?? null,
+            'reference_number' => $reference,
             'receipt_type' => $hasFull ? 'full' : 'partial',
             'is_final' => $hasFull,
             'is_partial' => $hasPartial && ! $hasFull,
