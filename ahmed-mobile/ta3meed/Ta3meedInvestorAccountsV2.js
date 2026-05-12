@@ -56,10 +56,8 @@ function normalizeDate(value) {
 function isEndedOpportunity(opportunity) {
   const status = String(opportunity?.opportunity_status || opportunity?.allocation_status || '').trim().toLowerCase();
   const closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
-  const maturityDate = String(opportunity?.maturity_date || '').slice(0, 10);
-  const isOverdue = Boolean(maturityDate) && maturityDate < todayText();
   const remaining = n(opportunity?.remaining_amount);
-  return closedStatuses.includes(status) || isOverdue || remaining <= 0;
+  return closedStatuses.includes(status) || remaining <= 0;
 }
 
 function isActiveOpportunity(opportunity) {
