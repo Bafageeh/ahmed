@@ -102,7 +102,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
 
 const screenStyles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
-  header: { paddingHorizontal: 28, paddingTop: 14, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
+  header: { paddingHorizontal: 28, paddingTop: 34, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
   headerIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
   refreshButton: { minWidth: 70, height: 48, borderRadius: 17, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
