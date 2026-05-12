@@ -43,6 +43,7 @@ Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::cl
 Route::put('/ta3meed/investments/{id}', [Ta3meedMutationController::class, 'update']);
 Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::class, 'receive']);
 Route::post('/ta3meed/investments/{id}/receipts', [Ta3meedReceiptController::class, 'store']);
+Route::delete('/ta3meed/receipts/{id}', [Ta3meedReceiptController::class, 'destroy']);
 Route::post('/ta3meed/receipts/parse', [Ta3meedReceiptController::class, 'parse']);
 Route::post('/ta3meed/receipts/apply-message', [Ta3meedReceiptController::class, 'applyMessage']);
 Route::get('/ta3meed/investors/{code}/account', [Ta3meedMutationController::class, 'investorAccount']);
