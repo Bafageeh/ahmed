@@ -292,37 +292,8 @@ function InvestorAccount({ investor, onBack }) {
       {account?.netBalance !== undefined ? <Text style={styles.investorPaymentMeta}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}
       {!!message && <Text style={styles.message}>{message}</Text>}
 
-      <Text style={styles.panelTitle}>الحركات المالية لكل مستثمر</Text>
-      <Text style={styles.investorScreenSubtitle}>تشمل استلامات تعميد والإيداعات والسحوبات اليدوية.</Text>
-      {timeline.length === 0 ? (
-        <Text style={styles.investorScreenSubtitle}>لا توجد حركات مالية لهذا المستثمر بعد.</Text>
-      ) : timeline.map((movement, index) => (
-        <View key={movement.id || `${movement.type}-${index}`} style={styles.investorPaymentCard}>
-          <View style={styles.balanceEntryHeader}>
-            <Text style={styles.investorPaymentMeta}>{movement.date || '-'}</Text>
-            <Text style={[styles.investorPaymentTitle, n(movement.amount) < 0 && styles.investorWithdrawText]}>{money(movement.amount, 2)} ر.س</Text>
-          </View>
-          <Text style={styles.investorPaymentMeta}>النوع: {movement.label || (movement.type === 'receipt' ? 'استلام تعميد' : 'حركة يدوية')}</Text>
-          {movement.reference_number ? <Text style={styles.investorPaymentMeta}>المرجع: {movement.reference_number}</Text> : null}
-          {movement.description ? <Text style={styles.investorPaymentMeta}>الوصف: {movement.description}</Text> : null}
-        </View>
-      ))}
-
-      <Text style={styles.panelTitle}>تفصيل فرص المستثمر</Text>
-      {opportunities.length === 0 ? (
-        <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text>
-      ) : opportunities.map((opportunity) => (
-        <View key={`${opportunity.opportunity_id}-${opportunity.allocation_id}`} style={styles.investorPaymentCard}>
-          <View style={styles.balanceEntryHeader}>
-            <Text style={styles.investorPaymentMeta}>يستحق: {opportunity.maturity_date || '-'}</Text>
-            <Text style={styles.investorPaymentTitle}>{opportunity.reference_number || 'فرصة تعميد'}</Text>
-          </View>
-          <Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(opportunity.invested_amount, 2)}</Text>
-          <Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(opportunity.received_amount, 2)}</Text>
-          <Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(opportunity.remaining_amount, 2)}</Text>
-          <Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(opportunity.expected_profit_amount, 2)}</Text>
-        </View>
-      ))}
+      <Text style={styles.panelTitle}>إدارة حركات أرصدة المستثمر</Text>
+      <Text style={styles.investorScreenSubtitle}>هذا القسم هو شاشة الإضافة والتعديل والحذف لحركات الرصيد اليدوية.</Text>
 
       <View style={styles.investorPaymentCard}>
         <Text style={styles.investorPaymentTitle}>{isEditing ? 'تعديل حركة رصيد' : (entryType === 'withdrawal' ? 'تسجيل سحب من الرصيد' : 'إضافة رصيد جديد')}</Text>
@@ -368,25 +339,56 @@ function InvestorAccount({ investor, onBack }) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.panelTitle}>حركات الرصيد اليدوية</Text>
-      <Text style={styles.investorScreenSubtitle}>هذا القسم للتعديل والحذف فقط؛ أما جميع الحركات فتظهر في قسم الحركات المالية أعلاه.</Text>
+      <Text style={styles.panelTitle}>حركات الرصيد اليدوية القابلة للتعديل والحذف</Text>
       {entries.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد يدوية بعد.</Text>
       ) : entries.map((entry) => (
         <View key={entry.id} style={styles.investorPaymentCard}>
           <View style={styles.balanceEntryHeader}>
-            <View style={styles.balanceEntryActions}>
-              <TouchableOpacity style={styles.balanceEntryActionButton} onPress={() => startEdit(entry)} activeOpacity={0.84}>
-                <Text style={[styles.balanceEntryActionIcon, styles.balanceEntryEditIcon]}>✎</Text>
+            <View style={[styles.balanceEntryActions, { gap: 8 }]}>
+              <TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 70, paddingHorizontal: 10 }]} onPress={() => startEdit(entry)} activeOpacity={0.84}>
+                <Text style={[styles.balanceEntryActionIcon, styles.balanceEntryEditIcon, { fontSize: 13 }]}>تعديل</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.balanceEntryActionButton} onPress={() => deleteEntry(entry)} activeOpacity={0.84}>
-                <Text style={[styles.balanceEntryActionIcon, styles.balanceEntryDeleteIcon]}>🗑</Text>
+              <TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 62, paddingHorizontal: 10 }]} onPress={() => deleteEntry(entry)} activeOpacity={0.84}>
+                <Text style={[styles.balanceEntryActionIcon, styles.balanceEntryDeleteIcon, { fontSize: 13 }]}>حذف</Text>
               </TouchableOpacity>
             </View>
             <Text style={[styles.investorPaymentTitle, n(entry.amount) < 0 && styles.investorWithdrawText]}>{money(entry.amount, 2)} ر.س</Text>
           </View>
           <Text style={styles.investorPaymentMeta}>التاريخ: {entry.entry_date || '-'}</Text>
           {entry.notes ? <Text style={styles.investorPaymentMeta}>ملاحظات: {entry.notes}</Text> : null}
+        </View>
+      ))}
+
+      <Text style={styles.panelTitle}>الحركات المالية لكل مستثمر</Text>
+      <Text style={styles.investorScreenSubtitle}>تشمل استلامات تعميد والإيداعات والسحوبات اليدوية.</Text>
+      {timeline.length === 0 ? (
+        <Text style={styles.investorScreenSubtitle}>لا توجد حركات مالية لهذا المستثمر بعد.</Text>
+      ) : timeline.map((movement, index) => (
+        <View key={movement.id || `${movement.type}-${index}`} style={styles.investorPaymentCard}>
+          <View style={styles.balanceEntryHeader}>
+            <Text style={styles.investorPaymentMeta}>{movement.date || '-'}</Text>
+            <Text style={[styles.investorPaymentTitle, n(movement.amount) < 0 && styles.investorWithdrawText]}>{money(movement.amount, 2)} ر.س</Text>
+          </View>
+          <Text style={styles.investorPaymentMeta}>النوع: {movement.label || (movement.type === 'receipt' ? 'استلام تعميد' : 'حركة يدوية')}</Text>
+          {movement.reference_number ? <Text style={styles.investorPaymentMeta}>المرجع: {movement.reference_number}</Text> : null}
+          {movement.description ? <Text style={styles.investorPaymentMeta}>الوصف: {movement.description}</Text> : null}
+        </View>
+      ))}
+
+      <Text style={styles.panelTitle}>تفصيل فرص المستثمر</Text>
+      {opportunities.length === 0 ? (
+        <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text>
+      ) : opportunities.map((opportunity) => (
+        <View key={`${opportunity.opportunity_id}-${opportunity.allocation_id}`} style={styles.investorPaymentCard}>
+          <View style={styles.balanceEntryHeader}>
+            <Text style={styles.investorPaymentMeta}>يستحق: {opportunity.maturity_date || '-'}</Text>
+            <Text style={styles.investorPaymentTitle}>{opportunity.reference_number || 'فرصة تعميد'}</Text>
+          </View>
+          <Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(opportunity.invested_amount, 2)}</Text>
+          <Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(opportunity.received_amount, 2)}</Text>
+          <Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(opportunity.remaining_amount, 2)}</Text>
+          <Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(opportunity.expected_profit_amount, 2)}</Text>
         </View>
       ))}
     </View>
