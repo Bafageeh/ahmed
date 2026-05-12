@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { SafeAreaView, ScrollView, Text, TextInput, View } from 'react-native';
+import { SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BottomTabs } from './ta3meed/Ta3meedBottomTabs';
 import { FilterSegment, filters } from './ta3meed/Ta3meedFilters';
 import { Ta3meedHeader } from './ta3meed/Ta3meedHeader';
@@ -110,7 +110,7 @@ export default function Ta3meedScreen({ onBack }) {
     setTab('investments');
   };
 
-  const openMore = () => {
+  const openInvestorAccounts = () => {
     setTab('more');
     setMessage('');
   };
@@ -126,7 +126,7 @@ export default function Ta3meedScreen({ onBack }) {
             onAdd={() => setTab('finishedImport')}
             onFilter={cycleFilter}
             onSearch={() => setSearchVisible((value) => !value)}
-            onToggleInvestors={openMore}
+            onToggleInvestors={openInvestorAccounts}
           />
 
           {searchVisible ? (
@@ -148,6 +148,17 @@ export default function Ta3meedScreen({ onBack }) {
             <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(filteredSummary.totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
+          {tab !== 'more' ? (
+            <TouchableOpacity
+              style={[styles.investorAccountButton, { marginTop: 14, backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}
+              onPress={openInvestorAccounts}
+              activeOpacity={0.84}
+            >
+              <Text style={[styles.investorAccountButtonText, { color: '#0f766e' }]}>حسابات المستثمرين - إضافة رصيد وتعديل</Text>
+              <Text style={styles.investorAccountButtonIcon}>›</Text>
+            </TouchableOpacity>
+          ) : null}
+
           {tab !== 'more' && tab !== 'finishedImport' ? (
             <>
               <View style={styles.filterShell}>
@@ -163,9 +174,16 @@ export default function Ta3meedScreen({ onBack }) {
 
           {tab === 'more' ? (
             <>
-              <Text style={styles.panelTitle}>المزيد</Text>
-              <InvestorStats summary={summary} />
+              <TouchableOpacity
+                style={[styles.investorAccountBackButton, { alignSelf: 'flex-start' }]}
+                onPress={() => setTab('investments')}
+                activeOpacity={0.84}
+              >
+                <Text style={styles.investorAccountBackText}>رجوع لفرص تعميد</Text>
+              </TouchableOpacity>
+              <Text style={styles.panelTitle}>حسابات المستثمرين</Text>
               <Ta3meedInvestorAccounts investors={investors} />
+              <InvestorStats summary={summary} />
             </>
           ) : null}
 
@@ -198,7 +216,7 @@ export default function Ta3meedScreen({ onBack }) {
         <BottomTabs
           onHome={onBack}
           onInfo={showInfo}
-          onMore={openMore}
+          onMore={openInvestorAccounts}
           active={tab === 'more' ? 'more' : 'investments'}
         />
       </View>
