@@ -44,6 +44,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [backRequestVersion, setBackRequestVersion] = useState(0);
 
   const investors = useMemo(() => buildInvestors(items), [items]);
 
@@ -66,11 +67,15 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
     load();
   }, []);
 
+  const requestBack = () => {
+    setBackRequestVersion((value) => value + 1);
+  };
+
   return (
     <SafeAreaView style={screenStyles.safe}>
       <StatusBar style="dark" />
       <View style={screenStyles.header}>
-        <TouchableOpacity style={screenStyles.headerIcon} onPress={onBack} activeOpacity={0.85}>
+        <TouchableOpacity style={screenStyles.headerIcon} onPress={requestBack} activeOpacity={0.85}>
           <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
         <Text style={screenStyles.headerTitle}>حسابات المستثمرين</Text>
@@ -89,7 +94,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
         {loading ? <ActivityIndicator color="#0f766e" style={screenStyles.loader} /> : null}
         {!!message && <Text style={screenStyles.message}>{message}</Text>}
 
-        <Ta3meedInvestorAccounts investors={investors} />
+        <Ta3meedInvestorAccounts investors={investors} backRequestVersion={backRequestVersion} onExit={onBack} />
       </ScrollView>
     </SafeAreaView>
   );
