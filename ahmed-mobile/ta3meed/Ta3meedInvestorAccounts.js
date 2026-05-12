@@ -69,9 +69,17 @@ function normalizeAccount(raw, investor) {
     invested: summary.invested !== undefined ? n(summary.invested) : undefined,
     received: summary.received !== undefined ? n(summary.received) : undefined,
     remaining: summary.remaining !== undefined ? n(summary.remaining) : undefined,
+    expectedProfit: summary.expected_profit !== undefined ? n(summary.expected_profit) : undefined,
+    actualProfit: summary.actual_profit !== undefined ? n(summary.actual_profit) : undefined,
+    opportunitiesCount: summary.opportunities_count !== undefined ? n(summary.opportunities_count) : undefined,
     entries,
+    opportunities: Array.isArray(raw?.opportunities) ? raw.opportunities : [],
     summary,
   };
+}
+
+function ta3meedInvestorAmount(account) {
+  return Math.max(0, n(account?.invested) - n(account?.received));
 }
 
 function parseBulkLine(line) {
@@ -100,10 +108,10 @@ export function Ta3meedInvestorAccounts({ investors }) {
   return (
     <View style={styles.investorScreen}>
       <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
-      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لعرض الرصيد الحقيقي وحركات الحساب، ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات السابقة.</Text>
+      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشته الخاصة وعرض إحصائيات تعميد، ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات السابقة.</Text>
       {accountInvestors.map((investor) => (
         <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => setSelected(investor)} activeOpacity={0.84}>
-          <Text style={styles.investorAccountButtonText}>حساب {investor.name} - إضافة رصيد / تعديل</Text>
+          <Text style={styles.investorAccountButtonText}>شاشة {investor.name} - إحصائيات وحساب الرصيد</Text>
           <Text style={styles.investorAccountButtonIcon}>›</Text>
         </TouchableOpacity>
       ))}
@@ -123,13 +131,16 @@ function InvestorAccount({ investor, onBack }) {
   const [message, setMessage] = useState('');
 
   const entries = account?.entries || [];
+  const opportunities = account?.opportunities || [];
   const balance = useMemo(() => n(account?.balance), [account]);
+  const investorTa3meed = useMemo(() => ta3meedInvestorAmount(account), [account]);
   const isEditing = Boolean(editingEntryId);
 
   const emptyAccount = () => ({
     investor,
     balance: 0,
     entries: [],
+    opportunities: [],
     summary: {},
   });
 
@@ -254,11 +265,45 @@ function InvestorAccount({ investor, onBack }) {
       <TouchableOpacity style={styles.investorAccountBackButton} onPress={onBack} activeOpacity={0.84}>
         <Text style={styles.investorAccountBackText}>رجوع لحسابات المستثمرين</Text>
       </TouchableOpacity>
-      <Text style={styles.investorScreenTitle}>حساب {investor.name}</Text>
-      <Text style={styles.investorBalanceText}>رصيد الحساب: {money(balance, 2)} ر.س</Text>
+      <Text style={styles.investorScreenTitle}>شاشة {investor.name}</Text>
+
+      <View style={[styles.investorPaymentCard, { backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}>
+        <Text style={[styles.investorPaymentTitle, { color: '#0f766e' }]}>مستثمر تعميد</Text>
+        <Text style={[styles.investorBalanceText, { marginTop: 6 }]}>{money(investorTa3meed, 2)} ر.س</Text>
+        <Text style={styles.investorPaymentMeta}>مجموع المبالغ الداخلة في استثمار كل فرصة - نصيب المستثمر المستلم</Text>
+      </View>
+
+      <View style={[styles.investorEntryTypeRow, { marginTop: 10 }]}>
+        <MiniStat title="إجمالي المستثمر" value={money(account?.invested, 2)} />
+        <MiniStat title="نصيبه المستلم" value={money(account?.received, 2)} />
+      </View>
+      <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
+        <MiniStat title="ربح متوقع" value={money(account?.expectedProfit, 2)} />
+        <MiniStat title="متبقي الفرص" value={money(account?.remaining, 2)} />
+      </View>
+      <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
+        <MiniStat title="الرصيد اليدوي" value={money(balance, 2)} />
+        <MiniStat title="عدد الفرص" value={`${n(account?.opportunitiesCount)}`} />
+      </View>
+
       {account?.netBalance !== undefined ? <Text style={styles.investorPaymentMeta}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}
-      {account?.invested !== undefined ? <Text style={styles.investorPaymentMeta}>استثماراته في تعميد: {money(account.invested, 2)} · المستلم: {money(account.received, 2)} · المتبقي: {money(account.remaining, 2)}</Text> : null}
       {!!message && <Text style={styles.message}>{message}</Text>}
+
+      <Text style={styles.panelTitle}>تفصيل فرص المستثمر</Text>
+      {opportunities.length === 0 ? (
+        <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text>
+      ) : opportunities.map((opportunity) => (
+        <View key={`${opportunity.opportunity_id}-${opportunity.allocation_id}`} style={styles.investorPaymentCard}>
+          <View style={styles.balanceEntryHeader}>
+            <Text style={styles.investorPaymentMeta}>يستحق: {opportunity.maturity_date || '-'}</Text>
+            <Text style={styles.investorPaymentTitle}>{opportunity.reference_number || 'فرصة تعميد'}</Text>
+          </View>
+          <Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(opportunity.invested_amount, 2)}</Text>
+          <Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(opportunity.received_amount, 2)}</Text>
+          <Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(opportunity.remaining_amount, 2)}</Text>
+          <Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(opportunity.expected_profit_amount, 2)}</Text>
+        </View>
+      ))}
 
       <View style={styles.investorPaymentCard}>
         <Text style={styles.investorPaymentTitle}>{isEditing ? 'تعديل حركة رصيد' : (entryType === 'withdrawal' ? 'تسجيل سحب من الرصيد' : 'إضافة رصيد جديد')}</Text>
@@ -304,7 +349,7 @@ function InvestorAccount({ investor, onBack }) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.panelTitle}>حركات الرصيد</Text>
+      <Text style={styles.panelTitle}>حركات الرصيد اليدوية</Text>
       {entries.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد يدوية بعد.</Text>
       ) : entries.map((entry) => (
@@ -324,6 +369,15 @@ function InvestorAccount({ investor, onBack }) {
           {entry.notes ? <Text style={styles.investorPaymentMeta}>ملاحظات: {entry.notes}</Text> : null}
         </View>
       ))}
+    </View>
+  );
+}
+
+function MiniStat({ title, value }) {
+  return (
+    <View style={[styles.investorPaymentCard, { flex: 1, marginTop: 0, paddingVertical: 12 }]}>
+      <Text style={styles.investorPaymentMeta}>{title}</Text>
+      <Text style={styles.investorPaymentTitle}>{value}</Text>
     </View>
   );
 }
