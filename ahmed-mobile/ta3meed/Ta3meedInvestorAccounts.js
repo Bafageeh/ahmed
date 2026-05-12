@@ -89,6 +89,18 @@ function activePartialReceivedOf(opportunities) {
     .reduce((sum, opportunity) => sum + n(opportunity.received_amount), 0);
 }
 
+function endedProfitAmountOf(opportunity) {
+  const actualProfit = n(opportunity?.actual_profit_amount);
+  if (actualProfit !== 0) return actualProfit;
+  return Math.max(0, n(opportunity?.received_amount) - n(opportunity?.invested_amount));
+}
+
+function endedProfitOf(opportunities) {
+  return (opportunities || [])
+    .filter(isEndedOpportunity)
+    .reduce((sum, opportunity) => sum + endedProfitAmountOf(opportunity), 0);
+}
+
 function normalizeAccount(raw, investor) {
   const summary = raw?.summary || {};
   const manualEntries = Array.isArray(raw?.manual_entries) ? raw.manual_entries : [];
@@ -97,6 +109,7 @@ function normalizeAccount(raw, investor) {
   const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
   const activeInvested = activeInvestedOf(opportunities);
   const activePartialReceived = activePartialReceivedOf(opportunities);
+  const endedProfit = endedProfitOf(opportunities);
 
   return {
     investor: raw?.investor || investor,
@@ -106,6 +119,7 @@ function normalizeAccount(raw, investor) {
     activeInvested,
     received: summary.received !== undefined ? n(summary.received) : undefined,
     activePartialReceived,
+    endedProfit,
     remaining: summary.remaining !== undefined ? n(summary.remaining) : undefined,
     expectedProfit: summary.expected_profit !== undefined ? n(summary.expected_profit) : undefined,
     actualProfit: summary.actual_profit !== undefined ? n(summary.actual_profit) : undefined,
@@ -214,6 +228,7 @@ function InvestorAccount({ investor, screen, setScreen, onBack }) {
     opportunities: [],
     activeInvested: 0,
     activePartialReceived: 0,
+    endedProfit: 0,
     summary: {},
   });
 
@@ -410,6 +425,9 @@ function InvestorHome({ investor, account, balance, investorTa3meed, message, op
       <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
         <MiniStat title="ربح متوقع" value={money(account?.expectedProfit, 2)} />
         <MiniStat title="متبقي الفرص" value={money(account?.remaining, 2)} />
+      </View>
+      <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
+        <MiniStat title="ربح تعميد المنتهية" value={money(account?.endedProfit, 2)} />
       </View>
       <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
         <MiniStat title="الرصيد اليدوي" value={money(balance, 2)} />
