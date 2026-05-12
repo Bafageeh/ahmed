@@ -131,25 +131,37 @@ class Ta3meedController extends Controller
             return response()->json(['message' => 'Ta3meed platform not found'], 404);
         }
 
-        $opportunities = DB::table('investment_opportunities')->where('platform_id', $platform->id);
-        $allocations = DB::table('investment_opportunity_allocations')
-            ->join('investment_opportunities', 'investment_opportunity_allocations.opportunity_id', '=', 'investment_opportunities.id')
-            ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
-            ->where('investment_opportunities.platform_id', $platform->id)
-            ->selectRaw('investment_investors.name, sum(invested_amount) as invested, sum(expected_profit_amount) as profit, sum(received_amount) as received')
-            ->groupBy('investment_investors.name')
-            ->orderBy('investment_investors.name')
-            ->get();
+        $base = DB::table('investment_opportunities')->where('platform_id', $platform->id);
+        $totalReceived = Schema::hasTable('ta3meed_receipts')
+            ? round((float) DB::table('ta3meed_receipts')
+                ->join('investment_opportunities', 'ta3meed_receipts.opportunity_id', '=', 'investment_opportunities.id')
+                ->where('investment_opportunities.platform_id', $platform->id)
+                ->sum('ta3meed_receipts.amount'), 2)
+            : 0;
+
+        $investors = collect();
+        try {
+            $investors = DB::table('investment_opportunity_allocations')
+                ->join('investment_opportunities', 'investment_opportunity_allocations.opportunity_id', '=', 'investment_opportunities.id')
+                ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
+                ->where('investment_opportunities.platform_id', $platform->id)
+                ->selectRaw('investment_investors.name, sum(investment_opportunity_allocations.invested_amount) as invested, sum(investment_opportunity_allocations.expected_profit_amount) as profit, sum(investment_opportunity_allocations.received_amount) as received')
+                ->groupBy('investment_investors.name')
+                ->orderBy('investment_investors.name')
+                ->get();
+        } catch (\Throwable $e) {
+            $investors = collect();
+        }
 
         return response()->json([
             'data' => [
-                'active_count' => (clone $opportunities)->where('status', 'active')->count(),
-                'partial_received_count' => (clone $opportunities)->where('status', 'partial_received')->count(),
-                'received_count' => (clone $opportunities)->where('status', 'received')->count(),
-                'total_invested' => round((clone $opportunities)->sum('principal_amount'), 2),
-                'total_expected_profit' => round((clone $opportunities)->sum('expected_profit_amount'), 2),
-                'total_received' => Schema::hasTable('ta3meed_receipts') ? round((float) DB::table('ta3meed_receipts')->sum('amount'), 2) : 0,
-                'investors' => $allocations,
+                'active_count' => (clone $base)->where('status', 'active')->count(),
+                'partial_received_count' => (clone $base)->where('status', 'partial_received')->count(),
+                'received_count' => (clone $base)->where('status', 'received')->count(),
+                'total_invested' => round((float) (clone $base)->where('status', 'active')->sum('principal_amount'), 2),
+                'total_expected_profit' => round((float) (clone $base)->where('status', 'active')->sum('expected_profit_amount'), 2),
+                'total_received' => $totalReceived,
+                'investors' => $investors,
             ],
         ]);
     }
