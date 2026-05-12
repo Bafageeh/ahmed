@@ -56,16 +56,31 @@ function normalizeDate(value) {
   return text;
 }
 
-function isActivePartialOpportunity(opportunity) {
+function isEndedOpportunity(opportunity) {
   const status = String(opportunity?.opportunity_status || opportunity?.allocation_status || '').trim().toLowerCase();
   const closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
-  const isClosed = closedStatuses.includes(status);
   const maturityDate = String(opportunity?.maturity_date || '').slice(0, 10);
   const isOverdue = Boolean(maturityDate) && maturityDate < todayText();
+  const remaining = n(opportunity?.remaining_amount);
+
+  return closedStatuses.includes(status) || isOverdue || remaining <= 0;
+}
+
+function isActiveOpportunity(opportunity) {
+  return !isEndedOpportunity(opportunity);
+}
+
+function isActivePartialOpportunity(opportunity) {
   const received = n(opportunity?.received_amount);
   const remaining = n(opportunity?.remaining_amount);
 
-  return !isClosed && !isOverdue && received > 0 && remaining > 0;
+  return isActiveOpportunity(opportunity) && received > 0 && remaining > 0;
+}
+
+function activeInvestedOf(opportunities) {
+  return (opportunities || [])
+    .filter(isActiveOpportunity)
+    .reduce((sum, opportunity) => sum + n(opportunity.invested_amount), 0);
 }
 
 function activePartialReceivedOf(opportunities) {
@@ -80,6 +95,7 @@ function normalizeAccount(raw, investor) {
   const mutationEntries = Array.isArray(raw?.entries) ? raw.entries : [];
   const entries = mutationEntries.length ? mutationEntries : manualEntries;
   const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
+  const activeInvested = activeInvestedOf(opportunities);
   const activePartialReceived = activePartialReceivedOf(opportunities);
 
   return {
@@ -87,6 +103,7 @@ function normalizeAccount(raw, investor) {
     balance: raw?.balance !== undefined ? n(raw.balance) : n(summary.manual_balance),
     netBalance: summary.net_balance !== undefined ? n(summary.net_balance) : undefined,
     invested: summary.invested !== undefined ? n(summary.invested) : undefined,
+    activeInvested,
     received: summary.received !== undefined ? n(summary.received) : undefined,
     activePartialReceived,
     remaining: summary.remaining !== undefined ? n(summary.remaining) : undefined,
@@ -101,7 +118,7 @@ function normalizeAccount(raw, investor) {
 }
 
 function ta3meedInvestorAmount(account) {
-  return Math.max(0, n(account?.invested) - n(account?.activePartialReceived));
+  return Math.max(0, n(account?.activeInvested) - n(account?.activePartialReceived));
 }
 
 function parseBulkLine(line) {
@@ -195,6 +212,7 @@ function InvestorAccount({ investor, screen, setScreen, onBack }) {
     entries: [],
     timeline: [],
     opportunities: [],
+    activeInvested: 0,
     activePartialReceived: 0,
     summary: {},
   });
@@ -382,11 +400,11 @@ function InvestorHome({ investor, account, balance, investorTa3meed, message, op
       <View style={[styles.investorPaymentCard, { backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}>
         <Text style={[styles.investorPaymentTitle, { color: '#0f766e' }]}>مستثمر تعميد</Text>
         <Text style={[styles.investorBalanceText, { marginTop: 6 }]}>{money(investorTa3meed, 2)} ر.س</Text>
-        <Text style={styles.investorPaymentMeta}>مجموع المبالغ الداخلة في استثمار كل فرصة - نصيبه المستلم الجزئي للفرص النشطة فقط</Text>
+        <Text style={styles.investorPaymentMeta}>إجمالي المستثمر النشط - نصيبه المستلم الجزئي للفرص النشطة فقط</Text>
       </View>
 
       <View style={[styles.investorEntryTypeRow, { marginTop: 10 }]}>
-        <MiniStat title="إجمالي المستثمر" value={money(account?.invested, 2)} />
+        <MiniStat title="إجمالي المستثمر" value={money(account?.activeInvested, 2)} />
         <MiniStat title="نصيبه المستلم" value={money(account?.activePartialReceived, 2)} />
       </View>
       <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
