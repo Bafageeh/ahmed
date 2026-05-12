@@ -56,11 +56,31 @@ function normalizeDate(value) {
   return text;
 }
 
+function isActivePartialOpportunity(opportunity) {
+  const status = String(opportunity?.opportunity_status || opportunity?.allocation_status || '').trim().toLowerCase();
+  const closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
+  const isClosed = closedStatuses.includes(status);
+  const maturityDate = String(opportunity?.maturity_date || '').slice(0, 10);
+  const isOverdue = Boolean(maturityDate) && maturityDate < todayText();
+  const received = n(opportunity?.received_amount);
+  const remaining = n(opportunity?.remaining_amount);
+
+  return !isClosed && !isOverdue && received > 0 && remaining > 0;
+}
+
+function activePartialReceivedOf(opportunities) {
+  return (opportunities || [])
+    .filter(isActivePartialOpportunity)
+    .reduce((sum, opportunity) => sum + n(opportunity.received_amount), 0);
+}
+
 function normalizeAccount(raw, investor) {
   const summary = raw?.summary || {};
   const manualEntries = Array.isArray(raw?.manual_entries) ? raw.manual_entries : [];
   const mutationEntries = Array.isArray(raw?.entries) ? raw.entries : [];
   const entries = mutationEntries.length ? mutationEntries : manualEntries;
+  const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
+  const activePartialReceived = activePartialReceivedOf(opportunities);
 
   return {
     investor: raw?.investor || investor,
@@ -68,19 +88,20 @@ function normalizeAccount(raw, investor) {
     netBalance: summary.net_balance !== undefined ? n(summary.net_balance) : undefined,
     invested: summary.invested !== undefined ? n(summary.invested) : undefined,
     received: summary.received !== undefined ? n(summary.received) : undefined,
+    activePartialReceived,
     remaining: summary.remaining !== undefined ? n(summary.remaining) : undefined,
     expectedProfit: summary.expected_profit !== undefined ? n(summary.expected_profit) : undefined,
     actualProfit: summary.actual_profit !== undefined ? n(summary.actual_profit) : undefined,
     opportunitiesCount: summary.opportunities_count !== undefined ? n(summary.opportunities_count) : undefined,
     entries,
     timeline: Array.isArray(raw?.timeline) ? raw.timeline : [],
-    opportunities: Array.isArray(raw?.opportunities) ? raw.opportunities : [],
+    opportunities,
     summary,
   };
 }
 
 function ta3meedInvestorAmount(account) {
-  return Math.max(0, n(account?.invested) - n(account?.received));
+  return Math.max(0, n(account?.invested) - n(account?.activePartialReceived));
 }
 
 function parseBulkLine(line) {
@@ -174,6 +195,7 @@ function InvestorAccount({ investor, screen, setScreen, onBack }) {
     entries: [],
     timeline: [],
     opportunities: [],
+    activePartialReceived: 0,
     summary: {},
   });
 
@@ -355,17 +377,17 @@ function InvestorAccount({ investor, screen, setScreen, onBack }) {
 function InvestorHome({ investor, account, balance, investorTa3meed, message, openManage, openMovements, openOpportunities }) {
   return (
     <>
-      <Text style={styles.investorScreenTitle}>شاشة {investor.name}</Text>
+      <Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text>
 
       <View style={[styles.investorPaymentCard, { backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}>
         <Text style={[styles.investorPaymentTitle, { color: '#0f766e' }]}>مستثمر تعميد</Text>
         <Text style={[styles.investorBalanceText, { marginTop: 6 }]}>{money(investorTa3meed, 2)} ر.س</Text>
-        <Text style={styles.investorPaymentMeta}>مجموع المبالغ الداخلة في استثمار كل فرصة - نصيب المستثمر المستلم</Text>
+        <Text style={styles.investorPaymentMeta}>مجموع المبالغ الداخلة في استثمار كل فرصة - نصيبه المستلم الجزئي للفرص النشطة فقط</Text>
       </View>
 
       <View style={[styles.investorEntryTypeRow, { marginTop: 10 }]}>
         <MiniStat title="إجمالي المستثمر" value={money(account?.invested, 2)} />
-        <MiniStat title="نصيبه المستلم" value={money(account?.received, 2)} />
+        <MiniStat title="نصيبه المستلم" value={money(account?.activePartialReceived, 2)} />
       </View>
       <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
         <MiniStat title="ربح متوقع" value={money(account?.expectedProfit, 2)} />
@@ -380,9 +402,9 @@ function InvestorHome({ investor, account, balance, investorTa3meed, message, op
       {!!message && <Text style={styles.message}>{message}</Text>}
 
       <Text style={styles.panelTitle}>شاشات المستثمر</Text>
-      <ScreenLink title="إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، استيراد جماعي، تعديل وحذف." onPress={openManage} />
-      <ScreenLink title="الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={openMovements} />
-      <ScreenLink title="تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={openOpportunities} />
+      <ScreenLink title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، استيراد جماعي، تعديل وحذف." onPress={openManage} />
+      <ScreenLink title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={openMovements} />
+      <ScreenLink title="#S-114 تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={openOpportunities} />
     </>
   );
 }
@@ -411,7 +433,7 @@ function ManageBalanceScreen({
 }) {
   return (
     <>
-      <Text style={styles.investorScreenTitle}>إدارة حركات أرصدة {investor.name}</Text>
+      <Text style={styles.investorScreenTitle}>#S-112 إدارة حركات أرصدة {investor.name}</Text>
       {!!message && <Text style={styles.message}>{message}</Text>}
 
       <View style={styles.investorPaymentCard}>
@@ -485,7 +507,7 @@ function ManageBalanceScreen({
 function FinancialMovementsScreen({ investor, timeline }) {
   return (
     <>
-      <Text style={styles.investorScreenTitle}>الحركات المالية - {investor.name}</Text>
+      <Text style={styles.investorScreenTitle}>#S-113 الحركات المالية - {investor.name}</Text>
       <Text style={styles.investorScreenSubtitle}>تشمل استلامات تعميد والإيداعات والسحوبات اليدوية.</Text>
       {timeline.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات مالية لهذا المستثمر بعد.</Text>
@@ -507,7 +529,7 @@ function FinancialMovementsScreen({ investor, timeline }) {
 function InvestorOpportunitiesScreen({ investor, opportunities }) {
   return (
     <>
-      <Text style={styles.investorScreenTitle}>فرص تعميد - {investor.name}</Text>
+      <Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>
       {opportunities.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text>
       ) : opportunities.map((opportunity) => (
