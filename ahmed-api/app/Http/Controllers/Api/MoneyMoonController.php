@@ -34,6 +34,11 @@ class MoneyMoonController extends Controller
             return response()->json(['message' => 'MoneyMoon platform not found'], 404);
         }
 
+        $orderNo = $this->normalizeOrderNo($data['order_no'] ?? null);
+        if ($orderNo && $this->findInvestmentByOrderNo($platform->id, $orderNo)) {
+            return response()->json(['message' => 'رقم الطلب موجود مسبقًا في موني مون'], 422);
+        }
+
         $accountId = DB::table('investment_accounts')->where('platform_id', $platform->id)->value('id');
 
         if (! $accountId) {
@@ -52,11 +57,12 @@ class MoneyMoonController extends Controller
         $dates = $this->investmentDates($data);
         $profitRate = $this->profitRate($data['category']);
         $expectedProfit = $this->expectedProfit($data['amount'], $profitRate);
+        $metadata = $this->buildMetadata($data, $profitRate, $orderNo);
 
         $id = DB::table('investment_opportunities')->insertGetId([
             'account_id' => $accountId,
             'platform_id' => $platform->id,
-            'title' => 'MoneyMoon ' . $data['category'],
+            'title' => $orderNo ? 'MoneyMoon ' . $orderNo : 'MoneyMoon ' . $data['category'],
             'investment_type' => 'moneymoon',
             'principal_amount' => $data['amount'],
             'expected_profit_amount' => $expectedProfit,
@@ -66,11 +72,7 @@ class MoneyMoonController extends Controller
             'maturity_date' => $dates['maturity_date'],
             'status' => 'active',
             'profit_distribution' => 'at_maturity',
-            'metadata' => json_encode([
-                'category' => $data['category'],
-                'profit_rate' => $profitRate,
-                'manual_maturity' => ! empty($data['maturity_date']),
-            ]),
+            'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE),
             'notes' => $data['notes'] ?? null,
             'created_at' => now(),
             'updated_at' => now(),
@@ -97,24 +99,28 @@ class MoneyMoonController extends Controller
             return response()->json(['message' => 'Investment not found'], 404);
         }
 
+        $orderNo = $this->normalizeOrderNo($data['order_no'] ?? null);
+        $duplicate = $orderNo ? $this->findInvestmentByOrderNo($platform->id, $orderNo, $id) : null;
+
+        if ($duplicate) {
+            return response()->json(['message' => 'رقم الطلب موجود مسبقًا في موني مون'], 422);
+        }
+
         $dates = $this->investmentDates($data);
         $profitRate = $this->profitRate($data['category']);
         $expectedProfit = $this->expectedProfit($data['amount'], $profitRate);
+        $metadata = $this->buildMetadata($data, $profitRate, $orderNo);
 
         DB::table('investment_opportunities')
             ->where('id', $id)
             ->update([
-                'title' => 'MoneyMoon ' . $data['category'],
+                'title' => $orderNo ? 'MoneyMoon ' . $orderNo : 'MoneyMoon ' . $data['category'],
                 'principal_amount' => $data['amount'],
                 'expected_profit_amount' => $expectedProfit,
                 'expected_rate' => $profitRate,
                 'start_date' => $dates['investment_date'],
                 'maturity_date' => $dates['maturity_date'],
-                'metadata' => json_encode([
-                    'category' => $data['category'],
-                    'profit_rate' => $profitRate,
-                    'manual_maturity' => ! empty($data['maturity_date']),
-                ]),
+                'metadata' => json_encode($metadata, JSON_UNESCAPED_UNICODE),
                 'notes' => $data['notes'] ?? null,
                 'updated_at' => now(),
             ]);
@@ -189,6 +195,7 @@ class MoneyMoonController extends Controller
             'category' => ['required', 'in:A,B,C,D'],
             'investment_date' => ['required', 'date'],
             'maturity_date' => ['nullable', 'date'],
+            'order_no' => ['nullable', 'string', 'max:80'],
             'notes' => ['nullable', 'string'],
         ]);
     }
@@ -219,5 +226,70 @@ class MoneyMoonController extends Controller
     private function expectedProfit(float|int|string $amount, float $profitRate): float
     {
         return round(((float) $amount) * ($profitRate / 100), 2);
+    }
+
+    private function buildMetadata(array $data, float $profitRate, ?string $orderNo): array
+    {
+        $metadata = [
+            'category' => $data['category'],
+            'profit_rate' => $profitRate,
+            'manual_maturity' => ! empty($data['maturity_date']),
+        ];
+
+        if ($orderNo) {
+            $metadata['external_order_no'] = $orderNo;
+            $metadata['order_no'] = $orderNo;
+        }
+
+        return $metadata;
+    }
+
+    private function normalizeOrderNo(?string $orderNo): ?string
+    {
+        $orderNo = trim((string) $orderNo);
+
+        return $orderNo === '' ? null : $orderNo;
+    }
+
+    private function findInvestmentByOrderNo(int $platformId, string $orderNo, ?int $exceptId = null)
+    {
+        $investments = DB::table('investment_opportunities')
+            ->where('platform_id', $platformId)
+            ->when($exceptId, fn ($query) => $query->where('id', '!=', $exceptId))
+            ->get(['id', 'metadata', 'title', 'notes']);
+
+        foreach ($investments as $investment) {
+            $metadata = $this->decodeMetadata($investment->metadata);
+            $currentOrderNo = $metadata['external_order_no'] ?? $metadata['order_no'] ?? null;
+
+            if (! $currentOrderNo && preg_match('/L-[A-Za-z0-9-]+/', (string) $investment->title, $titleMatches)) {
+                $currentOrderNo = $titleMatches[0];
+            }
+
+            if (! $currentOrderNo && preg_match('/L-[A-Za-z0-9-]+/', (string) $investment->notes, $noteMatches)) {
+                $currentOrderNo = $noteMatches[0];
+            }
+
+            if ($currentOrderNo && strcasecmp((string) $currentOrderNo, $orderNo) === 0) {
+                return $investment;
+            }
+        }
+
+        return null;
+    }
+
+    private function decodeMetadata($metadata): array
+    {
+        if (is_array($metadata)) {
+            return $metadata;
+        }
+
+        if (! is_string($metadata) || trim($metadata) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($metadata, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 }
