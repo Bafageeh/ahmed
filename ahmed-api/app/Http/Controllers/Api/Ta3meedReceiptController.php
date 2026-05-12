@@ -17,6 +17,16 @@ class Ta3meedReceiptController extends Controller
 
     public function applyMessage(Request $request)
     {
+        return $this->applyMessageInternal($request, false);
+    }
+
+    public function applyMessageConfirmed(Request $request)
+    {
+        return $this->applyMessageInternal($request, true);
+    }
+
+    private function applyMessageInternal(Request $request, bool $allowDuplicate)
+    {
         $data = $request->validate([
             'message' => ['required', 'string'],
             'receipt_date' => ['nullable', 'date'],
@@ -48,7 +58,21 @@ class Ta3meedReceiptController extends Controller
             'source_message' => $data['message'],
             'notes' => $data['notes'] ?? $parsed['label'],
             'force_complete' => $parsed['is_final'],
+            'allow_duplicate' => $allowDuplicate,
         ]);
+
+        if (($receipt['duplicate'] ?? false) && ! $allowDuplicate) {
+            return response()->json([
+                'message' => 'هذه الدفعة مسجلة سابقًا، هل تريد إضافتها مرة أخرى؟',
+                'data' => [
+                    'duplicate' => true,
+                    'needs_confirmation' => true,
+                    'parsed' => $parsed,
+                    'receipt' => $receipt,
+                    'investment' => $this->readInvestment($investment->id),
+                ],
+            ], 409);
+        }
 
         return response()->json(['data' => ['parsed' => $parsed, 'receipt' => $receipt, 'investment' => $this->readInvestment($investment->id)]]);
     }
@@ -62,6 +86,7 @@ class Ta3meedReceiptController extends Controller
             'notes' => ['nullable', 'string'],
             'source_message' => ['nullable', 'string'],
             'force_complete' => ['nullable', 'boolean'],
+            'allow_duplicate' => ['nullable', 'boolean'],
         ]);
 
         $platform = DB::table('investment_platforms')->where('code', 'ta3meed')->first();
@@ -82,6 +107,7 @@ class Ta3meedReceiptController extends Controller
             'source_message' => $data['source_message'] ?? null,
             'notes' => $data['notes'] ?? null,
             'force_complete' => (bool) ($data['force_complete'] ?? false),
+            'allow_duplicate' => (bool) ($data['allow_duplicate'] ?? false),
         ]);
 
         return response()->json(['data' => ['receipt' => $receipt, 'investment' => $this->readInvestment($id)]]);
@@ -150,30 +176,33 @@ class Ta3meedReceiptController extends Controller
             $receiptDate = $data['receipt_date'] ?? now()->toDateString();
             $reference = $data['reference_number'] ?? $investment->reference_number;
             $sourceMessage = $data['source_message'] ?? null;
+            $allowDuplicate = (bool) ($data['allow_duplicate'] ?? false);
 
-            $duplicateQuery = DB::table('ta3meed_receipts')
-                ->where('opportunity_id', $investment->id)
-                ->where('reference_number', $reference)
-                ->where('amount', $amount)
-                ->where('receipt_type', $receiptType);
+            if (! $allowDuplicate) {
+                $duplicateQuery = DB::table('ta3meed_receipts')
+                    ->where('opportunity_id', $investment->id)
+                    ->where('reference_number', $reference)
+                    ->where('amount', $amount)
+                    ->where('receipt_type', $receiptType);
 
-            if ($sourceMessage) {
-                $duplicateQuery->where('source_message', $sourceMessage);
-            } else {
-                $duplicateQuery->where('receipt_date', $receiptDate);
-            }
+                if ($sourceMessage) {
+                    $duplicateQuery->where('source_message', $sourceMessage);
+                } else {
+                    $duplicateQuery->where('receipt_date', $receiptDate);
+                }
 
-            $duplicate = $duplicateQuery->orderByDesc('id')->first();
-            if ($duplicate) {
-                $this->recalculate($investment->id, (bool) ($data['force_complete'] ?? false));
-                return [
-                    'id' => $duplicate->id,
-                    'amount' => round((float) $duplicate->amount, 2),
-                    'receipt_type' => $duplicate->receipt_type,
-                    'receipt_date' => $duplicate->receipt_date,
-                    'reference_number' => $duplicate->reference_number,
-                    'duplicate' => true,
-                ];
+                $duplicate = $duplicateQuery->orderByDesc('id')->first();
+                if ($duplicate) {
+                    $this->recalculate($investment->id, (bool) ($data['force_complete'] ?? false));
+                    return [
+                        'id' => $duplicate->id,
+                        'amount' => round((float) $duplicate->amount, 2),
+                        'receipt_type' => $duplicate->receipt_type,
+                        'receipt_date' => $duplicate->receipt_date,
+                        'reference_number' => $duplicate->reference_number,
+                        'duplicate' => true,
+                    ];
+                }
             }
 
             $receiptId = DB::table('ta3meed_receipts')->insertGetId([
@@ -219,6 +248,7 @@ class Ta3meedReceiptController extends Controller
                 'receipt_date' => $receiptDate,
                 'reference_number' => $reference,
                 'duplicate' => false,
+                'confirmed_duplicate' => $allowDuplicate,
             ];
         });
     }
