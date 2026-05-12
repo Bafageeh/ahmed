@@ -110,8 +110,9 @@ export default function Ta3meedScreen({ onBack }) {
     setTab('investments');
   };
 
-  const openInvestors = () => {
-    setTab((current) => (current === 'investors' ? 'investments' : 'investors'));
+  const openMore = () => {
+    setTab('more');
+    setMessage('');
   };
 
   const showInfo = (text) => setMessage(text);
@@ -125,7 +126,7 @@ export default function Ta3meedScreen({ onBack }) {
             onAdd={() => setTab('finishedImport')}
             onFilter={cycleFilter}
             onSearch={() => setSearchVisible((value) => !value)}
-            onToggleInvestors={openInvestors}
+            onToggleInvestors={openMore}
           />
 
           {searchVisible ? (
@@ -147,7 +148,7 @@ export default function Ta3meedScreen({ onBack }) {
             <SummaryCard icon="▢" iconStyle={styles.tealCircle} label="إجمالي الاستثمار" value={money(filteredSummary.totalInvested)} prefix="ر.س" tint={styles.summaryTeal} />
           </View>
 
-          {tab !== 'investors' && tab !== 'finishedImport' ? (
+          {tab !== 'more' && tab !== 'finishedImport' ? (
             <>
               <View style={styles.filterShell}>
                 {filters.map((item) => (
@@ -160,8 +161,9 @@ export default function Ta3meedScreen({ onBack }) {
 
           {!!message && <Text style={styles.message}>{message}</Text>}
 
-          {tab === 'investors' ? (
+          {tab === 'more' ? (
             <>
+              <Text style={styles.panelTitle}>المزيد</Text>
               <InvestorStats summary={summary} />
               <Ta3meedInvestorAccounts investors={investors} />
             </>
@@ -196,8 +198,8 @@ export default function Ta3meedScreen({ onBack }) {
         <BottomTabs
           onHome={onBack}
           onInfo={showInfo}
-          onMore={openInvestors}
-          active={tab === 'investors' ? 'more' : 'investments'}
+          onMore={openMore}
+          active={tab === 'more' ? 'more' : 'investments'}
         />
       </View>
     </SafeAreaView>
