@@ -78,7 +78,10 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
         <TouchableOpacity style={screenStyles.headerIcon} onPress={requestBack} activeOpacity={0.85}>
           <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
-        <Text style={screenStyles.headerTitle}>حسابات المستثمرين</Text>
+        <View style={screenStyles.titleBlock}>
+          <Text style={screenStyles.screenId}>#S-110</Text>
+          <Text style={screenStyles.headerTitle}>حسابات المستثمرين</Text>
+        </View>
         <TouchableOpacity style={screenStyles.refreshButton} onPress={load} activeOpacity={0.85}>
           <Text style={screenStyles.refreshText}>تحديث</Text>
         </TouchableOpacity>
@@ -86,7 +89,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
 
       <ScrollView contentContainerStyle={screenStyles.content} showsVerticalScrollIndicator={false}>
         <View style={screenStyles.heroCard}>
-          <Text style={screenStyles.heroKicker}>شاشة مستقلة</Text>
+          <Text style={screenStyles.heroKicker}>#S-110 · شاشة مستقلة</Text>
           <Text style={screenStyles.heroTitle}>إدارة أرصدة مستثمري تعميد</Text>
           <Text style={screenStyles.heroText}>هذه الشاشة منفصلة عن فلتر المستثمرين. اختر المستثمر ثم أضف رصيدًا أو سجل سحبًا أو عدّل واحذف حركات الرصيد.</Text>
         </View>
@@ -104,7 +107,9 @@ const screenStyles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   header: { paddingHorizontal: 28, paddingTop: 34, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
   headerIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
+  titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  screenId: { color: '#0f766e', fontSize: 12, fontWeight: '900', textAlign: 'center', marginBottom: 2 },
+  headerTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
   refreshButton: { minWidth: 70, height: 48, borderRadius: 17, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   refreshText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
   content: { paddingHorizontal: 18, paddingBottom: 36 },
