@@ -98,12 +98,42 @@ function parseBulkLine(line) {
   };
 }
 
-export function Ta3meedInvestorAccounts({ investors }) {
+export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onExit }) {
   const accountInvestors = useMemo(() => accountInvestorsFrom(investors), [investors]);
   const [selected, setSelected] = useState(null);
+  const [selectedScreen, setSelectedScreen] = useState('home');
+  const [handledBackVersion, setHandledBackVersion] = useState(backRequestVersion);
+
+  const selectInvestor = (investor) => {
+    setSelected(investor);
+    setSelectedScreen('home');
+  };
+
+  useEffect(() => {
+    if (backRequestVersion === handledBackVersion) return;
+    setHandledBackVersion(backRequestVersion);
+
+    if (selected && selectedScreen !== 'home') {
+      setSelectedScreen('home');
+      return;
+    }
+    if (selected) {
+      setSelected(null);
+      setSelectedScreen('home');
+      return;
+    }
+    onExit?.();
+  }, [backRequestVersion, handledBackVersion, onExit, selected, selectedScreen]);
 
   if (selected) {
-    return <InvestorAccount investor={selected} onBack={() => setSelected(null)} />;
+    return (
+      <InvestorAccount
+        investor={selected}
+        screen={selectedScreen}
+        setScreen={setSelectedScreen}
+        onBack={() => setSelected(null)}
+      />
+    );
   }
 
   return (
@@ -111,7 +141,7 @@ export function Ta3meedInvestorAccounts({ investors }) {
       <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
       <Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشة خاصة، ثم ادخل إلى شاشة الإحصائيات أو إدارة الحركات أو الحركات المالية.</Text>
       {accountInvestors.map((investor) => (
-        <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => setSelected(investor)} activeOpacity={0.84}>
+        <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => selectInvestor(investor)} activeOpacity={0.84}>
           <Text style={styles.investorAccountButtonText}>شاشة {investor.name}</Text>
           <Text style={styles.investorAccountButtonIcon}>›</Text>
         </TouchableOpacity>
@@ -120,9 +150,8 @@ export function Ta3meedInvestorAccounts({ investors }) {
   );
 }
 
-function InvestorAccount({ investor, onBack }) {
+function InvestorAccount({ investor, screen, setScreen, onBack }) {
   const [account, setAccount] = useState(null);
-  const [screen, setScreen] = useState('home');
   const [amount, setAmount] = useState('');
   const [entryDate, setEntryDate] = useState(todayText());
   const [notes, setNotes] = useState('');
@@ -187,6 +216,7 @@ function InvestorAccount({ investor, onBack }) {
     setEntryType(value < 0 ? 'withdrawal' : 'deposit');
     setEntryDate(entry.entry_date || todayText());
     setNotes(entry.notes || '');
+    setScreen('manage');
     setMessage('تم فتح حركة الرصيد للتعديل');
   };
 
