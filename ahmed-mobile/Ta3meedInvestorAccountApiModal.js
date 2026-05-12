@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const n = (v) => Number(v || 0);
@@ -19,6 +19,8 @@ export default function Ta3meedInvestorAccountApiModal({ investor, visible, onCl
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [account, setAccount] = useState(null);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const code = investor?.code || investor?.investor_code || investor?.name;
 
@@ -27,13 +29,23 @@ export default function Ta3meedInvestorAccountApiModal({ investor, visible, onCl
     setLoading(true);
     setMessage('');
     try {
-      const json = await apiJson(`/ta3meed/investors/${encodeURIComponent(code)}/account`);
+      const params = [];
+      if (fromDate.trim()) params.push(`from_date=${encodeURIComponent(fromDate.trim())}`);
+      if (toDate.trim()) params.push(`to_date=${encodeURIComponent(toDate.trim())}`);
+      const suffix = params.length ? `?${params.join('&')}` : '';
+      const json = await apiJson(`/ta3meed/investors/${encodeURIComponent(code)}/account${suffix}`);
       setAccount(json.data);
     } catch (error) {
       setMessage(error.message || 'تعذر تحميل حساب المستثمر');
     } finally {
       setLoading(false);
     }
+  };
+
+  const clearRange = async () => {
+    setFromDate('');
+    setToDate('');
+    setTimeout(load, 0);
   };
 
   useEffect(() => {
@@ -58,9 +70,22 @@ export default function Ta3meedInvestorAccountApiModal({ investor, visible, onCl
 
         <ScrollView contentContainerStyle={s.content}>
           <View style={s.hero}>
-            <Text style={s.heroLabel}>صافي الرصيد</Text>
+            <Text style={s.heroLabel}>صافي الرصيد خلال الفترة</Text>
             <Text style={s.heroValue}>{money(summary.net_balance)}</Text>
             <Text style={s.heroMeta}>المتبقي المتوقع: {money(summary.remaining)}</Text>
+            <Text style={s.heroMeta}>المستلم بالفترة: {money(summary.period_received)}</Text>
+          </View>
+
+          <View style={s.rangeBox}>
+            <Text style={s.rangeTitle}>فلتر الفترة</Text>
+            <View style={s.rangeInputs}>
+              <TextInput style={s.dateInput} value={toDate} onChangeText={setToDate} placeholder="إلى 2026-12-31" textAlign="right" />
+              <TextInput style={s.dateInput} value={fromDate} onChangeText={setFromDate} placeholder="من 2026-01-01" textAlign="right" />
+            </View>
+            <View style={s.rangeActions}>
+              <TouchableOpacity style={s.secondaryButton} onPress={clearRange}><Text style={s.secondaryButtonText}>مسح</Text></TouchableOpacity>
+              <TouchableOpacity style={s.primaryButton} onPress={load}><Text style={s.primaryButtonText}>تطبيق الفترة</Text></TouchableOpacity>
+            </View>
           </View>
 
           <View style={s.tabs}>
@@ -94,9 +119,11 @@ function Summary({ summary }) {
     <Metric title="إجمالي الاستثمار" value={money(summary.invested)} />
     <Metric title="الربح المتوقع" value={money(summary.expected_profit)} />
     <Metric title="الإجمالي المتوقع" value={money(summary.expected_total)} />
-    <Metric title="المستلم" value={money(summary.received)} />
+    <Metric title="المستلم إجماليًا" value={money(summary.received)} />
+    <Metric title="المستلم بالفترة" value={money(summary.period_received)} />
     <Metric title="الربح الفعلي" value={money(summary.actual_profit)} />
     <Metric title="الرصيد اليدوي" value={money(summary.manual_balance)} />
+    <Metric title="صافي الفترة" value={money(summary.net_balance)} />
     <Metric title="عدد الفرص" value={String(summary.opportunities_count || 0)} />
     <Metric title="عدد الحركات" value={String(summary.timeline_count || 0)} />
   </View>;
@@ -106,7 +133,7 @@ function Timeline({ rows }) {
   if (!rows.length) return <Empty label="لا توجد حركات" />;
   return <View>{rows.map((row) => <View key={row.id} style={s.rowCard}>
     <Text style={s.rowTitle}>{row.label}</Text>
-    <Text style={s.rowAmount}>{money(row.amount)}</Text>
+    <Text style={[s.rowAmount, row.direction === 'out' && s.outAmount]}>{money(row.amount)}</Text>
     <Text style={s.rowText}>{row.date || '-'} · {row.reference_number || 'بدون رقم فرصة'}</Text>
     <Text style={s.rowText}>{row.description || '-'}</Text>
   </View>)}</View>;
@@ -135,7 +162,7 @@ function Receipts({ rows, manualEntries }) {
     </View>)}
     {manualEntries.map((row) => <View key={`m-${row.id}`} style={s.rowCard}>
       <Text style={s.rowTitle}>{n(row.amount) >= 0 ? 'إيداع يدوي' : 'سحب يدوي'}</Text>
-      <Text style={s.rowAmount}>{money(row.amount)}</Text>
+      <Text style={[s.rowAmount, n(row.amount) < 0 && s.outAmount]}>{money(row.amount)}</Text>
       <Text style={s.rowText}>{row.entry_date || '-'}</Text>
       <Text style={s.rowText}>{row.notes || '-'}</Text>
     </View>)}
@@ -161,6 +188,15 @@ const s = StyleSheet.create({
   heroLabel: { color: '#ccfbf1', fontWeight: '900' },
   heroValue: { color: '#fff', fontWeight: '900', fontSize: 30, marginTop: 8 },
   heroMeta: { color: '#e6fffb', fontWeight: '800', marginTop: 6 },
+  rangeBox: { backgroundColor: '#fff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: '#dbe3ef', marginBottom: 12 },
+  rangeTitle: { color: '#0f172a', fontWeight: '900', textAlign: 'right', marginBottom: 8 },
+  rangeInputs: { flexDirection: 'row', gap: 8 },
+  dateInput: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, padding: 11, borderWidth: 1, borderColor: '#e2e8f0', fontWeight: '800' },
+  rangeActions: { flexDirection: 'row-reverse', gap: 8, marginTop: 10 },
+  primaryButton: { flex: 1, backgroundColor: '#0f766e', borderRadius: 14, paddingVertical: 11, alignItems: 'center' },
+  primaryButtonText: { color: '#fff', fontWeight: '900' },
+  secondaryButton: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 14, paddingVertical: 11, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  secondaryButtonText: { color: '#0f172a', fontWeight: '900' },
   tabs: { flexDirection: 'row-reverse', gap: 8, marginBottom: 12 },
   tab: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 10, alignItems: 'center', borderWidth: 1, borderColor: '#dbe3ef' },
   tabOn: { backgroundColor: '#0f766e' },
@@ -173,6 +209,7 @@ const s = StyleSheet.create({
   rowCard: { backgroundColor: '#fff', borderRadius: 18, padding: 14, borderWidth: 1, borderColor: '#dbe3ef', alignItems: 'flex-end', marginBottom: 8 },
   rowTitle: { color: '#0f172a', fontWeight: '900', fontSize: 16 },
   rowAmount: { color: '#0f766e', fontWeight: '900', fontSize: 18, marginTop: 5 },
+  outAmount: { color: '#dc2626' },
   rowText: { color: '#64748b', fontWeight: '800', textAlign: 'right', marginTop: 4 },
   message: { backgroundColor: '#eff6ff', color: '#075985', padding: 12, borderRadius: 16, textAlign: 'right', fontWeight: '800', marginBottom: 8 },
   empty: { backgroundColor: '#fff', borderRadius: 20, padding: 18, alignItems: 'center' },
