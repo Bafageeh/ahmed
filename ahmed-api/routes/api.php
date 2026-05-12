@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonController;
 use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
+use App\Http\Controllers\Api\Ta3meedInvestorAccountController;
 use App\Http\Controllers\Api\Ta3meedMutationController;
 use App\Http\Controllers\Api\Ta3meedReceiptController;
 use App\Http\Controllers\Api\WhatsAppController;
@@ -47,7 +48,7 @@ Route::delete('/ta3meed/receipts/{id}', [Ta3meedReceiptController::class, 'destr
 Route::post('/ta3meed/receipts/parse', [Ta3meedReceiptController::class, 'parse']);
 Route::post('/ta3meed/receipts/apply-message', [Ta3meedReceiptController::class, 'applyMessage']);
 Route::post('/ta3meed/receipts/apply-message-confirmed', [Ta3meedReceiptController::class, 'applyMessageConfirmed']);
-Route::get('/ta3meed/investors/{code}/account', [Ta3meedMutationController::class, 'investorAccount']);
+Route::get('/ta3meed/investors/{code}/account', [Ta3meedInvestorAccountController::class, 'show']);
 Route::post('/ta3meed/investors/{code}/account/entries', [Ta3meedMutationController::class, 'storeInvestorAccountEntry']);
 Route::put('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'updateInvestorAccountEntry']);
 Route::delete('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'deleteInvestorAccountEntry']);
