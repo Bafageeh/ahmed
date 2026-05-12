@@ -56,6 +56,19 @@ class Ta3meedInvestorAccountController extends Controller
                 $row->share_percent = ((float) $row->principal_amount) > 0
                     ? round(((float) $row->invested_amount / (float) $row->principal_amount) * 100, 6)
                     : 0;
+
+                $shareRatio = ((float) $row->share_percent) / 100;
+                $opportunityProfitShare = $shareRatio > 0
+                    ? round(((float) $row->opportunity_expected_profit) * $shareRatio, 2)
+                    : 0;
+
+                // Keep profit investor-specific: never expose full opportunity profit as the investor's profit.
+                $row->actual_profit_amount = ((float) $row->actual_profit_amount) !== 0.0
+                    ? round((float) $row->actual_profit_amount, 2)
+                    : $opportunityProfitShare;
+
+                $row->contribution_profit_amount = $opportunityProfitShare;
+
                 return $row;
             });
 
