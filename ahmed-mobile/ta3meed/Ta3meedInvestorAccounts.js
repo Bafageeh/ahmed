@@ -6,6 +6,30 @@ import { money, n } from './ta3meedUtils';
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const todayText = () => new Date().toISOString().slice(0, 10);
 
+const defaultInvestors = [
+  { code: 'ahmed', name: 'أحمد' },
+  { code: 'sara', name: 'سارة' },
+  { code: 'amal', name: 'آمال' },
+  { code: 'mother', name: 'أمي' },
+  { code: 'father', name: 'الوالد' },
+];
+
+function accountInvestorsFrom(investors) {
+  const map = new Map();
+
+  defaultInvestors.forEach((investor) => {
+    map.set(investor.code, investor);
+  });
+
+  (investors || []).forEach((investor) => {
+    const code = investor.code || investor.name;
+    const name = investor.name || investor.code;
+    if (code && name) map.set(code, { code, name });
+  });
+
+  return Array.from(map.values());
+}
+
 function normalizeDate(value) {
   const text = String(value || '').trim();
   const parts = text.split(/[-\/]/).map((part) => part.trim());
@@ -31,16 +55,8 @@ function parseBulkLine(line) {
 }
 
 export function Ta3meedInvestorAccounts({ investors }) {
+  const accountInvestors = useMemo(() => accountInvestorsFrom(investors), [investors]);
   const [selected, setSelected] = useState(null);
-
-  if (!investors.length) {
-    return (
-      <View style={styles.investorScreen}>
-        <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
-        <Text style={styles.investorScreenSubtitle}>لا يوجد مستثمرون في تعميد حتى الآن.</Text>
-      </View>
-    );
-  }
 
   if (selected) {
     return <InvestorAccount investor={selected} onBack={() => setSelected(null)} />;
@@ -49,10 +65,10 @@ export function Ta3meedInvestorAccounts({ investors }) {
   return (
     <View style={styles.investorScreen}>
       <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
-      <Text style={styles.investorScreenSubtitle}>اختر حساب المستثمر لإضافة رصيد أو مراجعة الرصيد داخل تعميد.</Text>
-      {investors.map((investor) => (
+      <Text style={styles.investorScreenSubtitle}>هذه هي شاشة إدخال الأرصدة: اختر المستثمر ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات السابقة.</Text>
+      {accountInvestors.map((investor) => (
         <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => setSelected(investor)} activeOpacity={0.84}>
-          <Text style={styles.investorAccountButtonText}>حساب {investor.name}</Text>
+          <Text style={styles.investorAccountButtonText}>حساب {investor.name} - إضافة رصيد / تعديل</Text>
           <Text style={styles.investorAccountButtonIcon}>›</Text>
         </TouchableOpacity>
       ))}
@@ -75,16 +91,27 @@ function InvestorAccount({ investor, onBack }) {
   const balance = useMemo(() => n(account?.balance), [account]);
   const isEditing = Boolean(editingEntryId);
 
+  const emptyAccount = () => ({
+    investor,
+    balance: 0,
+    entries: [],
+  });
+
   const loadAccount = async () => {
     setMessage('جاري تحميل الحساب...');
     try {
       const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account`);
       const json = await response.json();
-      if (!response.ok) throw new Error(json.message || 'account failed');
-      setAccount(json.data || null);
+      if (!response.ok) {
+        setAccount(emptyAccount());
+        setMessage('الحساب جاهز. أضف أول رصيد لهذا المستثمر.');
+        return;
+      }
+      setAccount(json.data || emptyAccount());
       setMessage('');
     } catch {
-      setMessage('تعذر تحميل حساب المستثمر');
+      setAccount(emptyAccount());
+      setMessage('تعذر تحميل الحساب، يمكنك المحاولة بعد تحديث الاتصال.');
     }
   };
 
@@ -129,10 +156,10 @@ function InvestorAccount({ investor, onBack }) {
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'entry failed');
       resetForm();
-      setAccount(json.data || null);
+      setAccount(json.data || emptyAccount());
       setMessage(isEditing ? 'تم تعديل حركة الرصيد' : (entryType === 'withdrawal' ? 'تم تسجيل السحب من حساب المستثمر' : 'تمت إضافة الرصيد لحساب المستثمر'));
     } catch {
-      setMessage('تعذر حفظ الحركة');
+      setMessage('تعذر حفظ الحركة. إذا كان الحساب جديدًا حدّث التطبيق ثم حاول مرة أخرى.');
     }
   };
 
@@ -156,7 +183,7 @@ function InvestorAccount({ investor, onBack }) {
         if (!response.ok) throw new Error(json.message || 'bulk failed');
         lastAccount = json.data || lastAccount;
       }
-      setAccount(lastAccount || account);
+      setAccount(lastAccount || account || emptyAccount());
       setBulkText('');
       setMessage(`تم استيراد ${parsed.length} حركة بنجاح`);
     } catch {
@@ -177,7 +204,7 @@ function InvestorAccount({ investor, onBack }) {
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'delete failed');
       if (editingEntryId === entry.id) resetForm();
-      setAccount(json.data || null);
+      setAccount(json.data || emptyAccount());
       setMessage('تم حذف حركة الرصيد');
     } catch {
       setMessage('تعذر حذف الحركة');
@@ -187,7 +214,7 @@ function InvestorAccount({ investor, onBack }) {
   return (
     <View style={styles.investorScreen}>
       <TouchableOpacity style={styles.investorAccountBackButton} onPress={onBack} activeOpacity={0.84}>
-        <Text style={styles.investorAccountBackText}>رجوع للحسابات</Text>
+        <Text style={styles.investorAccountBackText}>رجوع لحسابات المستثمرين</Text>
       </TouchableOpacity>
       <Text style={styles.investorScreenTitle}>حساب {investor.name}</Text>
       <Text style={styles.investorBalanceText}>الرصيد: {money(balance, 2)} ر.س</Text>
