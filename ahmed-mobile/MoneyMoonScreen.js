@@ -19,6 +19,14 @@ const money = (value, digits = 2) => `${asNumber(value).toLocaleString('en-US', 
 const rates = { A: 2, B: 2, C: 3, D: 4 };
 const categoryRate = (category) => rates[category] || 0;
 const calcProfit = (amount, category) => Math.round(asNumber(amount) * categoryRate(category)) / 100;
+const blankForm = () => ({
+  orderNo: '',
+  amount: '',
+  category: 'A',
+  investmentDate: today(),
+  maturityDate: '',
+  notes: '',
+});
 
 function readMeta(value) {
   try {
@@ -45,16 +53,38 @@ function orderNumber(item, meta) {
   return notesMatch ? notesMatch[0] : '';
 }
 
+function formFromItem(item) {
+  const meta = readMeta(item.metadata);
+  return {
+    orderNo: orderNumber(item, meta),
+    amount: String(item.principal_amount || ''),
+    category: meta.category || 'A',
+    investmentDate: item.start_date || today(),
+    maturityDate: item.maturity_date || '',
+    notes: item.notes || '',
+  };
+}
+
+function payloadFromForm(form) {
+  return {
+    amount: asNumber(form.amount),
+    category: form.category,
+    investment_date: form.investmentDate,
+    maturity_date: form.maturityDate || null,
+    order_no: String(form.orderNo || '').trim() || null,
+    notes: form.notes || null,
+  };
+}
+
 export default function MoneyMoonScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [mode, setMode] = useState('list');
+  const [filter, setFilter] = useState('all');
+  const [addForm, setAddForm] = useState(blankForm());
   const [editingId, setEditingId] = useState(null);
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('A');
-  const [investmentDate, setInvestmentDate] = useState(today());
-  const [maturityDate, setMaturityDate] = useState('');
-  const [notes, setNotes] = useState('');
+  const [editForm, setEditForm] = useState(blankForm());
   const [saving, setSaving] = useState(false);
   const [receivingId, setReceivingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -62,8 +92,15 @@ export default function MoneyMoonScreen({ onBack }) {
   const activeItems = useMemo(() => items.filter((item) => !isReceived(item)), [items]);
   const totalActive = useMemo(() => activeItems.reduce((sum, item) => sum + asNumber(item.principal_amount), 0), [activeItems]);
   const totalActiveProfit = useMemo(() => activeItems.reduce((sum, item) => sum + asNumber(item.expected_profit_amount), 0), [activeItems]);
-  const overdueCount = useMemo(() => items.filter(isOverdue).length, [items]);
-  const expectedProfit = calcProfit(amount, category);
+  const overdueItems = useMemo(() => items.filter(isOverdue), [items]);
+  const receivedItems = useMemo(() => items.filter(isReceived), [items]);
+
+  const visibleItems = useMemo(() => {
+    if (filter === 'active') return activeItems;
+    if (filter === 'received') return receivedItems;
+    if (filter === 'overdue') return overdueItems;
+    return items;
+  }, [activeItems, filter, items, overdueItems, receivedItems]);
 
   const loadItems = async () => {
     setLoading(true);
@@ -71,10 +108,10 @@ export default function MoneyMoonScreen({ onBack }) {
     try {
       const response = await fetch(`${API_URL}/moneymoon/investments`, { headers: { Accept: 'application/json' } });
       const json = await response.json();
-      if (!response.ok) throw new Error('load failed');
+      if (!response.ok) throw new Error(json?.message || 'تعذر تحميل استثمارات موني مون');
       setItems(Array.isArray(json.data) ? json.data : []);
     } catch (error) {
-      setMessage('تعذر تحميل استثمارات موني مون');
+      setMessage(error.message || 'تعذر تحميل استثمارات موني مون');
       setItems([]);
     } finally {
       setLoading(false);
@@ -83,54 +120,64 @@ export default function MoneyMoonScreen({ onBack }) {
 
   useEffect(() => { loadItems(); }, []);
 
-  const resetForm = () => {
+  const updateAddForm = (key, value) => setAddForm((current) => ({ ...current, [key]: value }));
+  const updateEditForm = (key, value) => setEditForm((current) => ({ ...current, [key]: value }));
+
+  const openAddScreen = () => {
+    setAddForm(blankForm());
     setEditingId(null);
-    setAmount('');
-    setCategory('A');
-    setInvestmentDate(today());
-    setMaturityDate('');
-    setNotes('');
+    setMode('add');
+    setMessage('');
+  };
+
+  const closeAddScreen = () => {
+    setMode('list');
+    setAddForm(blankForm());
+    setMessage('');
   };
 
   const startEdit = (item) => {
-    const meta = readMeta(item.metadata);
     setEditingId(item.id);
-    setAmount(String(item.principal_amount || ''));
-    setCategory(meta.category || 'A');
-    setInvestmentDate(item.start_date || today());
-    setMaturityDate(item.maturity_date || '');
-    setNotes(item.notes || '');
-    setMessage('تم فتح الاستثمار للتعديل');
+    setEditForm(formFromItem(item));
+    setMessage('');
   };
 
-  const saveInvestment = async () => {
-    if (!amount || asNumber(amount) <= 0) {
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm(blankForm());
+    setMessage('');
+  };
+
+  const saveForm = async ({ form, id }) => {
+    if (!form.amount || asNumber(form.amount) <= 0) {
       setMessage('ادخل مبلغ الاستثمار بشكل صحيح');
       return;
     }
 
     setSaving(true);
-    setMessage(editingId ? 'جاري حفظ التعديل...' : 'جاري حفظ الاستثمار...');
+    setMessage(id ? 'جاري حفظ التعديل...' : 'جاري حفظ الاستثمار...');
 
     try {
-      const url = editingId ? `${API_URL}/moneymoon/investments/${editingId}` : `${API_URL}/moneymoon/investments`;
+      const url = id ? `${API_URL}/moneymoon/investments/${id}` : `${API_URL}/moneymoon/investments`;
       const response = await fetch(url, {
-        method: editingId ? 'PUT' : 'POST',
+        method: id ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({
-          amount: asNumber(amount),
-          category,
-          investment_date: investmentDate,
-          maturity_date: maturityDate || null,
-          notes: notes || null,
-        }),
+        body: JSON.stringify(payloadFromForm(form)),
       });
-      if (!response.ok) throw new Error('save failed');
-      resetForm();
-      setMessage(editingId ? 'تم تعديل استثمار موني مون' : 'تم حفظ استثمار موني مون');
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json?.message || (id ? 'تعذر تعديل الاستثمار' : 'تعذر حفظ الاستثمار'));
+
+      if (id) {
+        cancelEdit();
+        setMessage('تم تعديل استثمار موني مون');
+      } else {
+        setMode('list');
+        setAddForm(blankForm());
+        setMessage('تم حفظ استثمار موني مون');
+      }
       await loadItems();
     } catch (error) {
-      setMessage(editingId ? 'تعذر تعديل الاستثمار' : 'تعذر حفظ الاستثمار');
+      setMessage(error.message || (id ? 'تعذر تعديل الاستثمار' : 'تعذر حفظ الاستثمار'));
     } finally {
       setSaving(false);
     }
@@ -141,11 +188,12 @@ export default function MoneyMoonScreen({ onBack }) {
     setMessage('جاري تسجيل الاستلام...');
     try {
       const response = await fetch(`${API_URL}/moneymoon/investments/${item.id}/receive`, { method: 'POST', headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error('receive failed');
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json?.message || 'تعذر تسجيل الاستلام');
       setMessage('تم اعتبار الاستثمار مستلمًا');
       await loadItems();
     } catch (error) {
-      setMessage('تعذر تسجيل الاستلام');
+      setMessage(error.message || 'تعذر تسجيل الاستلام');
     } finally {
       setReceivingId(null);
     }
@@ -156,12 +204,13 @@ export default function MoneyMoonScreen({ onBack }) {
     setMessage('جاري حذف الاستثمار...');
     try {
       const response = await fetch(`${API_URL}/moneymoon/investments/${item.id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
-      if (!response.ok) throw new Error('delete failed');
-      if (editingId === item.id) resetForm();
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json?.message || 'تعذر حذف الاستثمار');
+      if (editingId === item.id) cancelEdit();
       setMessage('تم حذف الاستثمار');
       await loadItems();
     } catch (error) {
-      setMessage('تعذر حذف الاستثمار');
+      setMessage(error.message || 'تعذر حذف الاستثمار');
     } finally {
       setDeletingId(null);
     }
@@ -174,6 +223,40 @@ export default function MoneyMoonScreen({ onBack }) {
     ]);
   };
 
+  if (mode === 'add') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+          <View style={styles.topBar}>
+            <TouchableOpacity style={styles.topIcon} onPress={closeAddScreen} activeOpacity={0.82}><UiIcon name="back" size={24} /></TouchableOpacity>
+            <View style={styles.topTitleBlock}>
+              <Text style={styles.screenTitle}>إضافة موني مون</Text>
+              <Text style={styles.screenSubtitle}>استثمار جديد مستقل عن القائمة</Text>
+            </View>
+            <View style={styles.topSpacer} />
+          </View>
+
+          <View style={styles.addHero}>
+            <View style={styles.addHeroIcon}><UiIcon name="add" size={30} color="#ffffff" /></View>
+            <Text style={styles.addHeroTitle}>أدخل بيانات الاستثمار الجديد</Text>
+            <Text style={styles.addHeroSubtitle}>يمكن ترك تاريخ الاستحقاق فارغًا ليتم احتسابه بعد شهر من تاريخ الاستثمار.</Text>
+          </View>
+
+          <InvestmentForm
+            form={addForm}
+            onChange={updateAddForm}
+            onSave={() => saveForm({ form: addForm })}
+            onCancel={closeAddScreen}
+            saving={saving}
+            saveLabel="حفظ الاستثمار"
+            cancelLabel="رجوع"
+          />
+          {!!message && <Text style={styles.message}>{message}</Text>}
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
@@ -183,9 +266,14 @@ export default function MoneyMoonScreen({ onBack }) {
             <Text style={styles.screenTitle}>موني مون</Text>
             <Text style={styles.screenSubtitle}>إدارة الاستثمارات النشطة والمستلمة</Text>
           </View>
-          <TouchableOpacity style={[styles.topIcon, styles.primaryTopIcon]} onPress={loadItems} activeOpacity={0.82}>
-            <Text style={styles.primaryTopIconText}>↻</Text>
-          </TouchableOpacity>
+          <View style={styles.topActions}>
+            <TouchableOpacity style={[styles.topIcon, styles.primaryTopIcon]} onPress={openAddScreen} activeOpacity={0.82}>
+              <UiIcon name="add" size={23} color="#ffffff" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.topIcon} onPress={loadItems} activeOpacity={0.82}>
+              <UiIcon name="refresh" size={23} />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.heroCard}>
@@ -199,52 +287,40 @@ export default function MoneyMoonScreen({ onBack }) {
           <View style={styles.metricsGrid}>
             <Metric label="موني مون النشطة" value={money(totalActive)} />
             <Metric label="أرباح موني مون النشطة" value={money(totalActiveProfit)} />
-            <Metric label="عدد الاستثمارات" value={String(items.length)} />
-            <Metric label="متأخرة" value={String(overdueCount)} danger={overdueCount > 0} />
+            <Metric label="استثمارات نشطة" value={String(activeItems.length)} />
+            <Metric label="متأخرة" value={String(overdueItems.length)} danger={overdueItems.length > 0} />
           </View>
         </View>
 
-        <View style={styles.formCard}>
-          <View style={styles.sectionHeaderInline}>
-            <Text style={styles.cardTitle}>{editingId ? 'تعديل استثمار' : 'إضافة استثمار'}</Text>
-            {editingId ? <TouchableOpacity onPress={resetForm}><Text style={styles.cancelLink}>إلغاء</Text></TouchableOpacity> : null}
-          </View>
-          <Field label="المبلغ المستثمر" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="مثال: 1000" />
-          <Text style={styles.inputLabel}>الفئة</Text>
-          <View style={styles.categoryRow}>
-            {['A', 'B', 'C', 'D'].map((item) => (
-              <TouchableOpacity key={item} onPress={() => setCategory(item)} style={[styles.categoryButton, category === item && styles.categoryActive]} activeOpacity={0.82}>
-                <Text style={[styles.categoryText, category === item && styles.categoryTextActive]}>{item}</Text>
-                <Text style={[styles.categoryRate, category === item && styles.categoryTextActive]}>{categoryRate(item)}%</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.profitBox}>
-            <Text style={styles.profitLabel}>الربح المتوقع</Text>
-            <Text style={styles.profitValue}>{money(expectedProfit)}</Text>
-          </View>
-          <Field label="تاريخ الاستثمار" value={investmentDate} onChangeText={setInvestmentDate} placeholder="YYYY-MM-DD" />
-          <Field label="تاريخ الاستحقاق" value={maturityDate} onChangeText={setMaturityDate} placeholder="فارغ = بعد شهر" />
-          <Field label="ملاحظات" value={notes} onChangeText={setNotes} placeholder="اختياري" multiline />
-          {!!message && <Text style={styles.message}>{message}</Text>}
-          <TouchableOpacity style={styles.saveButton} onPress={saveInvestment} disabled={saving} activeOpacity={0.85}>
-            <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : editingId ? 'حفظ التعديل' : 'حفظ الاستثمار'}</Text>
-          </TouchableOpacity>
-        </View>
+        {!!message && <Text style={styles.message}>{message}</Text>}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>استثمارات موني مون</Text>
-          <Text style={styles.sectionCounter}>{items.length}</Text>
+          <Text style={styles.sectionCounter}>{visibleItems.length}</Text>
         </View>
+
+        <View style={styles.filterRow}>
+          <FilterChip label="الكل" active={filter === 'all'} onPress={() => setFilter('all')} count={items.length} />
+          <FilterChip label="نشطة" active={filter === 'active'} onPress={() => setFilter('active')} count={activeItems.length} />
+          <FilterChip label="مستلمة" active={filter === 'received'} onPress={() => setFilter('received')} count={receivedItems.length} />
+          <FilterChip label="متأخرة" active={filter === 'overdue'} onPress={() => setFilter('overdue')} count={overdueItems.length} danger={overdueItems.length > 0} />
+        </View>
+
         {loading ? <StatusCard text="جاري تحميل موني مون..." loading /> : null}
-        {!loading && items.length === 0 ? <StatusCard text="لا توجد استثمارات موني مون بعد." /> : null}
-        {!loading && items.map((item) => (
+        {!loading && visibleItems.length === 0 ? <StatusCard text="لا توجد استثمارات ضمن هذا الفلتر." /> : null}
+        {!loading && visibleItems.map((item) => (
           <MoneyMoonCard
             key={String(item.id)}
             item={item}
+            editing={editingId === item.id}
+            editForm={editForm}
+            onEditChange={updateEditForm}
             onEdit={() => startEdit(item)}
+            onSaveEdit={() => saveForm({ form: editForm, id: item.id })}
+            onCancelEdit={cancelEdit}
             onReceive={() => receiveInvestment(item)}
             onDelete={() => confirmDelete(item)}
+            saving={saving && editingId === item.id}
             receiving={receivingId === item.id}
             deleting={deletingId === item.id}
           />
@@ -263,9 +339,9 @@ function Metric({ label, value, danger }) {
   );
 }
 
-function Field({ label, value, onChangeText, keyboardType, placeholder, multiline }) {
+function Field({ label, value, onChangeText, keyboardType, placeholder, multiline, compact }) {
   return (
-    <View style={styles.fieldBox}>
+    <View style={[styles.fieldBox, compact && styles.compactField]}>
       <Text style={styles.inputLabel}>{label}</Text>
       <TextInput
         value={value}
@@ -273,7 +349,7 @@ function Field({ label, value, onChangeText, keyboardType, placeholder, multilin
         keyboardType={keyboardType}
         placeholder={placeholder}
         placeholderTextColor="#94a3b8"
-        style={[styles.input, multiline && styles.multiInput]}
+        style={[styles.input, compact && styles.compactInput, multiline && styles.multiInput]}
         textAlign="right"
         multiline={multiline}
       />
@@ -281,7 +357,56 @@ function Field({ label, value, onChangeText, keyboardType, placeholder, multilin
   );
 }
 
-function MoneyMoonCard({ item, onEdit, onReceive, onDelete, receiving, deleting }) {
+function InvestmentForm({ form, onChange, onSave, onCancel, saving, saveLabel, cancelLabel, compact }) {
+  const expectedProfit = calcProfit(form.amount, form.category);
+
+  return (
+    <View style={[styles.formCard, compact && styles.inlineFormCard]}>
+      <Field label="رقم الطلب" value={form.orderNo} onChangeText={(text) => onChange('orderNo', text)} placeholder="مثال: L-12345" compact={compact} />
+      <Field label="المبلغ المستثمر" value={form.amount} onChangeText={(text) => onChange('amount', text)} keyboardType="decimal-pad" placeholder="مثال: 1000" compact={compact} />
+      <Text style={styles.inputLabel}>الفئة</Text>
+      <View style={styles.categoryRow}>
+        {['A', 'B', 'C', 'D'].map((item) => (
+          <TouchableOpacity key={item} onPress={() => onChange('category', item)} style={[styles.categoryButton, compact && styles.compactCategoryButton, form.category === item && styles.categoryActive]} activeOpacity={0.82}>
+            <Text style={[styles.categoryText, form.category === item && styles.categoryTextActive]}>{item}</Text>
+            <Text style={[styles.categoryRate, form.category === item && styles.categoryTextActive]}>{categoryRate(item)}%</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={[styles.profitBox, compact && styles.compactProfitBox]}>
+        <Text style={styles.profitLabel}>الربح المتوقع</Text>
+        <Text style={styles.profitValue}>{money(expectedProfit)}</Text>
+      </View>
+      <Field label="تاريخ الاستثمار" value={form.investmentDate} onChangeText={(text) => onChange('investmentDate', text)} placeholder="YYYY-MM-DD" compact={compact} />
+      <Field label="تاريخ الاستحقاق" value={form.maturityDate} onChangeText={(text) => onChange('maturityDate', text)} placeholder="فارغ = بعد شهر" compact={compact} />
+      <Field label="ملاحظات" value={form.notes} onChangeText={(text) => onChange('notes', text)} placeholder="اختياري" multiline compact={compact} />
+      <View style={styles.formActions}>
+        <TouchableOpacity style={[styles.saveButton, compact && styles.compactSaveButton]} onPress={onSave} disabled={saving} activeOpacity={0.85}>
+          <UiIcon name="save" size={18} color="#ffffff" />
+          <Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : saveLabel}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.cancelButton} onPress={onCancel} disabled={saving} activeOpacity={0.85}>
+          <Text style={styles.cancelButtonText}>{cancelLabel}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function MoneyMoonCard({
+  item,
+  editing,
+  editForm,
+  onEditChange,
+  onEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onReceive,
+  onDelete,
+  saving,
+  receiving,
+  deleting,
+}) {
   const meta = readMeta(item.metadata);
   const category = meta.category || '-';
   const rate = asNumber(item.expected_rate || meta.profit_rate || categoryRate(category));
@@ -291,7 +416,7 @@ function MoneyMoonCard({ item, onEdit, onReceive, onDelete, receiving, deleting 
   const statusText = received ? 'مستلم' : overdue ? 'متأخر' : 'نشط';
 
   return (
-    <View style={[styles.investmentCard, overdue && styles.overdueCard, received && styles.receivedCard]}>
+    <View style={[styles.investmentCard, overdue && styles.overdueCard, received && styles.receivedCard, editing && styles.editingCard]}>
       <View style={styles.cardTopRow}>
         <View style={[styles.cardIcon, overdue && styles.cardIconDanger, received && styles.cardIconReceived]}>
           <UiIcon name="moneymoon" size={23} color="#ffffff" />
@@ -310,19 +435,43 @@ function MoneyMoonCard({ item, onEdit, onReceive, onDelete, receiving, deleting 
         </View>
       </View>
 
-      <View style={styles.detailsGrid}>
-        <SmallStat label="الربح" value={money(profit)} />
-        <SmallStat label="النسبة" value={`${rate}%`} />
-        <SmallStat label="الاستثمار" value={item.start_date || '-'} />
-        <SmallStat label="الاستحقاق" value={item.maturity_date || '-'} />
-      </View>
-      {item.notes ? <Text style={styles.notesText}>ملاحظات: {item.notes}</Text> : null}
-      <View style={styles.actionsRow}>
-        {!received ? <IconButton icon="receive" label={receiving ? '...' : 'استلام'} onPress={onReceive} disabled={receiving || deleting} /> : null}
-        <IconButton icon="edit" label="تعديل" onPress={onEdit} disabled={deleting} />
-        <IconButton icon="delete" label={deleting ? '...' : 'حذف'} onPress={onDelete} danger disabled={deleting} />
-      </View>
+      {editing ? (
+        <InvestmentForm
+          form={editForm}
+          onChange={onEditChange}
+          onSave={onSaveEdit}
+          onCancel={onCancelEdit}
+          saving={saving}
+          saveLabel="حفظ التعديل"
+          cancelLabel="إلغاء"
+          compact
+        />
+      ) : (
+        <>
+          <View style={styles.detailsGrid}>
+            <SmallStat label="الربح" value={money(profit)} />
+            <SmallStat label="النسبة" value={`${rate}%`} />
+            <SmallStat label="الاستثمار" value={item.start_date || '-'} />
+            <SmallStat label="الاستحقاق" value={item.maturity_date || '-'} />
+          </View>
+          {item.notes ? <Text style={styles.notesText}>ملاحظات: {item.notes}</Text> : null}
+          <View style={styles.actionsRow}>
+            {!received ? <IconButton icon="receive" label={receiving ? '...' : 'استلام'} onPress={onReceive} disabled={receiving || deleting} /> : null}
+            <IconButton icon="edit" label="تعديل" onPress={onEdit} disabled={deleting} />
+            <IconButton icon="delete" label={deleting ? '...' : 'حذف'} onPress={onDelete} danger disabled={deleting} />
+          </View>
+        </>
+      )}
     </View>
+  );
+}
+
+function FilterChip({ label, active, onPress, count, danger }) {
+  return (
+    <TouchableOpacity style={[styles.filterChip, active && styles.filterChipActive, danger && styles.filterChipDanger]} onPress={onPress} activeOpacity={0.82}>
+      <Text style={[styles.filterChipText, active && styles.filterChipTextActive, danger && !active && styles.filterChipDangerText]}>{label}</Text>
+      <Text style={[styles.filterCount, active && styles.filterChipTextActive, danger && !active && styles.filterChipDangerText]}>{count}</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -353,11 +502,16 @@ const styles = StyleSheet.create({
   container: { padding: 16, paddingBottom: 34 },
   topBar: { marginTop: 8, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   topIcon: { width: 43, height: 43, borderRadius: 15, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  topSpacer: { width: 43, height: 43 },
+  topActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   primaryTopIcon: { backgroundColor: ICON_COLOR, borderColor: ICON_COLOR },
-  primaryTopIconText: { color: '#ffffff', fontSize: 20, fontWeight: '900' },
   topTitleBlock: { flex: 1, alignItems: 'center' },
   screenTitle: { color: '#0f172a', fontSize: 26, fontWeight: '900', textAlign: 'center' },
   screenSubtitle: { marginTop: 2, color: '#64748b', fontSize: 12, fontWeight: '700', textAlign: 'center' },
+  addHero: { marginTop: 16, backgroundColor: '#0f172a', borderRadius: 28, padding: 18, alignItems: 'center' },
+  addHeroIcon: { width: 56, height: 56, borderRadius: 21, backgroundColor: ICON_COLOR, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  addHeroTitle: { color: '#ffffff', fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  addHeroSubtitle: { marginTop: 6, color: '#cbd5e1', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 20 },
   heroCard: { marginTop: 16, backgroundColor: '#ffffff', borderRadius: 28, padding: 16, borderWidth: 1, borderColor: '#dbe7e5' },
   heroHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 12 },
   heroIcon: { width: 52, height: 52, borderRadius: 19, backgroundColor: ICON_COLOR, alignItems: 'center', justifyContent: 'center' },
@@ -371,33 +525,48 @@ const styles = StyleSheet.create({
   metricValue: { marginTop: 6, color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
   dangerText: { color: '#b91c1c' },
   formCard: { marginTop: 14, backgroundColor: '#ffffff', borderRadius: 24, padding: 15, borderWidth: 1, borderColor: '#e2e8f0' },
-  sectionHeaderInline: { flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardTitle: { color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' },
-  cancelLink: { color: '#b91c1c', fontWeight: '900' },
+  inlineFormCard: { marginTop: 12, borderRadius: 18, padding: 12, backgroundColor: '#f8fafc', borderColor: '#dbe7e5' },
   fieldBox: { marginTop: 8 },
+  compactField: { marginTop: 7 },
   inputLabel: { color: '#334155', fontWeight: '900', textAlign: 'right', marginBottom: 6 },
   input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 13, color: '#0f172a', fontWeight: '700' },
+  compactInput: { backgroundColor: '#ffffff', borderRadius: 13, padding: 10 },
   multiInput: { minHeight: 72, textAlignVertical: 'top' },
   categoryRow: { flexDirection: 'row', gap: 8 },
   categoryButton: { flex: 1, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingVertical: 10, alignItems: 'center' },
+  compactCategoryButton: { backgroundColor: '#ffffff', borderRadius: 13, paddingVertical: 8 },
   categoryActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
   categoryText: { color: '#0f172a', fontWeight: '900' },
   categoryRate: { marginTop: 3, color: '#64748b', fontSize: 12, fontWeight: '900' },
   categoryTextActive: { color: '#ffffff' },
   profitBox: { marginTop: 12, backgroundColor: '#ecfeff', borderRadius: 16, padding: 13, borderWidth: 1, borderColor: '#cffafe', alignItems: 'flex-end' },
+  compactProfitBox: { padding: 10, borderRadius: 13 },
   profitLabel: { color: '#0e7490', fontWeight: '900' },
   profitValue: { marginTop: 4, color: '#0f172a', fontSize: 20, fontWeight: '900' },
   message: { marginTop: 12, color: '#075985', textAlign: 'right', fontWeight: '900', backgroundColor: '#eff6ff', borderRadius: 16, padding: 12, overflow: 'hidden' },
-  saveButton: { marginTop: 15, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 15, alignItems: 'center' },
-  saveText: { color: '#ffffff', fontWeight: '900', fontSize: 16 },
+  formActions: { marginTop: 15, flexDirection: 'row-reverse', gap: 8 },
+  saveButton: { flex: 1, backgroundColor: '#0f172a', borderRadius: 18, paddingVertical: 15, alignItems: 'center', justifyContent: 'center', flexDirection: 'row-reverse', gap: 7 },
+  compactSaveButton: { borderRadius: 14, paddingVertical: 12 },
+  saveText: { color: '#ffffff', fontWeight: '900', fontSize: 15 },
+  cancelButton: { minWidth: 88, backgroundColor: '#f1f5f9', borderRadius: 18, paddingVertical: 15, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  cancelButtonText: { color: '#334155', fontWeight: '900' },
   sectionHeader: { marginTop: 22, marginBottom: 8, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' },
   sectionTitle: { color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'right' },
   sectionCounter: { color: ICON_COLOR_DARK, fontSize: 12, fontWeight: '900', backgroundColor: '#e0f2fe', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, overflow: 'hidden' },
+  filterRow: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  filterChip: { flexDirection: 'row-reverse', alignItems: 'center', gap: 6, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  filterChipActive: { backgroundColor: '#0f172a', borderColor: '#0f172a' },
+  filterChipDanger: { borderColor: '#fed7aa', backgroundColor: '#fff7ed' },
+  filterChipText: { color: '#334155', fontWeight: '900', fontSize: 12 },
+  filterChipTextActive: { color: '#ffffff' },
+  filterChipDangerText: { color: '#b91c1c' },
+  filterCount: { color: '#64748b', fontWeight: '900', fontSize: 11 },
   statusCard: { marginTop: 10, backgroundColor: '#ffffff', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center' },
   statusText: { marginTop: 7, color: '#64748b', fontWeight: '900', textAlign: 'center' },
   investmentCard: { backgroundColor: '#ffffff', borderRadius: 22, padding: 13, marginBottom: 10, borderWidth: 1, borderColor: '#dbe7e5' },
   overdueCard: { backgroundColor: '#fff7ed', borderColor: '#fdba74' },
   receivedCard: { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' },
+  editingCard: { borderColor: ICON_COLOR, borderWidth: 1.5 },
   cardTopRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
   cardIcon: { width: 48, height: 48, borderRadius: 17, backgroundColor: ICON_COLOR, alignItems: 'center', justifyContent: 'center' },
   cardIconDanger: { backgroundColor: '#f97316' },
