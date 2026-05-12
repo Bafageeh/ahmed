@@ -109,10 +109,10 @@ export function Ta3meedInvestorAccounts({ investors }) {
   return (
     <View style={styles.investorScreen}>
       <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
-      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشته الخاصة وعرض إحصائيات تعميد والحركات المالية، ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات اليدوية.</Text>
+      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشة خاصة، ثم ادخل إلى شاشة الإحصائيات أو إدارة الحركات أو الحركات المالية.</Text>
       {accountInvestors.map((investor) => (
         <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => setSelected(investor)} activeOpacity={0.84}>
-          <Text style={styles.investorAccountButtonText}>شاشة {investor.name} - إحصائيات وحساب الرصيد</Text>
+          <Text style={styles.investorAccountButtonText}>شاشة {investor.name}</Text>
           <Text style={styles.investorAccountButtonIcon}>›</Text>
         </TouchableOpacity>
       ))}
@@ -122,6 +122,7 @@ export function Ta3meedInvestorAccounts({ investors }) {
 
 function InvestorAccount({ investor, onBack }) {
   const [account, setAccount] = useState(null);
+  const [screen, setScreen] = useState('home');
   const [amount, setAmount] = useState('');
   const [entryDate, setEntryDate] = useState(todayText());
   const [notes, setNotes] = useState('');
@@ -263,11 +264,67 @@ function InvestorAccount({ investor, onBack }) {
     }
   };
 
+  const goHome = () => {
+    setScreen('home');
+    setMessage('');
+  };
+
+  const backButton = screen === 'home' ? onBack : goHome;
+  const backLabel = screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`;
+
   return (
     <View style={styles.investorScreen}>
-      <TouchableOpacity style={styles.investorAccountBackButton} onPress={onBack} activeOpacity={0.84}>
-        <Text style={styles.investorAccountBackText}>رجوع لحسابات المستثمرين</Text>
+      <TouchableOpacity style={styles.investorAccountBackButton} onPress={backButton} activeOpacity={0.84}>
+        <Text style={styles.investorAccountBackText}>{backLabel}</Text>
       </TouchableOpacity>
+
+      {screen === 'home' ? (
+        <InvestorHome
+          investor={investor}
+          account={account}
+          balance={balance}
+          investorTa3meed={investorTa3meed}
+          message={message}
+          openManage={() => setScreen('manage')}
+          openMovements={() => setScreen('movements')}
+          openOpportunities={() => setScreen('opportunities')}
+        />
+      ) : null}
+
+      {screen === 'manage' ? (
+        <ManageBalanceScreen
+          investor={investor}
+          message={message}
+          entries={entries}
+          amount={amount}
+          setAmount={setAmount}
+          entryDate={entryDate}
+          setEntryDate={setEntryDate}
+          notes={notes}
+          setNotes={setNotes}
+          entryType={entryType}
+          setEntryType={setEntryType}
+          bulkText={bulkText}
+          setBulkText={setBulkText}
+          bulkBusy={bulkBusy}
+          isEditing={isEditing}
+          saveEntry={saveEntry}
+          resetForm={resetForm}
+          importBulkEntries={importBulkEntries}
+          startEdit={startEdit}
+          deleteEntry={deleteEntry}
+        />
+      ) : null}
+
+      {screen === 'movements' ? <FinancialMovementsScreen investor={investor} timeline={timeline} /> : null}
+      {screen === 'opportunities' ? <InvestorOpportunitiesScreen investor={investor} opportunities={opportunities} /> : null}
+    </View>
+  );
+}
+
+function InvestorHome({ investor, account, balance, investorTa3meed, message, openManage, openMovements, openOpportunities }) {
+  return (
+    <>
       <Text style={styles.investorScreenTitle}>شاشة {investor.name}</Text>
 
       <View style={[styles.investorPaymentCard, { backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}>
@@ -292,8 +349,40 @@ function InvestorAccount({ investor, onBack }) {
       {account?.netBalance !== undefined ? <Text style={styles.investorPaymentMeta}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}
       {!!message && <Text style={styles.message}>{message}</Text>}
 
-      <Text style={styles.panelTitle}>إدارة حركات أرصدة المستثمر</Text>
-      <Text style={styles.investorScreenSubtitle}>هذا القسم هو شاشة الإضافة والتعديل والحذف لحركات الرصيد اليدوية.</Text>
+      <Text style={styles.panelTitle}>شاشات المستثمر</Text>
+      <ScreenLink title="إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، استيراد جماعي، تعديل وحذف." onPress={openManage} />
+      <ScreenLink title="الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={openMovements} />
+      <ScreenLink title="تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={openOpportunities} />
+    </>
+  );
+}
+
+function ManageBalanceScreen({
+  investor,
+  message,
+  entries,
+  amount,
+  setAmount,
+  entryDate,
+  setEntryDate,
+  notes,
+  setNotes,
+  entryType,
+  setEntryType,
+  bulkText,
+  setBulkText,
+  bulkBusy,
+  isEditing,
+  saveEntry,
+  resetForm,
+  importBulkEntries,
+  startEdit,
+  deleteEntry,
+}) {
+  return (
+    <>
+      <Text style={styles.investorScreenTitle}>إدارة حركات أرصدة {investor.name}</Text>
+      {!!message && <Text style={styles.message}>{message}</Text>}
 
       <View style={styles.investorPaymentCard}>
         <Text style={styles.investorPaymentTitle}>{isEditing ? 'تعديل حركة رصيد' : (entryType === 'withdrawal' ? 'تسجيل سحب من الرصيد' : 'إضافة رصيد جديد')}</Text>
@@ -339,7 +428,7 @@ function InvestorAccount({ investor, onBack }) {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.panelTitle}>حركات الرصيد اليدوية القابلة للتعديل والحذف</Text>
+      <Text style={styles.panelTitle}>الحركات القابلة للتعديل والحذف</Text>
       {entries.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد يدوية بعد.</Text>
       ) : entries.map((entry) => (
@@ -359,8 +448,14 @@ function InvestorAccount({ investor, onBack }) {
           {entry.notes ? <Text style={styles.investorPaymentMeta}>ملاحظات: {entry.notes}</Text> : null}
         </View>
       ))}
+    </>
+  );
+}
 
-      <Text style={styles.panelTitle}>الحركات المالية لكل مستثمر</Text>
+function FinancialMovementsScreen({ investor, timeline }) {
+  return (
+    <>
+      <Text style={styles.investorScreenTitle}>الحركات المالية - {investor.name}</Text>
       <Text style={styles.investorScreenSubtitle}>تشمل استلامات تعميد والإيداعات والسحوبات اليدوية.</Text>
       {timeline.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد حركات مالية لهذا المستثمر بعد.</Text>
@@ -375,8 +470,14 @@ function InvestorAccount({ investor, onBack }) {
           {movement.description ? <Text style={styles.investorPaymentMeta}>الوصف: {movement.description}</Text> : null}
         </View>
       ))}
+    </>
+  );
+}
 
-      <Text style={styles.panelTitle}>تفصيل فرص المستثمر</Text>
+function InvestorOpportunitiesScreen({ investor, opportunities }) {
+  return (
+    <>
+      <Text style={styles.investorScreenTitle}>فرص تعميد - {investor.name}</Text>
       {opportunities.length === 0 ? (
         <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text>
       ) : opportunities.map((opportunity) => (
@@ -391,7 +492,19 @@ function InvestorAccount({ investor, onBack }) {
           <Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(opportunity.expected_profit_amount, 2)}</Text>
         </View>
       ))}
-    </View>
+    </>
+  );
+}
+
+function ScreenLink({ title, text, onPress }) {
+  return (
+    <TouchableOpacity style={styles.investorAccountButton} onPress={onPress} activeOpacity={0.84}>
+      <View style={{ flex: 1, alignItems: 'flex-end' }}>
+        <Text style={styles.investorAccountButtonText}>{title}</Text>
+        <Text style={styles.investorPaymentMeta}>{text}</Text>
+      </View>
+      <Text style={styles.investorAccountButtonIcon}>›</Text>
+    </TouchableOpacity>
   );
 }
 
