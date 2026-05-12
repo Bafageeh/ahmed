@@ -14,17 +14,34 @@ const defaultInvestors = [
   { code: 'father', name: 'الوالد' },
 ];
 
+function normalizedInvestorCode(value) {
+  const text = String(value || '').trim();
+  const aliases = {
+    'أحمد': 'ahmed',
+    'احمد': 'ahmed',
+    'سارة': 'sara',
+    'ساره': 'sara',
+    'آمال': 'amal',
+    'امال': 'amal',
+    'أمال': 'amal',
+    'أمي': 'mother',
+    'امي': 'mother',
+    'الوالد': 'father',
+  };
+  return aliases[text] || text;
+}
+
 function accountInvestorsFrom(investors) {
   const map = new Map();
 
-  defaultInvestors.forEach((investor) => {
-    map.set(investor.code, investor);
-  });
-
   (investors || []).forEach((investor) => {
-    const code = investor.code || investor.name;
+    const code = normalizedInvestorCode(investor.code || investor.name);
     const name = investor.name || investor.code;
     if (code && name) map.set(code, { code, name });
+  });
+
+  defaultInvestors.forEach((investor) => {
+    if (!map.has(investor.code)) map.set(investor.code, investor);
   });
 
   return Array.from(map.values());
@@ -37,6 +54,24 @@ function normalizeDate(value) {
   const [day, month, year] = parts;
   if (year.length === 4) return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   return text;
+}
+
+function normalizeAccount(raw, investor) {
+  const summary = raw?.summary || {};
+  const manualEntries = Array.isArray(raw?.manual_entries) ? raw.manual_entries : [];
+  const mutationEntries = Array.isArray(raw?.entries) ? raw.entries : [];
+  const entries = mutationEntries.length ? mutationEntries : manualEntries;
+
+  return {
+    investor: raw?.investor || investor,
+    balance: raw?.balance !== undefined ? n(raw.balance) : n(summary.manual_balance),
+    netBalance: summary.net_balance !== undefined ? n(summary.net_balance) : undefined,
+    invested: summary.invested !== undefined ? n(summary.invested) : undefined,
+    received: summary.received !== undefined ? n(summary.received) : undefined,
+    remaining: summary.remaining !== undefined ? n(summary.remaining) : undefined,
+    entries,
+    summary,
+  };
 }
 
 function parseBulkLine(line) {
@@ -65,7 +100,7 @@ export function Ta3meedInvestorAccounts({ investors }) {
   return (
     <View style={styles.investorScreen}>
       <Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text>
-      <Text style={styles.investorScreenSubtitle}>هذه هي شاشة إدخال الأرصدة: اختر المستثمر ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات السابقة.</Text>
+      <Text style={styles.investorScreenSubtitle}>اختر المستثمر لعرض الرصيد الحقيقي وحركات الحساب، ثم أضف رصيدًا أو سجل سحبًا أو عدّل الحركات السابقة.</Text>
       {accountInvestors.map((investor) => (
         <TouchableOpacity key={investor.code} style={styles.investorAccountButton} onPress={() => setSelected(investor)} activeOpacity={0.84}>
           <Text style={styles.investorAccountButtonText}>حساب {investor.name} - إضافة رصيد / تعديل</Text>
@@ -95,19 +130,22 @@ function InvestorAccount({ investor, onBack }) {
     investor,
     balance: 0,
     entries: [],
+    summary: {},
   });
 
   const loadAccount = async () => {
     setMessage('جاري تحميل الحساب...');
     try {
-      const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account`);
+      const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account`, {
+        headers: { Accept: 'application/json' },
+      });
       const json = await response.json();
       if (!response.ok) {
         setAccount(emptyAccount());
-        setMessage('الحساب جاهز. أضف أول رصيد لهذا المستثمر.');
+        setMessage('لم يتم العثور على حساب مطابق لهذا المستثمر.');
         return;
       }
-      setAccount(json.data || emptyAccount());
+      setAccount(normalizeAccount(json.data, investor));
       setMessage('');
     } catch {
       setAccount(emptyAccount());
@@ -156,10 +194,10 @@ function InvestorAccount({ investor, onBack }) {
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'entry failed');
       resetForm();
-      setAccount(json.data || emptyAccount());
+      setAccount(normalizeAccount(json.data || emptyAccount(), investor));
       setMessage(isEditing ? 'تم تعديل حركة الرصيد' : (entryType === 'withdrawal' ? 'تم تسجيل السحب من حساب المستثمر' : 'تمت إضافة الرصيد لحساب المستثمر'));
     } catch {
-      setMessage('تعذر حفظ الحركة. إذا كان الحساب جديدًا حدّث التطبيق ثم حاول مرة أخرى.');
+      setMessage('تعذر حفظ الحركة. تأكد أن المستثمر موجود ثم حاول مرة أخرى.');
     }
   };
 
@@ -181,7 +219,7 @@ function InvestorAccount({ investor, onBack }) {
         });
         const json = await response.json();
         if (!response.ok) throw new Error(json.message || 'bulk failed');
-        lastAccount = json.data || lastAccount;
+        lastAccount = normalizeAccount(json.data, investor);
       }
       setAccount(lastAccount || account || emptyAccount());
       setBulkText('');
@@ -204,7 +242,7 @@ function InvestorAccount({ investor, onBack }) {
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'delete failed');
       if (editingEntryId === entry.id) resetForm();
-      setAccount(json.data || emptyAccount());
+      setAccount(normalizeAccount(json.data || emptyAccount(), investor));
       setMessage('تم حذف حركة الرصيد');
     } catch {
       setMessage('تعذر حذف الحركة');
@@ -217,7 +255,9 @@ function InvestorAccount({ investor, onBack }) {
         <Text style={styles.investorAccountBackText}>رجوع لحسابات المستثمرين</Text>
       </TouchableOpacity>
       <Text style={styles.investorScreenTitle}>حساب {investor.name}</Text>
-      <Text style={styles.investorBalanceText}>الرصيد: {money(balance, 2)} ر.س</Text>
+      <Text style={styles.investorBalanceText}>رصيد الحساب: {money(balance, 2)} ر.س</Text>
+      {account?.netBalance !== undefined ? <Text style={styles.investorPaymentMeta}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}
+      {account?.invested !== undefined ? <Text style={styles.investorPaymentMeta}>استثماراته في تعميد: {money(account.invested, 2)} · المستلم: {money(account.received, 2)} · المتبقي: {money(account.remaining, 2)}</Text> : null}
       {!!message && <Text style={styles.message}>{message}</Text>}
 
       <View style={styles.investorPaymentCard}>
@@ -266,7 +306,7 @@ function InvestorAccount({ investor, onBack }) {
 
       <Text style={styles.panelTitle}>حركات الرصيد</Text>
       {entries.length === 0 ? (
-        <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد بعد.</Text>
+        <Text style={styles.investorScreenSubtitle}>لا توجد حركات رصيد يدوية بعد.</Text>
       ) : entries.map((entry) => (
         <View key={entry.id} style={styles.investorPaymentCard}>
           <View style={styles.balanceEntryHeader}>
