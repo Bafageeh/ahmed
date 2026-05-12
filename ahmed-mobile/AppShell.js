@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import StatsDashboardScreen from './StatsDashboardScreen';
-import Ta3meedScreen from './Ta3meedInvestorFilteredScreen';
+import Ta3meedScreen from './Ta3meedInvestorDropdownScreen';
 import MoneyMoonScreen from './MoneyMoonScreen';
 import WealthScreen from './WealthScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
