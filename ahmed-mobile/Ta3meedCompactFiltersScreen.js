@@ -120,20 +120,36 @@ function receivedAmountOf(item, meta, receipts, allocations) {
 }
 
 function actualAnnualRate(item, meta, receipts, allocations) {
-  if (item.show_actual_annual_profit_rate === true || meta.actual_annual_profit_rate) {
-    const explicit = n(item.actual_annual_profit_rate || meta.actual_annual_profit_rate);
-    return explicit > 0 ? explicit : null;
-  }
   const principal = n(item.principal_amount);
-  const expectedProfit = n(item.expected_profit_amount);
-  const expectedTotal = principal + expectedProfit;
+  if (principal <= 0) return null;
+
+  const investmentDate = String(
+    meta.withdrawal_date ||
+    item.withdrawal_date ||
+    item.investment_date ||
+    item.start_date ||
+    ''
+  ).slice(0, 10);
+
+  const receiptDates = (receipts || [])
+    .map((receipt) => String(receipt.receipt_date || receipt.created_at || '').slice(0, 10))
+    .filter(Boolean)
+    .sort();
+
+  const lastReceiptDate = receiptDates.length ? receiptDates[receiptDates.length - 1] : '';
+
+  if (!investmentDate || !lastReceiptDate) return null;
+
+  const startDate = new Date(`${investmentDate}T00:00:00`);
+  const endDate = new Date(`${lastReceiptDate}T00:00:00`);
+  const days = Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)));
+
   const receivedAmount = receivedAmountOf(item, meta, receipts, allocations);
-  const actualProfit = Math.max(0, receivedAmount - principal);
-  const status = String(item.status || '').trim().toLowerCase();
-  const endedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
-  const isEnded = endedStatuses.includes(status);
-  if (!isEnded || principal <= 0 || actualProfit <= 0 || expectedTotal <= 0 || receivedAmount >= expectedTotal) return null;
-  return (actualProfit / principal) * 100;
+  const actualReceivedProfit = Math.max(0, receivedAmount - principal);
+
+  if (actualReceivedProfit <= 0) return null;
+
+  return ((actualReceivedProfit / principal) / days) * 365 * 100;
 }
 
 export default function Ta3meedCompactFiltersScreen({ onBack }) {
