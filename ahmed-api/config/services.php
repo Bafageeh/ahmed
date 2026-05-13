@@ -38,7 +38,7 @@ return [
 
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
-        'vision_model' => env('OPENAI_VISION_MODEL', 'gpt-4o-mini'),
+        'vision_model' => env('OPENAI_VISION_MODEL', 'gpt-4o'),
     ],
 
 ];

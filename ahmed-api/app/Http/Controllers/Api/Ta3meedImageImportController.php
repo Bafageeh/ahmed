@@ -49,7 +49,7 @@ class Ta3meedImageImportController extends Controller
         $imageUrl = 'data:' . $mimeType . ';base64,' . $base64;
 
         $payload = [
-            'model' => config('services.openai.vision_model') ?: env('OPENAI_VISION_MODEL', 'gpt-4o-mini'),
+            'model' => config('services.openai.vision_model') ?: env('OPENAI_VISION_MODEL', 'gpt-4o'),
             'response_format' => ['type' => 'json_object'],
             'messages' => [[
                 'role' => 'user',
@@ -119,6 +119,67 @@ class Ta3meedImageImportController extends Controller
         }
 
         return $this->normalizeParsed($parsed);
+    }
+
+
+    private function extractReferenceNumberOnly(string $base64, string $mimeType, ?string $instructions = null): ?string
+    {
+        $base64 = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', $base64);
+        $imageUrl = 'data:' . $mimeType . ';base64,' . $base64;
+
+        $payload = [
+            'model' => config('services.openai.vision_model') ?: env('OPENAI_VISION_MODEL', 'gpt-4o'),
+            'messages' => [[
+                'role' => 'user',
+                'content' => [
+                    [
+                        'type' => 'text',
+                        'text' =>
+                            "هذه لقطة شاشة من فرصة تعميد. المطلوب استخراج رقم الفرصة فقط.\\n" .
+                            "ابحث في أعلى الهيدر الأخضر تحت اسم المنشأة، وابحث أيضًا في بطاقة المؤشرات المالية التي تحتها عبارة: رقم الفرصة.\\n" .
+                            "رقم الفرصة غالبًا بصيغة مثل ER-XHYI565 أو ER-XHY1565 أو PB-XXXXX.\\n" .
+                            "لا ترجع أي شرح. أعد رقم الفرصة فقط كنص واحد.\\n" .
+                            "انتبه للفرق بين الحرف I والرقم 1. في المثال المرفق الرقم يظهر مثل ER-XHYI565.\\n" .
+                            ($instructions ? "تعليمات المستخدم: " . $instructions . "\\n" : "")
+                    ],
+                    [
+                        'type' => 'image_url',
+                        'image_url' => [
+                            'url' => $imageUrl,
+                            'detail' => 'high',
+                        ],
+                    ],
+                ],
+            ]],
+        ];
+
+        $ch = curl_init('https://api.openai.com/v1/chat/completions');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . (config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: getenv('OPENAI_API_KEY')),
+                'Content-Type: application/json',
+            ],
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
+            CURLOPT_TIMEOUT => 90,
+        ]);
+
+        $raw = curl_exec($ch);
+        curl_close($ch);
+
+        if (! $raw) {
+            return null;
+        }
+
+        $json = json_decode($raw, true);
+        $content = trim((string) ($json['choices'][0]['message']['content'] ?? ''));
+
+        if (preg_match('/\b[A-Z]{2,}-[A-Z0-9]{4,}\b/u', strtoupper($content), $m)) {
+            return $m[0];
+        }
+
+        return null;
     }
 
     private function normalizeParsed(array $row): array
