@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
-import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccountsV5';
+import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccountsCards';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 
