@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -37,6 +38,7 @@ export default function Ta3meedImageImportScreen({ onBack }) {
   const [result, setResult] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [manualReference, setManualReference] = useState('');
 
   const pickImage = async () => {
     setMessage('');
@@ -87,6 +89,8 @@ export default function Ta3meedImageImportScreen({ onBack }) {
         body: JSON.stringify({
           image_base64: image.base64,
           mime_type: image.mimeType || 'image/jpeg',
+          manual_reference_number: manualReference.trim() || null,
+          instructions: 'رقم الفرصة يظهر في الهيدر الأخضر أعلى الصورة وأسفل اسم المنشأة، ويظهر أيضًا في بطاقة رقم الفرصة.',
         }),
       });
 
@@ -130,6 +134,18 @@ export default function Ta3meedImageImportScreen({ onBack }) {
         </TouchableOpacity>
 
         {image?.uri ? <Image source={{ uri: image.uri }} style={styles.previewImage} resizeMode="contain" /> : null}
+
+        <View style={styles.manualCard}>
+          <Text style={styles.manualLabel}>رقم الفرصة يدويًا عند عدم التعرف عليه</Text>
+          <TextInput
+            value={manualReference}
+            onChangeText={setManualReference}
+            placeholder="مثال: ER-XHYI565"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="characters"
+            style={styles.manualInput}
+          />
+        </View>
 
         <TouchableOpacity style={[styles.importButton, busy && styles.disabledButton]} onPress={importImage} disabled={busy} activeOpacity={0.85}>
           {busy ? <ActivityIndicator color="#ffffff" /> : <Text style={styles.importButtonText}>قراءة الصورة وإدخالها</Text>}
@@ -181,6 +197,9 @@ const styles = StyleSheet.create({
   pickButton: { marginTop: 14, backgroundColor: '#ffffff', borderRadius: 16, paddingVertical: 13, borderWidth: 1, borderColor: '#99f6e4', alignItems: 'center' },
   pickButtonText: { color: '#0f766e', fontSize: 14, fontWeight: '900' },
   previewImage: { marginTop: 12, width: '100%', height: 360, backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0' },
+  manualCard: { marginTop: 12, backgroundColor: '#ffffff', borderRadius: 18, padding: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  manualLabel: { color: '#0f172a', fontSize: 12, fontWeight: '900', textAlign: 'right', marginBottom: 7 },
+  manualInput: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', borderRadius: 13, paddingHorizontal: 12, paddingVertical: 10, color: '#0f172a', fontSize: 14, fontWeight: '900', textAlign: 'right' },
   importButton: { marginTop: 12, backgroundColor: '#0f766e', borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
   disabledButton: { opacity: 0.65 },
   importButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
