@@ -64,7 +64,6 @@ function itemMatchesKeyword(item, keyword) {
 
 function activeStatusFilteredItems(items, categoryFilter, investorFilter, query) {
   const keyword = String(query || '').trim().toLowerCase();
-
   return (items || []).filter((item) => {
     if (statusKeyOf(item) === 'received') return false;
     if (categoryFilter !== 'all' && categoryOf(item) !== categoryFilter) return false;
@@ -84,22 +83,16 @@ function receivedAmountOf(item, meta, receipts, allocations) {
 function netActiveInvestedAmount(items, selectedInvestor) {
   return (items || []).reduce((total, item) => {
     if (statusKeyOf(item) === 'received') return total;
-
     const allocations = item.allocations || [];
     const selectedAllocations = selectedInvestor && selectedInvestor !== 'all'
       ? allocations.filter((allocation) => investorKey(allocation) === selectedInvestor)
       : allocations;
-
-    if (selectedInvestor && selectedInvestor !== 'all' && selectedAllocations.length === 0) {
-      return total;
-    }
-
+    if (selectedInvestor && selectedInvestor !== 'all' && selectedAllocations.length === 0) return total;
     if (selectedAllocations.length > 0) {
       const meta = metaOf(item);
       const totalAllocated = allocations.reduce((sum, allocation) => sum + n(allocation.invested_amount), 0);
       const itemReceivedTotal = receivedAmountOf(item, meta, item.receipts || [], allocations);
       const hasAllocationReceipts = allocations.some((allocation) => n(allocation.received_amount) > 0);
-
       return total + selectedAllocations.reduce((sum, allocation) => {
         const invested = n(allocation.invested_amount);
         const proportionalReceived = totalAllocated > 0 ? itemReceivedTotal * (invested / totalAllocated) : 0;
@@ -107,7 +100,6 @@ function netActiveInvestedAmount(items, selectedInvestor) {
         return sum + Math.max(0, invested - Math.min(invested, received));
       }, 0);
     }
-
     const meta = metaOf(item);
     const invested = n(item.principal_amount);
     const received = receivedAmountOf(item, meta, item.receipts || [], allocations);
@@ -166,6 +158,24 @@ function formFromItem(item) {
   };
 }
 
+function InlineEditableTa3meedCard({ OriginalCard, cardProps, onEdit }) {
+  const rendered = OriginalCard(cardProps);
+  if (!rendered || !rendered.props) return rendered;
+  const existingChildren = rendered.props.children;
+  const childArray = Array.isArray(existingChildren) ? existingChildren : [existingChildren];
+  const editButton = (
+    <TouchableOpacity
+      key="inline-edit-opportunity"
+      activeOpacity={0.84}
+      onPress={() => onEdit(cardProps.item)}
+      style={{ alignSelf: 'flex-start', marginTop: 10, width: 42, height: 42, borderRadius: 15, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' }}
+    >
+      <UiIcon name="edit" size={22} color={ICON_COLOR_DARK} />
+    </TouchableOpacity>
+  );
+  return React.cloneElement(rendered, rendered.props, ...childArray, editButton);
+}
+
 const originalUseState = React.useState;
 const originalUseMemo = React.useMemo;
 let renderingTa3meed = false;
@@ -176,17 +186,12 @@ React.useState = function patchedTa3meedUseState(initialState) {
   const hookIndex = stateHookIndex;
   stateHookIndex += 1;
   const stateTuple = originalUseState.call(this, initialState);
-
-  if (renderingTa3meed && hookIndex === 6) {
-    currentInvestorFilter = stateTuple[0] || 'all';
-  }
-
+  if (renderingTa3meed && hookIndex === 6) currentInvestorFilter = stateTuple[0] || 'all';
   return stateTuple;
 };
 
 React.useMemo = function patchedTa3meedUseMemo(factory, deps) {
   const value = originalUseMemo.call(this, factory, deps);
-
   const looksLikeFilteredItems = Array.isArray(value)
     && Array.isArray(deps)
     && deps.length === 5
@@ -194,12 +199,10 @@ React.useMemo = function patchedTa3meedUseMemo(factory, deps) {
     && typeof deps[1] === 'string'
     && typeof deps[2] === 'string'
     && typeof deps[3] === 'string';
-
   if (renderingTa3meed && looksLikeFilteredItems && deps[1] === 'active') {
     const [items, , categoryFilter, investorFilter, query] = deps;
     return activeStatusFilteredItems(items, categoryFilter, investorFilter, query);
   }
-
   const looksLikeTotals = value
     && typeof value === 'object'
     && !Array.isArray(value)
@@ -211,15 +214,8 @@ React.useMemo = function patchedTa3meedUseMemo(factory, deps) {
     && Array.isArray(deps)
     && deps.length === 1
     && Array.isArray(deps[0]);
-
   if (!renderingTa3meed || !looksLikeTotals) return value;
-
-  return {
-    ...value,
-    invested: netActiveInvestedAmount(deps[0], currentInvestorFilter),
-    profit: expectedProfitForActiveItems(deps[0]),
-    active: countActiveItems(deps[0]),
-  };
+  return { ...value, invested: netActiveInvestedAmount(deps[0], currentInvestorFilter), profit: expectedProfitForActiveItems(deps[0]), active: countActiveItems(deps[0]) };
 };
 
 const Ta3meedCompactFiltersScreen = require('./Ta3meedCompactFiltersScreen.js').default;
@@ -229,8 +225,6 @@ export default function Ta3meedNoResetFilterScreen(props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add');
   const [saving, setSaving] = useState(false);
-  const [loadingEditList, setLoadingEditList] = useState(false);
-  const [editableItems, setEditableItems] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(blankForm());
   const [message, setMessage] = useState('');
@@ -246,28 +240,12 @@ export default function Ta3meedNoResetFilterScreen(props) {
     setModalOpen(true);
   };
 
-  const openEditList = async () => {
-    setMessage('');
-    setModalMode('selectEdit');
-    setModalOpen(true);
-    setLoadingEditList(true);
-    try {
-      const response = await fetch(`${API_URL}/ta3meed/investments`, { headers: { Accept: 'application/json' } });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.message || 'تعذر تحميل فرص التعديل');
-      setEditableItems(Array.isArray(json.data) ? json.data : []);
-    } catch (error) {
-      setMessage(error.message || 'تعذر تحميل فرص التعديل');
-    } finally {
-      setLoadingEditList(false);
-    }
-  };
-
   const openEditForm = (item) => {
     setEditingId(item.id);
     setForm(formFromItem(item));
     setMessage('');
     setModalMode('edit');
+    setModalOpen(true);
   };
 
   const saveOpportunity = async () => {
@@ -309,17 +287,16 @@ export default function Ta3meedNoResetFilterScreen(props) {
   };
 
   const originalCreateElement = React.createElement;
-
   React.createElement = function createElementWithoutResetFilterButton(type, elementProps, ...children) {
-    if (type === TouchableOpacity && containsResetFilterText(children)) {
-      return null;
+    if (type === TouchableOpacity && containsResetFilterText(children)) return null;
+    if (renderingTa3meed && typeof type === 'function' && type.name === 'Ta3meedCard' && elementProps?.item) {
+      return originalCreateElement.call(this, InlineEditableTa3meedCard, { OriginalCard: type, cardProps: elementProps, onEdit: openEditForm });
     }
     return originalCreateElement.call(this, type, elementProps, ...children);
   };
 
   renderingTa3meed = true;
   stateHookIndex = 0;
-
   let screen;
   try {
     screen = <Ta3meedCompactFiltersScreen key={screenKey} {...props} />;
@@ -329,58 +306,39 @@ export default function Ta3meedNoResetFilterScreen(props) {
   }
 
   const isEditForm = modalMode === 'edit';
-
   return (
     <View style={{ flex: 1 }}>
       {screen}
       <TouchableOpacity activeOpacity={0.86} onPress={openAdd} style={floatingButtonStyle}>
         <UiIcon name="add" size={28} color={ICON_COLOR_DARK} />
       </TouchableOpacity>
-      <TouchableOpacity activeOpacity={0.86} onPress={openEditList} style={[floatingButtonStyle, { top: 98 }]}>
-        <UiIcon name="edit" size={26} color={ICON_COLOR_DARK} />
-      </TouchableOpacity>
-
       <Modal visible={modalOpen} transparent animationType="fade" onRequestClose={() => setModalOpen(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.42)', justifyContent: 'center', padding: 16 }}>
           <View style={{ maxHeight: '92%', backgroundColor: '#fff', borderRadius: 28, padding: 18 }}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <Text style={{ color: '#0f172a', fontSize: 23, fontWeight: '900', textAlign: 'right' }}>{modalMode === 'selectEdit' ? 'اختيار فرصة للتعديل' : isEditForm ? 'تعديل فرصة تعميد' : 'إضافة فرصة تعميد'}</Text>
+              <Text style={{ color: '#0f172a', fontSize: 23, fontWeight: '900', textAlign: 'right' }}>{isEditForm ? 'تعديل فرصة تعميد' : 'إضافة فرصة تعميد'}</Text>
               <TouchableOpacity onPress={() => setModalOpen(false)} style={{ width: 42, height: 42, borderRadius: 16, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 26, fontWeight: '900', color: '#64748b' }}>×</Text></TouchableOpacity>
             </View>
             {!!message && <Text style={{ backgroundColor: '#eff6ff', color: '#075985', borderRadius: 14, padding: 10, marginBottom: 10, fontWeight: '900', textAlign: 'right' }}>{message}</Text>}
-
-            {modalMode === 'selectEdit' ? (
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
-                {loadingEditList ? <Text style={{ color: '#64748b', fontWeight: '900', textAlign: 'center', padding: 18 }}>جاري تحميل الفرص...</Text> : null}
-                {!loadingEditList && editableItems.map((item) => (
-                  <TouchableOpacity key={String(item.id)} onPress={() => openEditForm(item)} activeOpacity={0.84} style={{ borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#f8fafc', padding: 14, alignItems: 'flex-end' }}>
-                    <Text style={{ color: '#0f172a', fontSize: 17, fontWeight: '900', textAlign: 'right' }}>{item.reference_number || 'فرصة تعميد'}</Text>
-                    <Text style={{ color: '#64748b', marginTop: 4, fontWeight: '800', textAlign: 'right' }}>{money(item.principal_amount)} · يستحق {String(item.maturity_date || '-').slice(0, 10)}</Text>
-                  </TouchableOpacity>
-                ))}
-                {!loadingEditList && editableItems.length === 0 ? <Text style={{ color: '#64748b', fontWeight: '900', textAlign: 'center', padding: 18 }}>لا توجد فرص للتعديل</Text> : null}
-              </ScrollView>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <TextInput value={form.code} onChangeText={(v) => setField('code', v)} placeholder="رقم الفرصة" placeholderTextColor="#94a3b8" textAlign="right" style={inputStyle} />
-                <TextInput value={form.total_amount} onChangeText={(v) => setField('total_amount', v)} placeholder="مبلغ الاستثمار" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" style={inputStyle} />
-                <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
-                  <TextInput value={form.profit} onChangeText={(v) => setField('profit', v)} placeholder="الربح" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" style={[inputStyle, { flex: 1 }]} />
-                  <TextInput value={form.profit_rate} onChangeText={(v) => setField('profit_rate', v)} placeholder="النسبة" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" style={[inputStyle, { flex: 1 }]} />
-                </View>
-                <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
-                  <TextInput value={form.category} onChangeText={(v) => setField('category', v)} placeholder="التصنيف A+" placeholderTextColor="#94a3b8" textAlign="right" style={[inputStyle, { flex: 1 }]} />
-                  <TextInput value={form.months} onChangeText={(v) => setField('months', v)} placeholder="الشهور" placeholderTextColor="#94a3b8" keyboardType="number-pad" textAlign="right" style={[inputStyle, { flex: 1 }]} />
-                </View>
-                <TextInput value={form.start_date} onChangeText={(v) => setField('start_date', v)} placeholder="تاريخ الاستثمار YYYY-MM-DD" placeholderTextColor="#94a3b8" textAlign="right" style={inputStyle} />
-                <TextInput value={form.maturity_date} onChangeText={(v) => setField('maturity_date', v)} placeholder="تاريخ الاستحقاق YYYY-MM-DD" placeholderTextColor="#94a3b8" textAlign="right" style={inputStyle} />
-                <TextInput value={form.allocations} onChangeText={(v) => setField('allocations', v)} placeholder={'المستثمرين، كل سطر: الاسم المبلغ\nمثال: أحمد 10000'} placeholderTextColor="#94a3b8" textAlign="right" multiline style={[inputStyle, { minHeight: 86, textAlignVertical: 'top' }]} />
-                <TextInput value={form.notes} onChangeText={(v) => setField('notes', v)} placeholder="ملاحظات" placeholderTextColor="#94a3b8" textAlign="right" multiline style={[inputStyle, { minHeight: 70, textAlignVertical: 'top' }]} />
-                <TouchableOpacity disabled={saving} onPress={saveOpportunity} style={{ marginTop: 8, borderRadius: 18, backgroundColor: '#0f766e', paddingVertical: 14, alignItems: 'center' }}>
-                  <Text style={{ color: '#fff', fontSize: 17, fontWeight: '900' }}>{saving ? 'جاري الحفظ...' : isEditForm ? 'حفظ التعديل' : 'حفظ الفرصة'}</Text>
-                </TouchableOpacity>
-              </ScrollView>
-            )}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TextInput value={form.code} onChangeText={(v) => setField('code', v)} placeholder="رقم الفرصة" placeholderTextColor="#94a3b8" textAlign="right" style={inputStyle} />
+              <TextInput value={form.total_amount} onChangeText={(v) => setField('total_amount', v)} placeholder="مبلغ الاستثمار" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" style={inputStyle} />
+              <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                <TextInput value={form.profit} onChangeText={(v) => setField('profit', v)} placeholder="الربح" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" style={[inputStyle, { flex: 1 }]} />
+                <TextInput value={form.profit_rate} onChangeText={(v) => setField('profit_rate', v)} placeholder="النسبة" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" style={[inputStyle, { flex: 1 }]} />
+              </View>
+              <View style={{ flexDirection: 'row-reverse', gap: 8 }}>
+                <TextInput value={form.category} onChangeText={(v) => setField('category', v)} placeholder="التصنيف A+" placeholderTextColor="#94a3b8" textAlign="right" style={[inputStyle, { flex: 1 }]} />
+                <TextInput value={form.months} onChangeText={(v) => setField('months', v)} placeholder="الشهور" placeholderTextColor="#94a3b8" keyboardType="number-pad" textAlign="right" style={[inputStyle, { flex: 1 }]} />
+              </View>
+              <TextInput value={form.start_date} onChangeText={(v) => setField('start_date', v)} placeholder="تاريخ الاستثمار YYYY-MM-DD" placeholderTextColor="#94a3b8" textAlign="right" style={inputStyle} />
+              <TextInput value={form.maturity_date} onChangeText={(v) => setField('maturity_date', v)} placeholder="تاريخ الاستحقاق YYYY-MM-DD" placeholderTextColor="#94a3b8" textAlign="right" style={inputStyle} />
+              <TextInput value={form.allocations} onChangeText={(v) => setField('allocations', v)} placeholder={'المستثمرين، كل سطر: الاسم المبلغ\nمثال: أحمد 10000'} placeholderTextColor="#94a3b8" textAlign="right" multiline style={[inputStyle, { minHeight: 86, textAlignVertical: 'top' }]} />
+              <TextInput value={form.notes} onChangeText={(v) => setField('notes', v)} placeholder="ملاحظات" placeholderTextColor="#94a3b8" textAlign="right" multiline style={[inputStyle, { minHeight: 70, textAlignVertical: 'top' }]} />
+              <TouchableOpacity disabled={saving} onPress={saveOpportunity} style={{ marginTop: 8, borderRadius: 18, backgroundColor: '#0f766e', paddingVertical: 14, alignItems: 'center' }}>
+                <Text style={{ color: '#fff', fontSize: 17, fontWeight: '900' }}>{saving ? 'جاري الحفظ...' : isEditForm ? 'حفظ التعديل' : 'حفظ الفرصة'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
