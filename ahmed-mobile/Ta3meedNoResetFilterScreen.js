@@ -2,6 +2,7 @@ import React from 'react';
 import { TouchableOpacity } from 'react-native';
 
 const RESET_FILTER_TEXT = 'إعادة الفلتر إلى نشط';
+const CATEGORIES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
 
 const today = () => new Date().toISOString().slice(0, 10);
 const n = (value) => Number(value || 0);
@@ -21,6 +22,11 @@ function metaOf(item) {
   }
 }
 
+function categoryOf(item) {
+  const raw = String(metaOf(item).category || item.category || '').trim().toUpperCase().replace(/\s+/g, '');
+  return CATEGORIES.includes(raw) ? raw : '-';
+}
+
 function statusKeyOf(item) {
   if (item?.status === 'received' || item?.status === 'completed') return 'received';
   if (item?.status === 'partial_received') return 'partial_received';
@@ -30,6 +36,38 @@ function statusKeyOf(item) {
 
 function investorKey(allocation) {
   return String(allocation?.investor_code || allocation?.investor_name || '').trim();
+}
+
+function itemHasInvestor(item, selectedInvestor) {
+  if (!selectedInvestor || selectedInvestor === 'all') return true;
+  return (item.allocations || []).some((allocation) => investorKey(allocation) === selectedInvestor);
+}
+
+function itemMatchesKeyword(item, keyword) {
+  if (!keyword) return true;
+  const meta = metaOf(item);
+  const category = categoryOf(item);
+  const text = [
+    item.reference_number,
+    item.status,
+    item.maturity_date,
+    meta.category,
+    category,
+    meta.withdrawal_date,
+    ...(item.allocations || []).map((allocation) => allocation.investor_name),
+  ].filter(Boolean).join(' ').toLowerCase();
+  return text.includes(keyword);
+}
+
+function activeStatusFilteredItems(items, categoryFilter, investorFilter, query) {
+  const keyword = String(query || '').trim().toLowerCase();
+
+  return (items || []).filter((item) => {
+    if (statusKeyOf(item) === 'received') return false;
+    if (categoryFilter !== 'all' && categoryOf(item) !== categoryFilter) return false;
+    if (!itemHasInvestor(item, investorFilter)) return false;
+    return itemMatchesKeyword(item, keyword);
+  });
 }
 
 function receivedAmountOf(item, meta, receipts, allocations) {
@@ -74,6 +112,17 @@ function netActiveInvestedAmount(items, selectedInvestor) {
   }, 0);
 }
 
+function expectedProfitForActiveItems(items) {
+  return (items || []).reduce((sum, item) => {
+    if (statusKeyOf(item) === 'received') return sum;
+    return sum + n(item.expected_profit_amount);
+  }, 0);
+}
+
+function countActiveItems(items) {
+  return (items || []).filter((item) => statusKeyOf(item) !== 'received').length;
+}
+
 const originalUseState = React.useState;
 const originalUseMemo = React.useMemo;
 let renderingTa3meed = false;
@@ -95,6 +144,19 @@ React.useState = function patchedTa3meedUseState(initialState) {
 React.useMemo = function patchedTa3meedUseMemo(factory, deps) {
   const value = originalUseMemo.call(this, factory, deps);
 
+  const looksLikeFilteredItems = Array.isArray(value)
+    && Array.isArray(deps)
+    && deps.length === 5
+    && Array.isArray(deps[0])
+    && typeof deps[1] === 'string'
+    && typeof deps[2] === 'string'
+    && typeof deps[3] === 'string';
+
+  if (renderingTa3meed && looksLikeFilteredItems && deps[1] === 'active') {
+    const [items, , categoryFilter, investorFilter, query] = deps;
+    return activeStatusFilteredItems(items, categoryFilter, investorFilter, query);
+  }
+
   const looksLikeTotals = value
     && typeof value === 'object'
     && !Array.isArray(value)
@@ -112,6 +174,8 @@ React.useMemo = function patchedTa3meedUseMemo(factory, deps) {
   return {
     ...value,
     invested: netActiveInvestedAmount(deps[0], currentInvestorFilter),
+    profit: expectedProfitForActiveItems(deps[0]),
+    active: countActiveItems(deps[0]),
   };
 };
 
