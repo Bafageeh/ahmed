@@ -18,7 +18,6 @@ class Ta3meedImageImportController extends Controller
             'image_parts.*.base64' => ['required_with:image_parts', 'string'],
             'image_parts.*.mime_type' => ['nullable', 'string'],
             'image_parts.*.label' => ['nullable', 'string'],
-            'manual_reference_number' => ['nullable', 'string', 'max:100'],
             'instructions' => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -36,6 +35,13 @@ class Ta3meedImageImportController extends Controller
             $data['instructions'] ?? null,
             $data['image_parts'] ?? []
         );
+
+        if (($parsed['status'] ?? null) === 429 || str_contains((string) ($parsed['error'] ?? ''), 'لا يوجد رصيد كاف')) {
+            return response()->json([
+                'message' => 'لا يوجد رصيد كافٍ في حساب OpenAI API. أضف رصيدًا أو ارفع حد الإنفاق من منصة OpenAI ثم أعد المحاولة.',
+                'data' => $parsed,
+            ], 422);
+        }
 
         if (empty($parsed['reference_number'])) {
             $ocrText = $this->extractVisibleTextOnly(
@@ -73,14 +79,9 @@ class Ta3meedImageImportController extends Controller
             }
         }
 
-        if (empty($parsed['reference_number']) && ! empty($data['manual_reference_number'])) {
-            $parsed['reference_number'] = trim($data['manual_reference_number']);
-            $parsed['reference_number_source'] = 'manual';
-        }
-
         if (empty($parsed['reference_number'])) {
             return response()->json([
-                'message' => 'لم يتم التعرف على رقم الفرصة من الصورة. اكتب رقم الفرصة يدويًا أو قرّب الصورة أكثر. النص المقروء من الصورة مرفق للمراجعة.',
+                'message' => 'لم يتم التعرف على رقم الفرصة من الصورة. قرّب الصورة أكثر بحيث يظهر الهيدر الأخضر وبطاقة رقم الفرصة بوضوح. النص المقروء من الصورة مرفق للمراجعة.',
                 'data' => $parsed,
             ], 422);
         }
@@ -374,10 +375,17 @@ class Ta3meedImageImportController extends Controller
         $status = curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         curl_close($ch);
 
+        $errorBody = $error ?: $body;
+        $errorMessage = $errorBody;
+
+        if ($status === 429 || (is_string($errorBody) && str_contains($errorBody, 'insufficient_quota'))) {
+            $errorMessage = 'لا يوجد رصيد كافٍ في حساب OpenAI API. أضف رصيدًا أو ارفع حد الإنفاق من منصة OpenAI ثم أعد المحاولة.';
+        }
+
         return [
             'ok' => $body !== false && $status < 400,
             'body' => $body ?: '',
-            'error' => $error ?: $body,
+            'error' => $errorMessage,
             'status' => $status,
         ];
     }
