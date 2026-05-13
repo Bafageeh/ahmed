@@ -10,24 +10,60 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
-import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccountsV2';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const HIDDEN_INVESTOR_ACCOUNT_STAT_TITLE = 'متبقي الفرص';
+
+function shouldHideRemainingOpportunitiesStat(type, props) {
+  if (props?.title !== HIDDEN_INVESTOR_ACCOUNT_STAT_TITLE) return false;
+  return typeof type === 'function' || typeof type === 'string';
+}
 
 if (!React.__ahmedHideRemainingOpportunitiesStat) {
   const originalCreateElement = React.createElement;
 
   React.createElement = function createElementWithoutRemainingOpportunitiesStat(type, elementProps, ...children) {
-    if (elementProps?.title === HIDDEN_INVESTOR_ACCOUNT_STAT_TITLE) {
+    if (shouldHideRemainingOpportunitiesStat(type, elementProps)) {
       return null;
     }
 
     return originalCreateElement.call(this, type, elementProps, ...children);
   };
 
+  try {
+    const jsxRuntime = require('react/jsx-runtime');
+    const originalJsx = jsxRuntime.jsx;
+    const originalJsxs = jsxRuntime.jsxs;
+    const originalJsxDEV = jsxRuntime.jsxDEV;
+
+    if (typeof originalJsx === 'function') {
+      jsxRuntime.jsx = function jsxWithoutRemainingOpportunitiesStat(type, props, key) {
+        if (shouldHideRemainingOpportunitiesStat(type, props)) return null;
+        return originalJsx.call(this, type, props, key);
+      };
+    }
+
+    if (typeof originalJsxs === 'function') {
+      jsxRuntime.jsxs = function jsxsWithoutRemainingOpportunitiesStat(type, props, key) {
+        if (shouldHideRemainingOpportunitiesStat(type, props)) return null;
+        return originalJsxs.call(this, type, props, key);
+      };
+    }
+
+    if (typeof originalJsxDEV === 'function') {
+      jsxRuntime.jsxDEV = function jsxDEVWithoutRemainingOpportunitiesStat(type, props, key, isStaticChildren, source, self) {
+        if (shouldHideRemainingOpportunitiesStat(type, props)) return null;
+        return originalJsxDEV.call(this, type, props, key, isStaticChildren, source, self);
+      };
+    }
+  } catch {
+    // Older React Native/Babel runtimes may not expose react/jsx-runtime.
+  }
+
   React.__ahmedHideRemainingOpportunitiesStat = true;
 }
+
+const { Ta3meedInvestorAccounts } = require('./ta3meed/Ta3meedInvestorAccountsV2');
 
 const defaultInvestors = [
   { code: 'ahmed', name: 'أحمد' },
