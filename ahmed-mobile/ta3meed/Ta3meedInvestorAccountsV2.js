@@ -139,6 +139,28 @@ function ta3meedInvestorAmount(account) {
   return Math.max(0, n(account?.activeInvested) - n(account?.activePartialReceived));
 }
 
+function registeredProfitRateOf(opportunity) {
+  const registered = n(opportunity?.registered_profit_rate) || n(opportunity?.expected_rate);
+  if (registered > 0) return registered;
+
+  const invested = n(opportunity?.invested_amount);
+  const expectedProfit = n(opportunity?.expected_profit_amount);
+  return invested > 0 && expectedProfit > 0 ? (expectedProfit / invested) * 100 : 0;
+}
+
+function actualReceivedProfitRateOf(opportunity) {
+  const invested = n(opportunity?.invested_amount);
+  const received = n(opportunity?.received_amount);
+  const expectedProfit = n(opportunity?.expected_profit_amount);
+  const expectedTotal = invested + expectedProfit;
+  const actualProfit = n(opportunity?.actual_received_profit_amount) || Math.max(0, received - invested);
+  const isEligible = opportunity?.show_actual_received_profit_rate === true
+    || (isEndedOpportunity(opportunity) && invested > 0 && actualProfit > 0 && expectedTotal > 0 && received < expectedTotal);
+
+  if (!isEligible || invested <= 0 || actualProfit <= 0) return null;
+  return n(opportunity?.actual_received_profit_rate) || ((actualProfit / invested) * 100);
+}
+
 function parseBulkLine(line) {
   const trimmed = String(line || '').trim();
   if (!trimmed) return null;
@@ -455,18 +477,27 @@ function InvestorOpportunitiesScreen({ investor, opportunities }) {
   return (
     <>
       <Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>
-      {opportunities.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : opportunities.map((opportunity) => (
-        <View key={`${opportunity.opportunity_id}-${opportunity.allocation_id}`} style={styles.investorPaymentCard}>
-          <View style={styles.balanceEntryHeader}>
-            <Text style={styles.investorPaymentMeta}>يستحق: {opportunity.maturity_date || '-'}</Text>
-            <Text style={styles.investorPaymentTitle}>{opportunity.reference_number || 'فرصة تعميد'}</Text>
+      {opportunities.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : opportunities.map((opportunity) => {
+        const registeredRate = registeredProfitRateOf(opportunity);
+        const actualRate = actualReceivedProfitRateOf(opportunity);
+
+        return (
+          <View key={`${opportunity.opportunity_id}-${opportunity.allocation_id}`} style={styles.investorPaymentCard}>
+            <View style={styles.balanceEntryHeader}>
+              <Text style={styles.investorPaymentMeta}>يستحق: {opportunity.maturity_date || '-'}</Text>
+              <Text style={styles.investorPaymentTitle}>{opportunity.reference_number || 'فرصة تعميد'}</Text>
+            </View>
+            <Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(opportunity.invested_amount, 2)}</Text>
+            <Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(opportunity.received_amount, 2)}</Text>
+            <Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(opportunity.remaining_amount, 2)}</Text>
+            <Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(opportunity.expected_profit_amount, 2)}</Text>
+            <View style={[styles.investorEntryTypeRow, { marginTop: 8 }]}>
+              <MiniStat title="النسبة المسجلة" value={`${money(registeredRate, 2)}%`} />
+              {actualRate !== null ? <MiniStat title="النسبة الحقيقية" value={`${money(actualRate, 2)}%`} /> : null}
+            </View>
           </View>
-          <Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(opportunity.invested_amount, 2)}</Text>
-          <Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(opportunity.received_amount, 2)}</Text>
-          <Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(opportunity.remaining_amount, 2)}</Text>
-          <Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(opportunity.expected_profit_amount, 2)}</Text>
-        </View>
-      ))}
+        );
+      })}
     </>
   );
 }
