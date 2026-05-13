@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import StatsDashboardScreen from './StatsDashboardScreen';
 import Ta3meedScreen from './Ta3meedCompactFiltersScreen';
 import Ta3meedInvestorAccountsScreen from './Ta3meedInvestorAccountsScreen';
+import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
 import MoneyMoonScreen from './MoneyMoonScreen';
 import WealthScreen from './WealthScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
@@ -19,12 +20,13 @@ const tabs = [
 const investmentPlatforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد، التصنيفات، المستثمرين، السداد، والمتأخرات.' },
   { key: 'ta3meedAccounts', name: 'حسابات المستثمرين', icon: 'users', text: 'شاشة مستقلة لإضافة رصيد المستثمر وتعديل وحذف حركات الرصيد.' },
+  { key: 'ta3meedImageImport', name: 'استيراد صورة تعميد', icon: 'ta3meed', text: 'رفع صورة الفرصة وقراءة بياناتها ثم إضافة أو تحديث الفرصة.' },
   { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون النشطة والمستلمة.' },
   { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'جاهزة لإضافة فرص دينار وحساباتها.' },
   { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'جاهزة لإضافة فرص ترميز ومتابعتها.' },
 ];
 
-const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'moneymoon'];
+const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon'];
 
 export default function AppShell() {
   const [activeTab, setActiveTab] = useState('wealth');
@@ -57,6 +59,7 @@ export default function AppShell() {
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'ta3meedImageImport') return <Ta3meedImageImportScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'moneymoon') return <MoneyMoonScreen onBack={() => setInvestmentScreen('list')} />;
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }

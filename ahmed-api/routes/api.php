@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonController;
 use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
+use App\Http\Controllers\Api\Ta3meedImageImportController;
 use App\Http\Controllers\Api\Ta3meedInvestorAccountController;
 use App\Http\Controllers\Api\Ta3meedMutationController;
 use App\Http\Controllers\Api\Ta3meedReceiptController;
@@ -41,6 +42,7 @@ Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonController::class, 
 Route::get('/ta3meed/investments', [Ta3meedController::class, 'index']);
 Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);
 Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::class, 'finished']);
+Route::post('/ta3meed/image-import', [Ta3meedImageImportController::class, 'import']);
 Route::put('/ta3meed/investments/{id}', [Ta3meedMutationController::class, 'update']);
 Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::class, 'receive']);
 Route::post('/ta3meed/investments/{id}/receipts', [Ta3meedReceiptController::class, 'store']);
