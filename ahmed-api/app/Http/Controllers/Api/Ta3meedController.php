@@ -40,6 +40,7 @@ class Ta3meedController extends Controller
                     ->get();
 
                 $item->receipts = $this->receipts($item->id);
+                $this->appendActualAnnualRate($item);
 
                 return $item;
             });
@@ -169,7 +170,7 @@ class Ta3meedController extends Controller
     private function receipts(int $opportunityId)
     {
         if (! Schema::hasTable('ta3meed_receipts')) {
-            return [];
+            return collect();
         }
 
         return DB::table('ta3meed_receipts')
@@ -192,6 +193,37 @@ class Ta3meedController extends Controller
 
                 return $receipt;
             });
+    }
+
+    private function appendActualAnnualRate(object $item): void
+    {
+        $principal = (float) $item->principal_amount;
+        $expectedProfit = (float) $item->expected_profit_amount;
+        $expectedTotal = $principal + $expectedProfit;
+        $registeredAnnualRate = (float) $item->expected_rate;
+
+        if ($registeredAnnualRate <= 0 && $principal > 0 && $expectedProfit > 0) {
+            $registeredAnnualRate = ($expectedProfit / $principal) * 100;
+        }
+
+        $receivedFromReceipts = collect($item->receipts ?? [])->sum('amount');
+        $receivedFromAllocations = collect($item->allocations ?? [])->sum('received_amount');
+        $receivedAmount = max((float) $receivedFromReceipts, (float) $receivedFromAllocations);
+        $status = strtolower(trim((string) $item->status));
+        $closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
+        $isEnded = in_array($status, $closedStatuses, true);
+        $actualProfit = max(0, $receivedAmount - $principal);
+        $showActualAnnualRate = $isEnded
+            && $principal > 0
+            && $actualProfit > 0
+            && $expectedTotal > 0
+            && $receivedAmount < $expectedTotal;
+
+        $item->registered_annual_profit_rate = round($registeredAnnualRate, 6);
+        $item->received_amount = round($receivedAmount, 2);
+        $item->actual_received_profit_amount = $showActualAnnualRate ? round($actualProfit, 2) : null;
+        $item->actual_annual_profit_rate = $showActualAnnualRate ? round(($actualProfit / $principal) * 100, 6) : null;
+        $item->show_actual_annual_profit_rate = $showActualAnnualRate;
     }
 
     private function platform()
