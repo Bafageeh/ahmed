@@ -68,11 +68,14 @@ class Ta3meedImageImportController extends Controller
                             "maturity_date: تاريخ الاستحقاق بصيغة YYYY-MM-DD إذا وجد، وإذا كان '-' اجعله null\n" .
                             "category: تصنيف A+ أو A أو B... إذا وجد\n" .
                             "notes: ملاحظات مختصرة من الصورة\n" .
-                            "لا تخمن أي قيمة غير واضحة، اجعلها null."
+                            "لا تخمن أي قيمة غير واضحة، اجعلها null. هذه لقطة شاشة تعميد؛ ركّز على بطاقة رقم الفرصة وقيمة استثمار وربح متوقع ومدة التمويل وصافي العائد السنوي."
                     ],
                     [
                         'type' => 'image_url',
-                        'image_url' => ['url' => $imageUrl],
+                        'image_url' => [
+                            'url' => $imageUrl,
+                            'detail' => 'high',
+                        ],
                     ],
                 ],
             ]],
@@ -107,7 +110,15 @@ class Ta3meedImageImportController extends Controller
         $content = $json['choices'][0]['message']['content'] ?? '{}';
         $parsed = json_decode($content, true);
 
-        return is_array($parsed) ? $this->normalizeParsed($parsed) : ['reference_number' => null];
+        if (! is_array($parsed)) {
+            $parsed = [];
+        }
+
+        if (empty($parsed['reference_number']) && preg_match('/\\b[A-Z]{2,}-[A-Z0-9]{4,}\\b/u', $content, $m)) {
+            $parsed['reference_number'] = $m[0];
+        }
+
+        return $this->normalizeParsed($parsed);
     }
 
     private function normalizeParsed(array $row): array
