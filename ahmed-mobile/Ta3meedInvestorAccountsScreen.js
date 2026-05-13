@@ -13,6 +13,21 @@ import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccountsV2';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const HIDDEN_INVESTOR_ACCOUNT_STAT_TITLE = 'متبقي الفرص';
+
+if (!React.__ahmedHideRemainingOpportunitiesStat) {
+  const originalCreateElement = React.createElement;
+
+  React.createElement = function createElementWithoutRemainingOpportunitiesStat(type, elementProps, ...children) {
+    if (elementProps?.title === HIDDEN_INVESTOR_ACCOUNT_STAT_TITLE) {
+      return null;
+    }
+
+    return originalCreateElement.call(this, type, elementProps, ...children);
+  };
+
+  React.__ahmedHideRemainingOpportunitiesStat = true;
+}
 
 const defaultInvestors = [
   { code: 'ahmed', name: 'أحمد' },
