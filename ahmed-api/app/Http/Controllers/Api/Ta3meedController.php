@@ -224,6 +224,26 @@ class Ta3meedController extends Controller
         $item->actual_received_profit_amount = $showActualAnnualRate ? round($actualProfit, 2) : null;
         $item->actual_annual_profit_rate = $showActualAnnualRate ? round(($actualProfit / $principal) * 100, 6) : null;
         $item->show_actual_annual_profit_rate = $showActualAnnualRate;
+
+        $metadata = json_decode((string) $item->metadata, true);
+        if (! is_array($metadata)) {
+            $metadata = [];
+        }
+
+        $originalCategory = trim((string) ($metadata['category'] ?? ''));
+        $registeredBadge = 'سنوي مرفوع ' . number_format((float) $item->registered_annual_profit_rate, 2, '.', '') . '%';
+        $metadata['annual_rate_badge'] = $registeredBadge;
+
+        $categoryParts = array_values(array_filter([$originalCategory, $registeredBadge]));
+
+        if ($showActualAnnualRate) {
+            $actualBadge = 'سنوي حقيقي ' . number_format((float) $item->actual_annual_profit_rate, 2, '.', '') . '%';
+            $metadata['actual_annual_rate_badge'] = $actualBadge;
+            $categoryParts[] = $actualBadge;
+        }
+
+        $metadata['category'] = implode(' · ', $categoryParts);
+        $item->metadata = json_encode($metadata, JSON_UNESCAPED_UNICODE);
     }
 
     private function platform()
