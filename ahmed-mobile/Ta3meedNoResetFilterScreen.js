@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity } from 'react-native';
-import Ta3meedCompactFiltersScreen from './Ta3meedCompactFiltersScreen';
+import Ta3meedCompactFiltersScreen from './Ta3meedCompactFiltersScreen.js';
 
 const RESET_FILTER_TEXT = 'إعادة الفلتر إلى نشط';
 
