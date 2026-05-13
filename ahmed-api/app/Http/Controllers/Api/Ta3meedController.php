@@ -221,28 +221,20 @@ class Ta3meedController extends Controller
 
         $item->registered_annual_profit_rate = round($registeredAnnualRate, 6);
         $item->received_amount = round($receivedAmount, 2);
+        $item->annual_rate_badge = 'سنوي مرفوع ' . number_format((float) $item->registered_annual_profit_rate, 2, '.', '') . '%';
         $item->actual_received_profit_amount = $showActualAnnualRate ? round($actualProfit, 2) : null;
         $item->actual_annual_profit_rate = $showActualAnnualRate ? round(($actualProfit / $principal) * 100, 6) : null;
+        $item->actual_annual_rate_badge = $showActualAnnualRate ? 'سنوي حقيقي ' . number_format((float) $item->actual_annual_profit_rate, 2, '.', '') . '%' : null;
         $item->show_actual_annual_profit_rate = $showActualAnnualRate;
 
         $metadata = json_decode((string) $item->metadata, true);
         if (! is_array($metadata)) {
             $metadata = [];
         }
-
-        $originalCategory = trim((string) ($metadata['category'] ?? ''));
-        $registeredBadge = 'سنوي مرفوع ' . number_format((float) $item->registered_annual_profit_rate, 2, '.', '') . '%';
-        $metadata['annual_rate_badge'] = $registeredBadge;
-
-        $categoryParts = array_values(array_filter([$originalCategory, $registeredBadge]));
-
-        if ($showActualAnnualRate) {
-            $actualBadge = 'سنوي حقيقي ' . number_format((float) $item->actual_annual_profit_rate, 2, '.', '') . '%';
-            $metadata['actual_annual_rate_badge'] = $actualBadge;
-            $categoryParts[] = $actualBadge;
-        }
-
-        $metadata['category'] = implode(' · ', $categoryParts);
+        $metadata['annual_rate_badge'] = $item->annual_rate_badge;
+        $metadata['actual_annual_rate_badge'] = $item->actual_annual_rate_badge;
+        $metadata['registered_annual_profit_rate'] = $item->registered_annual_profit_rate;
+        $metadata['actual_annual_profit_rate'] = $item->actual_annual_profit_rate;
         $item->metadata = json_encode($metadata, JSON_UNESCAPED_UNICODE);
     }
 
