@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
@@ -33,11 +34,58 @@ function money(value) {
   return `${n.toLocaleString('en-US', { maximumFractionDigits: 2 })} ر.س`;
 }
 
+
+async function cropImagePart(asset, label, crop) {
+  const result = await ImageManipulator.manipulateAsync(
+    asset.uri,
+    [{ crop }],
+    {
+      compress: 0.95,
+      format: ImageManipulator.SaveFormat.JPEG,
+      base64: true,
+    }
+  );
+
+  return {
+    label,
+    base64: result.base64,
+    mime_type: 'image/jpeg',
+  };
+}
+
+async function buildImageParts(asset) {
+  const width = asset.width || 1200;
+  const height = asset.height || 1600;
+
+  const safeCrop = (originX, originY, cropWidth, cropHeight) => ({
+    originX: Math.max(0, Math.round(originX)),
+    originY: Math.max(0, Math.round(originY)),
+    width: Math.max(1, Math.min(width - Math.max(0, Math.round(originX)), Math.round(cropWidth))),
+    height: Math.max(1, Math.min(height - Math.max(0, Math.round(originY)), Math.round(cropHeight))),
+  });
+
+  const headerCrop = safeCrop(0, 0, width, height * 0.48);
+  const metricsCrop = safeCrop(0, height * 0.36, width, height * 0.55);
+
+  const parts = [];
+
+  try {
+    parts.push(await cropImagePart(asset, 'header_green_area', headerCrop));
+  } catch {}
+
+  try {
+    parts.push(await cropImagePart(asset, 'financial_cards_area', metricsCrop));
+  } catch {}
+
+  return parts.filter((part) => part.base64);
+}
+
 export default function Ta3meedImageImportScreen({ onBack }) {
   const [image, setImage] = useState(null);
   const [result, setResult] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [imageParts, setImageParts] = useState([]);
   const [manualReference, setManualReference] = useState('');
 
   const pickImage = async () => {
@@ -70,6 +118,11 @@ export default function Ta3meedImageImportScreen({ onBack }) {
       base64: asset.base64,
       mimeType: asset.mimeType || 'image/jpeg',
     });
+
+    setMessage('جاري تجهيز قصّات الصورة للقراءة...');
+    const parts = await buildImageParts(asset);
+    setImageParts(parts);
+    setMessage(parts.length ? `تم تجهيز ${parts.length} قصّة مركزة من الصورة.` : 'تم اختيار الصورة.');
   };
 
   const importImage = async () => {
@@ -89,6 +142,7 @@ export default function Ta3meedImageImportScreen({ onBack }) {
         body: JSON.stringify({
           image_base64: image.base64,
           mime_type: image.mimeType || 'image/jpeg',
+          image_parts: imageParts,
           manual_reference_number: manualReference.trim() || null,
           instructions: 'رقم الفرصة يظهر في الهيدر الأخضر أعلى الصورة وأسفل اسم المنشأة، ويظهر أيضًا في بطاقة رقم الفرصة.',
         }),
@@ -134,6 +188,8 @@ export default function Ta3meedImageImportScreen({ onBack }) {
         </TouchableOpacity>
 
         {image?.uri ? <Image source={{ uri: image.uri }} style={styles.previewImage} resizeMode="contain" /> : null}
+
+        {image?.uri ? <Text style={styles.partsText}>قصّات مركزة جاهزة للقراءة: {imageParts.length}</Text> : null}
 
         <View style={styles.manualCard}>
           <Text style={styles.manualLabel}>رقم الفرصة يدويًا عند عدم التعرف عليه</Text>
@@ -203,6 +259,7 @@ const styles = StyleSheet.create({
   importButton: { marginTop: 12, backgroundColor: '#0f766e', borderRadius: 16, paddingVertical: 14, alignItems: 'center' },
   disabledButton: { opacity: 0.65 },
   importButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
+  partsText: { marginTop: 8, color: '#0f766e', textAlign: 'right', fontSize: 12, fontWeight: '900' },
   message: { marginTop: 12, color: '#075985', backgroundColor: '#eff6ff', borderRadius: 14, padding: 10, textAlign: 'right', fontWeight: '900', overflow: 'hidden' },
   resultCard: { marginTop: 14, backgroundColor: '#ffffff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: '#e2e8f0' },
   resultTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right', marginBottom: 10 },

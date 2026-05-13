@@ -14,6 +14,10 @@ class Ta3meedImageImportController extends Controller
         $data = $request->validate([
             'image_base64' => ['required', 'string'],
             'mime_type' => ['nullable', 'string'],
+            'image_parts' => ['nullable', 'array'],
+            'image_parts.*.base64' => ['required_with:image_parts', 'string'],
+            'image_parts.*.mime_type' => ['nullable', 'string'],
+            'image_parts.*.label' => ['nullable', 'string'],
             'manual_reference_number' => ['nullable', 'string', 'max:100'],
             'instructions' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -29,7 +33,8 @@ class Ta3meedImageImportController extends Controller
         $parsed = $this->extractByVision(
             $data['image_base64'],
             $data['mime_type'] ?? 'image/jpeg',
-            $data['instructions'] ?? null
+            $data['instructions'] ?? null,
+            $data['image_parts'] ?? []
         );
 
         if (empty($parsed['reference_number'])) {
@@ -92,7 +97,7 @@ class Ta3meedImageImportController extends Controller
         return response()->json(['data' => $result]);
     }
 
-    private function extractByVision(string $base64, string $mimeType, ?string $instructions = null): array
+    private function extractByVision(string $base64, string $mimeType, ?string $instructions = null, array $imageParts = []): array
     {
         $base64 = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', $base64);
         $imageUrl = 'data:' . $mimeType . ';base64,' . $base64;
@@ -126,6 +131,7 @@ class Ta3meedImageImportController extends Controller
                             'detail' => 'high',
                         ],
                     ],
+                    ...$this->imagePartsContent($imageParts),
                 ],
             ]],
         ];
@@ -153,6 +159,38 @@ class Ta3meedImageImportController extends Controller
         }
 
         return $this->normalizeParsed($parsed);
+    }
+
+
+    private function imagePartsContent(array $imageParts): array
+    {
+        $content = [];
+
+        foreach ($imageParts as $part) {
+            $base64 = $part['base64'] ?? null;
+            if (! $base64) {
+                continue;
+            }
+
+            $mimeType = $part['mime_type'] ?? 'image/jpeg';
+            $label = $part['label'] ?? 'cropped_part';
+            $base64 = preg_replace('/^data:image\/[a-zA-Z0-9.+-]+;base64,/', '', $base64);
+
+            $content[] = [
+                'type' => 'text',
+                'text' => 'الصورة التالية قصّة مكبرة من لقطة تعميد: ' . $label,
+            ];
+
+            $content[] = [
+                'type' => 'image_url',
+                'image_url' => [
+                    'url' => 'data:' . $mimeType . ';base64,' . $base64,
+                    'detail' => 'high',
+                ],
+            ];
+        }
+
+        return $content;
     }
 
     private function extractVisibleTextOnly(string $base64, string $mimeType, ?string $instructions = null): string
@@ -368,6 +406,24 @@ class Ta3meedImageImportController extends Controller
             ->where('platform_id', $platform->id)
             ->where('reference_number', $code)
             ->first();
+
+        
+        if (! $existing) {
+            $hasUsefulData =
+                (($row['principal_amount'] ?? null) !== null && (float) $row['principal_amount'] > 0)
+                || (($row['expected_profit_amount'] ?? null) !== null && (float) $row['expected_profit_amount'] > 0)
+                || (($row['expected_rate'] ?? null) !== null && (float) $row['expected_rate'] > 0)
+                || (($row['months'] ?? null) !== null && (int) $row['months'] > 0);
+
+            if (! $hasUsefulData) {
+                abort(response()->json([
+                    'message' => 'تم التعرف على رقم الفرصة فقط، لكن لم تُقرأ أي بيانات مالية من الصورة. لم يتم إنشاء فرصة فارغة.',
+                    'data' => [
+                        'parsed' => $row,
+                    ],
+                ], 422));
+            }
+        }
 
         $oldMeta = $existing ? $this->decodeMeta($existing->metadata ?? null) : [];
         $meta = $oldMeta;
