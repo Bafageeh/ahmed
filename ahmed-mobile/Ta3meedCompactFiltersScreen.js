@@ -152,6 +152,74 @@ function actualAnnualRate(item, meta, receipts, allocations) {
   return ((actualReceivedProfit / principal) / days) * 365 * 100;
 }
 
+function investmentStartDateOf(item, meta) {
+  return String(
+    meta.withdrawal_date ||
+    item.withdrawal_date ||
+    item.investment_date ||
+    item.start_date ||
+    ''
+  ).slice(0, 10);
+}
+
+function lastReceiptDateOf(receipts) {
+  const dates = (receipts || [])
+    .map((receipt) => String(receipt.receipt_date || receipt.created_at || '').slice(0, 10))
+    .filter(Boolean)
+    .sort();
+
+  return dates.length ? dates[dates.length - 1] : '';
+}
+
+function daysBetweenDates(startDateText, endDateText) {
+  if (!startDateText || !endDateText) return null;
+
+  const startDate = new Date(`${startDateText}T00:00:00`);
+  const endDate = new Date(`${endDateText}T00:00:00`);
+  const diff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+  return Number.isFinite(diff) && diff >= 0 ? Math.max(1, diff) : null;
+}
+
+function raisedMonthsOf(item, meta) {
+  const explicit = n(
+    item.months ||
+    item.duration_months ||
+    item.investment_months ||
+    item.raised_months ||
+    meta.months ||
+    meta.duration_months ||
+    meta.investment_months ||
+    meta.raised_months ||
+    meta.ta3meed_months
+  );
+
+  if (explicit > 0) return explicit;
+
+  const startDate = investmentStartDateOf(item, meta);
+  const endDate = String(item.maturity_date || '').slice(0, 10);
+  const days = daysBetweenDates(startDate, endDate);
+
+  return days ? Math.max(1, Math.round(days / 30)) : null;
+}
+
+function realInvestmentDaysOf(item, meta, receipts) {
+  const startDate = investmentStartDateOf(item, meta);
+  const lastReceiptDate = lastReceiptDateOf(receipts);
+  return daysBetweenDates(startDate, lastReceiptDate);
+}
+
+function formatRealInvestmentDuration(days) {
+  if (!days) return '-';
+
+  const months = Math.floor(days / 30);
+  const restDays = days % 30;
+
+  if (months > 0 && restDays > 0) return `${months} شهر و ${restDays} يوم`;
+  if (months > 0) return `${months} شهر`;
+  return `${days} يوم`;
+}
+
 export default function Ta3meedCompactFiltersScreen({ onBack }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
@@ -415,8 +483,11 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId 
   const lastReceipt = receipts[0];
   const annualRate = registeredAnnualRate(item, meta);
   const realRate = actualAnnualRate(item, meta, receipts, allocations);
+  const raisedMonths = raisedMonthsOf(item, meta);
+  const realInvestmentDays = realInvestmentDaysOf(item, meta, receipts);
+  const realInvestmentDuration = formatRealInvestmentDuration(realInvestmentDays);
 
-  return <View style={[styles.card, { borderColor: status.color }]}><View style={styles.cardTop}><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text><Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}><TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={styles.deleteReceipt}><Text style={styles.deleteReceiptText}>{deletingReceiptId === receipt.id ? '...' : 'حذف'}</Text></TouchableOpacity><Text style={styles.receiptText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'} · {money(receipt.amount, 2)}</Text></View>) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>{allocations.map((allocation) => { const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0; const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount); const investorRemaining = Math.max(0, expected - n(allocation.received_amount)); const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount); return <Text key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detail}>{allocation.investor_name}: نسبة {pct(share)} · مستثمر {money(allocation.invested_amount, 2)} · مستلم {money(allocation.received_amount, 2)} · ربح فعلي {money(actualProfit, 2)} · متبقي {money(investorRemaining, 2)}</Text>; })}</View> : null}</View>;
+  return <View style={[styles.card, { borderColor: status.color }]}><View style={styles.cardTop}><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text><Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}><TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={styles.deleteReceipt}><Text style={styles.deleteReceiptText}>{deletingReceiptId === receipt.id ? '...' : 'حذف'}</Text></TouchableOpacity><Text style={styles.receiptText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'} · {money(receipt.amount, 2)}</Text></View>) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>{allocations.map((allocation) => { const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0; const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount); const investorRemaining = Math.max(0, expected - n(allocation.received_amount)); const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount); return <Text key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detail}>{allocation.investor_name}: نسبة {pct(share)} · مستثمر {money(allocation.invested_amount, 2)} · مستلم {money(allocation.received_amount, 2)} · ربح فعلي {money(actualProfit, 2)} · متبقي {money(investorRemaining, 2)}</Text>; })}</View> : null}</View>;
 }
 
 function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, parseReceipt, applyReceipt, saving }) {
@@ -462,6 +533,8 @@ const styles = StyleSheet.create({
   categoryPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999 },
   categoryText: { fontSize: 9.5, fontWeight: '900' },
   rateBadgesRow: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
+  durationBadgesRow: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
+  durationBadge: { backgroundColor: '#f8fafc', color: '#475569', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: '900', overflow: 'hidden' },
   rateBadge: { backgroundColor: '#eef2ff', color: '#4338ca', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: '900', overflow: 'hidden' },
   actualRateBadge: { backgroundColor: '#dcfce7', color: '#166534' },
   amounts: { marginTop: 7, flexDirection: 'row-reverse', gap: 5 },
