@@ -113,6 +113,53 @@ class Ta3meedReceiptController extends Controller
         return response()->json(['data' => ['receipt' => $receipt, 'investment' => $this->readInvestment($id)]]);
     }
 
+
+    public function update(Request $request, int $id)
+    {
+        $data = $request->validate([
+            'receipt_date' => ['required', 'date'],
+            'notes' => ['nullable', 'string'],
+        ]);
+
+        if (! Schema::hasTable('ta3meed_receipts')) {
+            return response()->json(['message' => 'Receipt not found'], 404);
+        }
+
+        $receipt = DB::table('ta3meed_receipts')->where('id', $id)->first();
+        if (! $receipt) {
+            return response()->json(['message' => 'Receipt not found'], 404);
+        }
+
+        DB::transaction(function () use ($receipt, $data) {
+            $update = [
+                'receipt_date' => $data['receipt_date'],
+                'updated_at' => now(),
+            ];
+
+            if (array_key_exists('notes', $data)) {
+                $update['notes'] = $data['notes'];
+            }
+
+            DB::table('ta3meed_receipts')->where('id', $receipt->id)->update($update);
+
+            if (Schema::hasTable('ta3meed_receipt_allocations')) {
+                DB::table('ta3meed_receipt_allocations')
+                    ->where('receipt_id', $receipt->id)
+                    ->update(['updated_at' => now()]);
+            }
+
+            $this->recalculate((int) $receipt->opportunity_id, false);
+        });
+
+        return response()->json([
+            'data' => [
+                'updated' => true,
+                'receipt' => DB::table('ta3meed_receipts')->where('id', $id)->first(),
+                'investment' => $this->readInvestment((int) $receipt->opportunity_id),
+            ],
+        ]);
+    }
+
     public function destroy(int $id)
     {
         if (! Schema::hasTable('ta3meed_receipts')) {

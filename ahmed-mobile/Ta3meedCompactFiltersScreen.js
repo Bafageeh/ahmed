@@ -237,6 +237,9 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [savingReceipt, setSavingReceipt] = useState(false);
   const [deletingReceiptId, setDeletingReceiptId] = useState(null);
+  const [editingReceiptId, setEditingReceiptId] = useState(null);
+  const [editingReceiptDate, setEditingReceiptDate] = useState('');
+  const [savingReceiptDateId, setSavingReceiptDateId] = useState(null);
 
   const investors = useMemo(() => buildInvestors(items), [items]);
   const selectedInvestor = investors.find((investor) => investor.code === investorFilter);
@@ -379,6 +382,43 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
     ]);
   };
 
+
+  const startEditReceiptDate = (receipt) => {
+    setEditingReceiptId(receipt.id);
+    setEditingReceiptDate(String(receipt.receipt_date || today()).slice(0, 10));
+  };
+
+  const cancelEditReceiptDate = () => {
+    setEditingReceiptId(null);
+    setEditingReceiptDate('');
+  };
+
+  const saveReceiptDate = async (receipt) => {
+    const date = String(editingReceiptDate || '').trim();
+    if (!date) {
+      setMessage('أدخل تاريخ الدفعة أولًا');
+      return;
+    }
+
+    setSavingReceiptDateId(receipt.id);
+    try {
+      await apiJson(`/ta3meed/receipts/${receipt.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_date: date, notes: receipt.notes || null }),
+      });
+
+      setMessage('تم تعديل تاريخ الدفعة وإعادة حساب الفرصة');
+      setEditingReceiptId(null);
+      setEditingReceiptDate('');
+      await load(true);
+    } catch (error) {
+      setMessage(error.message || 'تعذر تعديل تاريخ الدفعة');
+    } finally {
+      setSavingReceiptDateId(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
@@ -425,7 +465,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
           <Text style={styles.sectionTitle}>فرص تعميد</Text>
         </View>
 
-        {filteredItems.map((item) => <Ta3meedCard key={String(item.id)} item={item} open={expandedId === item.id} onToggle={() => setExpandedId((current) => current === item.id ? null : item.id)} onDeleteReceipt={deleteReceipt} deletingReceiptId={deletingReceiptId} />)}
+        {filteredItems.map((item) => <Ta3meedCard key={String(item.id)} item={item} open={expandedId === item.id} onToggle={() => setExpandedId((current) => current === item.id ? null : item.id)} onDeleteReceipt={deleteReceipt} deletingReceiptId={deletingReceiptId} editingReceiptId={editingReceiptId} editingReceiptDate={editingReceiptDate} setEditingReceiptDate={setEditingReceiptDate} startEditReceiptDate={startEditReceiptDate} cancelEditReceiptDate={cancelEditReceiptDate} saveReceiptDate={saveReceiptDate} savingReceiptDateId={savingReceiptDateId} />)}
 
         {!loading && filteredItems.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>لا توجد فرص مطابقة</Text><Text style={styles.emptyText}>غيّر المستثمر أو التصنيف أو الحالة.</Text></View> : null}
       </ScrollView>
@@ -467,7 +507,7 @@ function RateBadge({ children, tone }) {
   return <Text style={[styles.rateBadge, tone === 'actual' && styles.actualRateBadge]}>{children}</Text>;
 }
 
-function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId }) {
+function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId, editingReceiptId, editingReceiptDate, setEditingReceiptDate, startEditReceiptDate, cancelEditReceiptDate, saveReceiptDate, savingReceiptDateId }) {
   const meta = metaOf(item);
   const status = statusOf(item);
   const category = categoryOf(item);
@@ -487,7 +527,43 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId 
   const realInvestmentDays = realInvestmentDaysOf(item, meta, receipts);
   const realInvestmentDuration = formatRealInvestmentDuration(realInvestmentDays);
 
-  return <View style={[styles.card, { borderColor: status.color }]}><View style={styles.cardTop}><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text><Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}><TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={styles.deleteReceipt}><Text style={styles.deleteReceiptText}>{deletingReceiptId === receipt.id ? '...' : 'حذف'}</Text></TouchableOpacity><Text style={styles.receiptText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'} · {money(receipt.amount, 2)}</Text></View>) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>{allocations.map((allocation) => { const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0; const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount); const investorRemaining = Math.max(0, expected - n(allocation.received_amount)); const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount); return <Text key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detail}>{allocation.investor_name}: نسبة {pct(share)} · مستثمر {money(allocation.invested_amount, 2)} · مستلم {money(allocation.received_amount, 2)} · ربح فعلي {money(actualProfit, 2)} · متبقي {money(investorRemaining, 2)}</Text>; })}</View> : null}</View>;
+  return <View style={[styles.card, { borderColor: status.color }]}><View style={styles.cardTop}><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text><Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => {
+  const isEditingDate = editingReceiptId === receipt.id;
+  return (
+    <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}>
+      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
+        <TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={styles.deleteReceipt}>
+          <Text style={styles.deleteReceiptText}>{deletingReceiptId === receipt.id ? '...' : 'حذف'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => startEditReceiptDate(receipt)} style={[styles.deleteReceipt, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+          <Text style={[styles.deleteReceiptText, { color: '#2563eb' }]}>تعديل</Text>
+        </TouchableOpacity>
+      </View>
+
+      {isEditingDate ? (
+        <View style={{ flex: 1, alignItems: 'flex-end', gap: 6 }}>
+          <TextInput
+            value={editingReceiptDate}
+            onChangeText={setEditingReceiptDate}
+            placeholder="YYYY-MM-DD"
+            placeholderTextColor="#94a3b8"
+            style={{ minWidth: 120, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, textAlign: 'right', color: '#0f172a', fontWeight: '900', fontSize: 12 }}
+          />
+          <View style={{ flexDirection: 'row-reverse', gap: 6 }}>
+            <TouchableOpacity onPress={() => saveReceiptDate(receipt)} disabled={savingReceiptDateId === receipt.id} style={{ backgroundColor: '#0f766e', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+              <Text style={{ color: '#fff', fontWeight: '900', fontSize: 11 }}>{savingReceiptDateId === receipt.id ? '...' : 'حفظ'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={cancelEditReceiptDate} style={{ backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+              <Text style={{ color: '#475569', fontWeight: '900', fontSize: 11 }}>إلغاء</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <Text style={styles.receiptText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'} · {money(receipt.amount, 2)}</Text>
+      )}
+    </View>
+  );
+}) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>{allocations.map((allocation) => { const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0; const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount); const investorRemaining = Math.max(0, expected - n(allocation.received_amount)); const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount); return <Text key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detail}>{allocation.investor_name}: نسبة {pct(share)} · مستثمر {money(allocation.invested_amount, 2)} · مستلم {money(allocation.received_amount, 2)} · ربح فعلي {money(actualProfit, 2)} · متبقي {money(investorRemaining, 2)}</Text>; })}</View> : null}</View>;
 }
 
 function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, parseReceipt, applyReceipt, saving }) {
