@@ -176,6 +176,15 @@ function InlineEditableTa3meedCard({ OriginalCard, cardProps, onEdit }) {
   return React.cloneElement(rendered, rendered.props, ...childArray, editButton);
 }
 
+function isTa3meedCardElement(type, props) {
+  return renderingTa3meed
+    && typeof type === 'function'
+    && props?.item
+    && typeof props?.onToggle === 'function'
+    && Object.prototype.hasOwnProperty.call(props, 'open')
+    && Object.prototype.hasOwnProperty.call(props, 'onDeleteReceipt');
+}
+
 const originalUseState = React.useState;
 const originalUseMemo = React.useMemo;
 let renderingTa3meed = false;
@@ -287,13 +296,45 @@ export default function Ta3meedNoResetFilterScreen(props) {
   };
 
   const originalCreateElement = React.createElement;
-  React.createElement = function createElementWithoutResetFilterButton(type, elementProps, ...children) {
-    if (type === TouchableOpacity && containsResetFilterText(children)) return null;
-    if (renderingTa3meed && typeof type === 'function' && type.name === 'Ta3meedCard' && elementProps?.item) {
-      return originalCreateElement.call(this, InlineEditableTa3meedCard, { OriginalCard: type, cardProps: elementProps, onEdit: openEditForm });
+  let runtime;
+  let originalJsx;
+  let originalJsxs;
+  let originalJsxDEV;
+
+  try {
+    runtime = require('react/jsx-runtime');
+    originalJsx = runtime.jsx;
+    originalJsxs = runtime.jsxs;
+    originalJsxDEV = runtime.jsxDEV;
+  } catch {}
+
+  const wrapElement = (type, elementProps, createOriginal, extraArgs = []) => {
+    if (type === TouchableOpacity && containsResetFilterText(elementProps?.children || extraArgs)) return null;
+    if (isTa3meedCardElement(type, elementProps)) {
+      return createOriginal(InlineEditableTa3meedCard, { OriginalCard: type, cardProps: elementProps, onEdit: openEditForm }, ...extraArgs);
     }
-    return originalCreateElement.call(this, type, elementProps, ...children);
+    return createOriginal(type, elementProps, ...extraArgs);
   };
+
+  React.createElement = function createElementWithInlineEdit(type, elementProps, ...children) {
+    return wrapElement(type, elementProps, originalCreateElement.bind(this), children);
+  };
+
+  if (runtime && typeof originalJsx === 'function') {
+    runtime.jsx = function jsxWithInlineEdit(type, elementProps, ...rest) {
+      return wrapElement(type, elementProps, originalJsx.bind(this), rest);
+    };
+  }
+  if (runtime && typeof originalJsxs === 'function') {
+    runtime.jsxs = function jsxsWithInlineEdit(type, elementProps, ...rest) {
+      return wrapElement(type, elementProps, originalJsxs.bind(this), rest);
+    };
+  }
+  if (runtime && typeof originalJsxDEV === 'function') {
+    runtime.jsxDEV = function jsxDEVWithInlineEdit(type, elementProps, ...rest) {
+      return wrapElement(type, elementProps, originalJsxDEV.bind(this), rest);
+    };
+  }
 
   renderingTa3meed = true;
   stateHookIndex = 0;
@@ -303,6 +344,9 @@ export default function Ta3meedNoResetFilterScreen(props) {
   } finally {
     renderingTa3meed = false;
     React.createElement = originalCreateElement;
+    if (runtime && originalJsx) runtime.jsx = originalJsx;
+    if (runtime && originalJsxs) runtime.jsxs = originalJsxs;
+    if (runtime && originalJsxDEV) runtime.jsxDEV = originalJsxDEV;
   }
 
   const isEditForm = modalMode === 'edit';
