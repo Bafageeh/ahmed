@@ -5,7 +5,7 @@ import StatsDashboardScreen from './StatsDashboardScreen';
 import Ta3meedScreen from './Ta3meedCompactFiltersScreen';
 import Ta3meedInvestorAccountsScreen from './Ta3meedInvestorAccountsScreen';
 import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
-import MoneyMoonScreen from './MoneyMoonScreen';
+import MoneyMoonScreen from './MoneyMoonSearchScreen';
 import WealthScreen from './WealthScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
 
