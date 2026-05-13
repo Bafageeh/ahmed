@@ -589,32 +589,33 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   const realInvestmentDays = realInvestmentDaysOf(item, meta, receipts);
   const realInvestmentDuration = formatRealInvestmentDuration(realInvestmentDays);
 
-  return <View style={[styles.card, { borderColor: status.color }]}><View style={styles.cardTop}><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.withdrawalEditBox}>
-        {editingWithdrawalId === item.id ? (
-          <>
-            <TextInput
-              value={editingWithdrawalDate}
-              onChangeText={setEditingWithdrawalDate}
-              placeholder="تاريخ السحب YYYY-MM-DD"
-              placeholderTextColor="#94a3b8"
-              style={styles.withdrawalDateInput}
-            />
-            <View style={styles.withdrawalEditActions}>
-              <TouchableOpacity onPress={() => saveWithdrawalDate(item)} disabled={savingWithdrawalId === item.id} style={styles.withdrawalSaveButton}>
-                <Text style={styles.withdrawalSaveText}>{savingWithdrawalId === item.id ? '...' : 'حفظ تاريخ السحب'}</Text>
+  return <View style={[styles.card, { borderColor: status.color }]}><View style={styles.cardTop}><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
+          <View style={styles.withdrawalEditBox}>
+            {editingWithdrawalId === item.id ? (
+              <>
+                <TextInput
+                  value={editingWithdrawalDate}
+                  onChangeText={setEditingWithdrawalDate}
+                  placeholder="تاريخ السحب YYYY-MM-DD"
+                  placeholderTextColor="#94a3b8"
+                  style={styles.withdrawalDateInput}
+                />
+                <View style={styles.withdrawalEditActions}>
+                  <TouchableOpacity onPress={() => saveWithdrawalDate(item)} disabled={savingWithdrawalId === item.id} style={styles.withdrawalSaveButton}>
+                    <Text style={styles.withdrawalSaveText}>{savingWithdrawalId === item.id ? '...' : 'حفظ'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={cancelEditWithdrawalDate} style={styles.withdrawalCancelButton}>
+                    <Text style={styles.withdrawalCancelText}>إلغاء</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <TouchableOpacity onPress={() => startEditWithdrawalDate(item)} style={styles.withdrawalEditButton}>
+                <Text style={styles.withdrawalEditText}>تعديل تاريخ السحب</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={cancelEditWithdrawalDate} style={styles.withdrawalCancelButton}>
-                <Text style={styles.withdrawalCancelText}>إلغاء</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : (
-          <TouchableOpacity onPress={() => startEditWithdrawalDate(item)} style={styles.withdrawalEditButton}>
-            <Text style={styles.withdrawalEditText}>تعديل تاريخ السحب</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-      <View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text><Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => {
+            )}
+          </View>
+<Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => {
   const isEditingDate = editingReceiptId === receipt.id;
   return (
     <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}>
@@ -702,7 +703,7 @@ const styles = StyleSheet.create({
   withdrawalDateInput: { minWidth: 150, backgroundColor: '#fff', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 11, paddingHorizontal: 10, paddingVertical: 7, textAlign: 'right', color: '#0f172a', fontWeight: '900', fontSize: 12 },
   withdrawalEditActions: { marginTop: 6, flexDirection: 'row-reverse', gap: 6 },
   withdrawalSaveButton: { backgroundColor: '#0f766e', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  withdrawalSaveText: { color: '#fff', fontWeight: '900', fontSize: 11 },
+  withdrawalSaveText: { color: '#0f172a', fontWeight: '900', fontSize: 11 },
   withdrawalCancelButton: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
   withdrawalCancelText: { color: '#475569', fontWeight: '900', fontSize: 11 },
   durationBadgesRow: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
