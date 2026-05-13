@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { styles } from './ta3meedStyles';
 import { money, n } from './ta3meedUtils';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const todayText = () => new Date().toISOString().slice(0, 10);
 const investorBase = [
   { code: 'ahmed', name: 'أحمد' },
   { code: 'sara', name: 'سارة' },
@@ -20,13 +21,21 @@ const colors = {
   slate: ['#f8fafc', '#e2e8f0', '#475569', '#0f172a'],
   red: ['#fff1f2', '#fecdd3', '#be123c', '#881337'],
 };
+
 function keyOf(v) { return aliases[String(v || '').trim()] || String(v || '').trim(); }
 function buildInvestors(investors) {
   const map = new Map(investorBase.map((x) => [x.code, x]));
-  (investors || []).forEach((x) => { const code = keyOf(x.code || x.name); const name = x.name || x.code; if (code && name) map.set(code, { code, name }); });
+  (investors || []).forEach((x) => {
+    const code = keyOf(x.code || x.name);
+    const name = x.name || x.code;
+    if (code && name) map.set(code, { code, name });
+  });
   return Array.from(map.values());
 }
-function isClosed(o) { const status = String(o?.opportunity_status || o?.allocation_status || '').toLowerCase(); return ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'].includes(status) || n(o?.remaining_amount) <= 0; }
+function isClosed(o) {
+  const status = String(o?.opportunity_status || o?.allocation_status || '').toLowerCase();
+  return ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'].includes(status) || n(o?.remaining_amount) <= 0;
+}
 function normalizeAccount(raw, investor) {
   const summary = raw?.summary || {};
   const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
@@ -50,6 +59,7 @@ function normalizeAccount(raw, investor) {
     opportunities,
   };
 }
+
 export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onExit }) {
   const accounts = useMemo(() => buildInvestors(investors), [investors]);
   const [selected, setSelected] = useState(null);
@@ -65,6 +75,7 @@ export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onE
   if (selected) return <InvestorDetails investor={selected} screen={screen} setScreen={setScreen} onBack={() => setSelected(null)} />;
   return <View style={styles.investorScreen}><Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text><Text style={styles.investorScreenSubtitle}>اختر المستثمر لفتح شاشة خاصة به.</Text>{accounts.map((i) => <TouchableOpacity key={i.code} style={styles.investorAccountButton} onPress={() => { setSelected(i); setScreen('home'); }}><Text style={styles.investorAccountButtonText}>شاشة {i.name}</Text><Text style={styles.investorAccountButtonIcon}>›</Text></TouchableOpacity>)}</View>;
 }
+
 function InvestorDetails({ investor, screen, setScreen, onBack }) {
   const [account, setAccount] = useState(null);
   const [message, setMessage] = useState('');
@@ -82,8 +93,9 @@ function InvestorDetails({ investor, screen, setScreen, onBack }) {
     }
   };
   useEffect(() => { load(); }, [investor.code]);
-  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'movements' ? <SimpleList title={`#S-113 الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}{screen === 'opportunities' ? <OpportunityList investor={investor} rows={account?.opportunities || []} /> : null}{screen === 'manage' ? <SimpleList title={`#S-112 إدارة حركات أرصدة ${investor.name}`} rows={account?.entries || []} /> : null}</View>;
+  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} /> : null}{screen === 'movements' ? <SimpleList title={`#S-113 الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}{screen === 'opportunities' ? <OpportunityList investor={investor} rows={account?.opportunities || []} /> : null}</View>;
 }
+
 function Home({ investor, account, message, setScreen }) {
   const balance = n(account?.balance);
   const ta3meed = n(account?.ta3meed);
@@ -104,9 +116,42 @@ function Home({ investor, account, message, setScreen }) {
 }
 function Card({ title, value, color = 'slate', note, wide, count }) { const c = colors[color] || colors.slate; return <View style={{ flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: wide ? 128 : 108, borderRadius: 24, padding: 15, backgroundColor: c[0], borderWidth: 1, borderColor: c[1], alignItems: 'flex-end', justifyContent: 'center' }}><Text style={{ color: c[2], fontWeight: '900', fontSize: 13, textAlign: 'right' }}>{title}</Text><Text style={{ color: c[3], fontWeight: '900', fontSize: wide ? 27 : 20, marginTop: 7, textAlign: 'right' }}>{count ? value : `${money(value, 2)} ر.س`}</Text>{note ? <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 11, marginTop: 5, textAlign: 'right' }}>{note}</Text> : null}</View>; }
 function Nav({ title, text, onPress }) { return <TouchableOpacity style={styles.investorAccountButton} onPress={onPress}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={styles.investorAccountButtonText}>{title}</Text><Text style={styles.investorScreenSubtitle}>{text}</Text></View><Text style={styles.investorAccountButtonIcon}>›</Text></TouchableOpacity>; }
-function SimpleList({ title, rows }) {
-  const total = rows.reduce((sum, row) => sum + n(row.amount || row.received_amount || 0), 0);
-  const isBalanceEntriesScreen = title.includes('#S-112');
-  return <><Text style={styles.investorScreenTitle}>{title}</Text>{isBalanceEntriesScreen ? <View style={[styles.investorPaymentCard, { backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}><Text style={[styles.investorPaymentTitle, { color: '#0f766e' }]}>مجموع الحركات</Text><Text style={[styles.investorBalanceText, { marginTop: 6 }]}>{money(total, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>إجمالي الإيداعات والسحوبات الظاهرة في هذه الشاشة</Text></View> : null}{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((r, i) => <View key={r.id || i} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{money(r.amount || r.received_amount || 0, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>{r.date || r.entry_date || r.receipt_date || '-'}</Text>{r.description || r.notes ? <Text style={styles.investorPaymentMeta}>{r.description || r.notes}</Text> : null}</View>)}</>;
+
+function ManageEntries({ investor, account, reload }) {
+  const [amount, setAmount] = useState('');
+  const [entryDate, setEntryDate] = useState(todayText());
+  const [notes, setNotes] = useState('');
+  const [entryType, setEntryType] = useState('deposit');
+  const [editingId, setEditingId] = useState(null);
+  const [localMessage, setLocalMessage] = useState('');
+  const rows = account?.entries || [];
+  const total = rows.reduce((sum, row) => sum + n(row.amount || 0), 0);
+  const reset = () => { setAmount(''); setEntryDate(todayText()); setNotes(''); setEntryType('deposit'); setEditingId(null); };
+  const startEdit = (row) => { setEditingId(row.id); setAmount(String(Math.abs(n(row.amount)))); setEntryType(n(row.amount) < 0 ? 'withdrawal' : 'deposit'); setEntryDate(row.entry_date || todayText()); setNotes(row.notes || ''); setLocalMessage('تم فتح الحركة للتعديل'); };
+  const save = async () => {
+    const value = n(amount);
+    if (!value) return setLocalMessage('أدخل المبلغ أولًا');
+    try {
+      const url = editingId ? `${API_URL}/ta3meed/investors/${investor.code}/account/entries/${editingId}` : `${API_URL}/ta3meed/investors/${investor.code}/account/entries`;
+      const response = await fetch(url, { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ amount: value, type: entryType, entry_date: entryDate || todayText(), notes: notes || null }) });
+      if (!response.ok) throw new Error('failed');
+      reset();
+      setLocalMessage(editingId ? 'تم تعديل الحركة' : 'تمت إضافة الحركة');
+      await reload();
+    } catch { setLocalMessage('تعذر حفظ الحركة'); }
+  };
+  const remove = async (row) => {
+    try {
+      const response = await fetch(`${API_URL}/ta3meed/investors/${investor.code}/account/entries/${row.id}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+      if (!response.ok) throw new Error('failed');
+      if (editingId === row.id) reset();
+      setLocalMessage('تم حذف الحركة');
+      await reload();
+    } catch { setLocalMessage('تعذر حذف الحركة'); }
+  };
+  return <><Text style={styles.investorScreenTitle}>#S-112 إدارة حركات أرصدة {investor.name}</Text>{!!localMessage && <Text style={styles.message}>{localMessage}</Text>}<View style={[styles.investorPaymentCard, { backgroundColor: '#ecfdf5', borderColor: '#99f6e4' }]}><Text style={[styles.investorPaymentTitle, { color: '#0f766e' }]}>مجموع الحركات</Text><Text style={[styles.investorBalanceText, { marginTop: 6 }]}>{money(total, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>إجمالي الإيداعات والسحوبات الظاهرة في هذه الشاشة</Text></View><View style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{editingId ? 'تعديل حركة' : 'إضافة حركة'}</Text><View style={styles.investorEntryTypeRow}><TypeButton label="إضافة" active={entryType === 'deposit'} onPress={() => setEntryType('deposit')} /><TypeButton label="سحب" active={entryType === 'withdrawal'} onPress={() => setEntryType('withdrawal')} danger /></View><TextInput value={amount} onChangeText={setAmount} placeholder="المبلغ" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.investorPaymentInput} /><TextInput value={entryDate} onChangeText={setEntryDate} placeholder="تاريخ الحركة YYYY-MM-DD" placeholderTextColor="#94a3b8" style={styles.investorPaymentInput} /><TextInput value={notes} onChangeText={setNotes} placeholder="ملاحظات" placeholderTextColor="#94a3b8" style={[styles.investorPaymentInput, styles.investorNotesInput]} multiline textAlignVertical="top" /><TouchableOpacity style={[styles.investorPaymentButton, entryType === 'withdrawal' && styles.investorWithdrawButton]} onPress={save}><Text style={styles.investorPaymentButtonText}>{editingId ? 'حفظ التعديل' : 'حفظ الحركة'}</Text></TouchableOpacity>{editingId ? <TouchableOpacity style={styles.investorCancelEditButton} onPress={reset}><Text style={styles.investorCancelEditText}>إلغاء التعديل</Text></TouchableOpacity> : null}</View><Text style={styles.panelTitle}>الحركات</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((r, i) => <View key={r.id || i} style={styles.investorPaymentCard}><View style={styles.balanceEntryHeader}><View style={[styles.balanceEntryActions, { gap: 8 }]}><TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 70, paddingHorizontal: 10 }]} onPress={() => startEdit(r)}><Text style={[styles.balanceEntryActionIcon, styles.balanceEntryEditIcon, { fontSize: 13 }]}>تعديل</Text></TouchableOpacity><TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 62, paddingHorizontal: 10 }]} onPress={() => remove(r)}><Text style={[styles.balanceEntryActionIcon, styles.balanceEntryDeleteIcon, { fontSize: 13 }]}>حذف</Text></TouchableOpacity></View><Text style={[styles.investorPaymentTitle, n(r.amount) < 0 && styles.investorWithdrawText]}>{money(r.amount || 0, 2)} ر.س</Text></View><Text style={styles.investorPaymentMeta}>{r.entry_date || '-'}</Text>{r.notes ? <Text style={styles.investorPaymentMeta}>{r.notes}</Text> : null}</View>)}</>;
 }
+function TypeButton({ label, active, onPress, danger }) { return <TouchableOpacity style={[styles.investorEntryTypeButton, active && styles.investorEntryTypeButtonActive, active && danger && styles.investorEntryTypeButtonDanger]} onPress={onPress}><Text style={[styles.investorEntryTypeText, active && styles.investorEntryTypeTextActive]}>{label}</Text></TouchableOpacity>; }
+
+function SimpleList({ title, rows }) { return <><Text style={styles.investorScreenTitle}>{title}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((r, i) => <View key={r.id || i} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{money(r.amount || r.received_amount || 0, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>{r.date || r.entry_date || r.receipt_date || '-'}</Text>{r.description || r.notes ? <Text style={styles.investorPaymentMeta}>{r.description || r.notes}</Text> : null}</View>)}</>; }
 function OpportunityList({ investor, rows }) { return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((o, i) => <View key={`${o.opportunity_id || i}-${o.allocation_id || i}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{o.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(o.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(o.received_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(o.remaining_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(o.expected_profit_amount, 2)}</Text></View>)}</>; }
