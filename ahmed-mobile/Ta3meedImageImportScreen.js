@@ -25,7 +25,12 @@ async function apiJson(path, options = {}) {
   const text = await response.text();
   let json = {};
   try { json = text ? JSON.parse(text) : {}; } catch { json = { message: `رد غير JSON من ${path}` }; }
-  if (!response.ok) throw new Error(json.message || `خطأ ${response.status}`);
+  if (!response.ok) {
+    const error = new Error(json.message || `خطأ ${response.status}`);
+    error.status = response.status;
+    error.data = json.data;
+    throw error;
+  }
   return json;
 }
 
@@ -83,6 +88,7 @@ async function buildImageParts(asset) {
 export default function Ta3meedImageImportScreen({ onBack }) {
   const [image, setImage] = useState(null);
   const [result, setResult] = useState(null);
+  const [errorData, setErrorData] = useState(null);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [imageParts, setImageParts] = useState([]);
@@ -91,6 +97,7 @@ export default function Ta3meedImageImportScreen({ onBack }) {
   const pickImage = async () => {
     setMessage('');
     setResult(null);
+    setErrorData(null);
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -134,6 +141,7 @@ export default function Ta3meedImageImportScreen({ onBack }) {
     setBusy(true);
     setMessage('جاري قراءة الصورة وتحديث قاعدة البيانات...');
     setResult(null);
+    setErrorData(null);
 
     try {
       const json = await apiJson('/ta3meed/image-import', {
@@ -151,6 +159,7 @@ export default function Ta3meedImageImportScreen({ onBack }) {
       setResult(json.data);
       setMessage(json.data?.action === 'created' ? 'تمت إضافة فرصة جديدة من الصورة.' : 'تم تحديث الفرصة الموجودة من الصورة.');
     } catch (error) {
+      setErrorData(error.data || null);
       setMessage(error.message || 'تعذر استيراد الصورة.');
     } finally {
       setBusy(false);
@@ -209,6 +218,17 @@ export default function Ta3meedImageImportScreen({ onBack }) {
 
         {!!message && <Text style={styles.message}>{message}</Text>}
 
+        {errorData ? (
+          <View style={styles.debugCard}>
+            <Text style={styles.debugTitle}>النص المقروء من الصورة</Text>
+            <Text style={styles.debugText}>{errorData.ocr_text_preview || 'لم يرجع نص مقروء من الصورة.'}</Text>
+
+            <Text style={styles.debugTitle}>البيانات التي حاول النظام قراءتها</Text>
+            <Text style={styles.debugText}>{JSON.stringify(errorData, null, 2)}</Text>
+          </View>
+        ) : null}
+
+
         {result ? (
           <View style={styles.resultCard}>
             <Text style={styles.resultTitle}>{action === 'created' ? 'فرصة جديدة' : 'تحديث فرصة موجودة'}</Text>
@@ -261,6 +281,9 @@ const styles = StyleSheet.create({
   importButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
   partsText: { marginTop: 8, color: '#0f766e', textAlign: 'right', fontSize: 12, fontWeight: '900' },
   message: { marginTop: 12, color: '#075985', backgroundColor: '#eff6ff', borderRadius: 14, padding: 10, textAlign: 'right', fontWeight: '900', overflow: 'hidden' },
+  debugCard: { marginTop: 12, backgroundColor: '#fff7ed', borderRadius: 16, padding: 12, borderWidth: 1, borderColor: '#fed7aa' },
+  debugTitle: { color: '#9a3412', fontSize: 13, fontWeight: '900', textAlign: 'right', marginBottom: 6, marginTop: 6 },
+  debugText: { color: '#431407', fontSize: 11, fontWeight: '800', textAlign: 'left', lineHeight: 18 },
   resultCard: { marginTop: 14, backgroundColor: '#ffffff', borderRadius: 20, padding: 14, borderWidth: 1, borderColor: '#e2e8f0' },
   resultTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right', marginBottom: 10 },
   infoRow: { paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: '#f1f5f9', flexDirection: 'row-reverse', justifyContent: 'space-between', gap: 10 },
