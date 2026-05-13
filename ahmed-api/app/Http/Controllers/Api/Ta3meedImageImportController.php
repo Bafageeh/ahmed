@@ -16,7 +16,7 @@ class Ta3meedImageImportController extends Controller
             'mime_type' => ['nullable', 'string'],
         ]);
 
-        $apiKey = env('OPENAI_API_KEY');
+        $apiKey = config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: getenv('OPENAI_API_KEY');
         if (! $apiKey) {
             return response()->json([
                 'message' => 'OPENAI_API_KEY غير موجود في ملف .env، لا يمكن قراءة الصورة تلقائيًا.',
@@ -49,7 +49,7 @@ class Ta3meedImageImportController extends Controller
         $imageUrl = 'data:' . $mimeType . ';base64,' . $base64;
 
         $payload = [
-            'model' => env('OPENAI_VISION_MODEL', 'gpt-4o-mini'),
+            'model' => config('services.openai.vision_model') ?: env('OPENAI_VISION_MODEL', 'gpt-4o-mini'),
             'response_format' => ['type' => 'json_object'],
             'messages' => [[
                 'role' => 'user',
@@ -86,7 +86,7 @@ class Ta3meedImageImportController extends Controller
             CURLOPT_POST => true,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_HTTPHEADER => [
-                'Authorization: Bearer ' . env('OPENAI_API_KEY'),
+                'Authorization: Bearer ' . (config('services.openai.api_key') ?: env('OPENAI_API_KEY') ?: getenv('OPENAI_API_KEY')),
                 'Content-Type: application/json',
             ],
             CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
