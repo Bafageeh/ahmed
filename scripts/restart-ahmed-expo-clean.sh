@@ -12,6 +12,20 @@ WEB_PUBLIC_DIR="$API_DIR/public/webapp"
 LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
 
 log() { echo "[Ahmed Expo Clean Restart] $1"; }
+run_optional_patch() {
+  local patch="$1"
+  if [ -f "$patch" ]; then
+    log "Running optional $patch"
+    python3 "$patch" || log "Optional patch skipped/failed without blocking deploy: $patch"
+  fi
+}
+run_required_patch() {
+  local patch="$1"
+  if [ -f "$patch" ]; then
+    log "Running required $patch"
+    python3 "$patch"
+  fi
+}
 
 if [ ! -d "$PROJECT_PATH/.git" ]; then
   echo "ERROR: $PROJECT_PATH is not a Git repository." >&2
@@ -34,12 +48,11 @@ if [ -d "$API_DIR" ]; then
 fi
 
 log "Applying mobile patches"
-for patch in scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-sort-by-withdrawal-date.py scripts/patch-ta3meed-investor-badges.py scripts/patch-ta3meed-card-direct-investor-badges.py scripts/patch-ta3meed-investor-filter-button.py; do
-  if [ -f "$patch" ]; then
-    log "Running $patch"
-    python3 "$patch"
-  fi
-done
+run_optional_patch scripts/patch-ta3meed-receipt-date-preserve-status.py
+run_optional_patch scripts/patch-ta3meed-sort-by-withdrawal-date.py
+run_optional_patch scripts/patch-ta3meed-investor-badges.py
+run_optional_patch scripts/patch-ta3meed-card-direct-investor-badges.py
+run_required_patch scripts/patch-ta3meed-investor-filter-button.py
 
 log "Verifying Ta3meed entrypoint"
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" || {
@@ -51,6 +64,7 @@ grep -n "setPicker('investor')" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || 
   echo "ERROR: Ta3meed investor filter button does not open investor picker." >&2
   exit 1
 }
+grep -n "style={styles.investorFloatingButton}" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
 grep -n "floatingButtonStyle" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
 grep -n "investor-badge" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
 grep -n "investorBadgesBox" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
@@ -72,7 +86,7 @@ if [ -d "$API_DIR/public" ]; then
     exit 1
   fi
 
-  if grep -q "Ahmed Web Test" "$WEB_EXPORT_DIR/index.html"; then
+  if grep -q "Ahmed Web Test\|Ahmed Web غير منشور\|نسخة الويب لم تُبنى بعد" "$WEB_EXPORT_DIR/index.html"; then
     echo "ERROR: Expo web export produced the old placeholder page." >&2
     exit 1
   fi
