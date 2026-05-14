@@ -22,6 +22,14 @@ log "Fetching latest main"
 git fetch origin main
 git reset --hard origin/main
 
+log "Applying mobile patches"
+for patch in scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-sort-by-withdrawal-date.py; do
+  if [ -f "$patch" ]; then
+    log "Running $patch"
+    python3 "$patch" || true
+  fi
+done
+
 log "Verifying Ta3meed entrypoint"
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" || {
   echo "ERROR: AppShell does not point to Ta3meedNoResetFilterScreen.js" >&2
@@ -29,6 +37,7 @@ grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/
 }
 
 grep -n "floatingButtonStyle" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
+grep -n "withdrawalSortValue" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
 
 cd "$MOBILE_DIR"
 log "Writing mobile environment"
