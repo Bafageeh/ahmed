@@ -50,6 +50,18 @@ class Ta3meedReceiptController extends Controller
             return response()->json(['message' => 'لم يتم العثور على فرصة تعميد بهذا الرقم', 'data' => $parsed], 404);
         }
 
+        if ($this->hasFullReceipt((int) $investment->id)) {
+            return response()->json([
+                'message' => 'تم رفض إضافة السداد: يوجد سداد كلي مسجل سابقًا لنفس رقم الفرصة.',
+                'data' => [
+                    'blocked' => true,
+                    'reason' => 'full_receipt_exists',
+                    'parsed' => $parsed,
+                    'investment' => $this->readInvestment((int) $investment->id),
+                ],
+            ], 409);
+        }
+
         $receipt = $this->record($investment, [
             'amount' => $parsed['amount'],
             'receipt_type' => $parsed['receipt_type'],
@@ -98,6 +110,17 @@ class Ta3meedReceiptController extends Controller
             ->first();
 
         if (! $investment) return response()->json(['message' => 'Investment not found'], 404);
+
+        if ($this->hasFullReceipt((int) $investment->id)) {
+            return response()->json([
+                'message' => 'تم رفض إضافة السداد: يوجد سداد كلي مسجل سابقًا لنفس رقم الفرصة.',
+                'data' => [
+                    'blocked' => true,
+                    'reason' => 'full_receipt_exists',
+                    'investment' => $this->readInvestment((int) $investment->id),
+                ],
+            ], 409);
+        }
 
         $receipt = $this->record($investment, [
             'amount' => round((float) $data['amount'], 2),
@@ -380,6 +403,18 @@ class Ta3meedReceiptController extends Controller
                 'updated_at' => now(),
             ]);
         }
+    }
+
+    private function hasFullReceipt(int $opportunityId): bool
+    {
+        if (! Schema::hasTable('ta3meed_receipts')) {
+            return false;
+        }
+
+        return DB::table('ta3meed_receipts')
+            ->where('opportunity_id', $opportunityId)
+            ->where('receipt_type', 'full')
+            ->exists();
     }
 
     private function readInvestment(int $id)
