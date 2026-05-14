@@ -268,7 +268,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack }) {
+export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -646,7 +646,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
 
         <View style={styles.compactFiltersCard}>
           <View style={styles.compactFilterGrid}>
-            <CompactFilter label="المستثمر" value={investorLabel} onPress={() => setPicker('investor')} />
+            <CompactFilter label="المستثمر" value={investorLabel} onPress={() => onOpenMore ? onOpenMore() : onBack?.()} />
             <CompactFilter label="التصنيف" value={categoryLabel} onPress={() => setPicker('category')} />
             <CompactFilter label="الحالة" value={statusLabel} onPress={() => setPicker('status')} />
           </View>
@@ -676,10 +676,10 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
 
       <TouchableOpacity
         activeOpacity={0.86}
-        onPress={() => setPicker('investor')}
+        onPress={() => onOpenMore ? onOpenMore() : onBack?.()}
         style={styles.investorFloatingButton}
       >
-        <UiIcon name="investors" size={27} color={ICON_COLOR_DARK} />
+        <UiIcon name="more" size={27} color={ICON_COLOR_DARK} />
       </TouchableOpacity>
 
 
