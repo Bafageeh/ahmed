@@ -119,6 +119,39 @@ function receivedAmountOf(item, meta, receipts, allocations) {
   return Math.max(metaReceived, itemReceived, receiptsReceived, allocationsReceived);
 }
 
+
+function activeRemainingInvestmentAmount(items, selectedInvestor = 'all') {
+  return (items || []).reduce((total, item) => {
+    if (statusOf(item).key === 'received') return total;
+
+    const allocations = item.allocations || [];
+    const selectedAllocations = selectedInvestor && selectedInvestor !== 'all'
+      ? allocations.filter((allocation) => investorKey(allocation) === selectedInvestor)
+      : allocations;
+
+    if (selectedInvestor && selectedInvestor !== 'all' && selectedAllocations.length === 0) {
+      return total;
+    }
+
+    const meta = metaOf(item);
+    const receivedTotal = receivedAmountOf(item, meta, item.receipts || [], allocations);
+
+    if (selectedAllocations.length > 0) {
+      const totalAllocated = allocations.reduce((sum, allocation) => sum + n(allocation.invested_amount), 0);
+
+      return total + selectedAllocations.reduce((sum, allocation) => {
+        const invested = n(allocation.invested_amount);
+        const proportionalReceived = totalAllocated > 0 ? receivedTotal * (invested / totalAllocated) : 0;
+        return sum + Math.max(0, invested - Math.min(invested, proportionalReceived));
+      }, 0);
+    }
+
+    const invested = n(item.principal_amount);
+    return total + Math.max(0, invested - Math.min(invested, receivedTotal));
+  }, 0);
+}
+
+
 function actualAnnualRate(item, meta, receipts, allocations) {
   const principal = n(item.principal_amount);
   if (principal <= 0) return null;
@@ -335,13 +368,13 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
   const totals = useMemo(() => {
     const active = filteredItems.filter((item) => statusOf(item).key === 'active');
     return {
-      invested: active.reduce((sum, item) => sum + n(item.principal_amount), 0),
+      invested: activeRemainingInvestmentAmount(items, investorFilter),
       profit: active.reduce((sum, item) => sum + n(item.expected_profit_amount), 0),
       active: active.length,
       partial: filteredItems.filter((item) => statusOf(item).key === 'partial_received').length,
       received: filteredItems.reduce((sum, item) => sum + receivedAmountOf(item, metaOf(item), item.receipts || [], item.allocations || []), 0),
     };
-  }, [filteredItems]);
+  }, [filteredItems, items, investorFilter]);
 
   const parseReceipt = async () => {
     if (!receiptText.trim()) return setMessage('الصق رسالة تعميد أولًا');
@@ -621,7 +654,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
         </View>
 
         <View style={styles.metricGrid}>
-          <Metric title="إجمالي الاستثمار النشط" value={money(totals.invested)} />
+          <Metric title="استثمار تعميد" value={money(totals.invested)} />
           <Metric title="الأرباح المتوقعة النشطة" value={money(totals.profit, 2)} />
           <Metric title="استثمارات نشطة" value={String(totals.active)} />
           <Metric title="مستلم جزئيًا" value={String(totals.partial)} />
@@ -640,6 +673,15 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
 
         {!loading && filteredItems.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>لا توجد فرص مطابقة</Text><Text style={styles.emptyText}>غيّر المستثمر أو التصنيف أو الحالة.</Text></View> : null}
       </ScrollView>
+
+      <TouchableOpacity
+        activeOpacity={0.86}
+        onPress={() => setPicker('investor')}
+        style={styles.investorFloatingButton}
+      >
+        <UiIcon name="investors" size={27} color={ICON_COLOR_DARK} />
+      </TouchableOpacity>
+
 
       <FilterPickerModal visible={Boolean(picker)} type={picker} onClose={() => setPicker(null)} investors={investors} selectedInvestor={investorFilter} selectedCategory={categoryFilter} selectedStatus={statusFilter} onInvestor={(value) => { setInvestorFilter(value); setPicker(null); }} onCategory={(value) => { setCategoryFilter(value); setPicker(null); }} onStatus={(value) => { setStatusFilter(value); setPicker(null); }} />
 
@@ -822,6 +864,27 @@ function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, 
 }
 
 const styles = StyleSheet.create({
+
+  investorFloatingButton: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    zIndex: 50,
+  },
+
 
   cardTitleLeft: {
     marginRight: 'auto',
