@@ -17,6 +17,11 @@ function containsResetFilterText(node) {
   return false;
 }
 
+function isInvestorFloatingButtonStyle(style) {
+  const styles = Array.isArray(style) ? style : [style];
+  return styles.some((item) => item && typeof item === 'object' && item.position === 'absolute' && item.left === 24 && item.bottom === 24);
+}
+
 function metaOf(item) {
   try {
     return typeof item?.metadata === 'string' ? JSON.parse(item.metadata || '{}') : item?.metadata || {};
@@ -317,6 +322,12 @@ export default function Ta3meedNoResetFilterScreen(props) {
   } catch {}
 
   const wrapElement = (type, elementProps, createOriginal, extraArgs = []) => {
+    if (renderingTa3meed && typeof type === 'function' && elementProps?.label === 'المستثمر') {
+      return createOriginal(type, { ...elementProps, onPress: openInvestorPickerFromLegacyButton }, ...extraArgs);
+    }
+    if (renderingTa3meed && type === TouchableOpacity && isInvestorFloatingButtonStyle(elementProps?.style)) {
+      return createOriginal(type, { ...elementProps, onPress: openInvestorPickerFromLegacyButton }, ...extraArgs);
+    }
     if (type === TouchableOpacity && containsResetFilterText(elementProps?.children || extraArgs)) return null;
     if (isTa3meedCardElement(type, elementProps)) {
       return createOriginal(InlineEditableTa3meedCard, { OriginalCard: type, cardProps: elementProps, onEdit: openEditForm }, ...extraArgs);
