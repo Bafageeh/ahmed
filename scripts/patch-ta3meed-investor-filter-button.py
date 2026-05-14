@@ -4,22 +4,23 @@ from pathlib import Path
 path = Path('ahmed-mobile/Ta3meedCompactFiltersScreen.js')
 text = path.read_text(encoding='utf-8')
 
-replacements = {
-    'onPress={() => onOpenMore ? onOpenMore() : onBack?.()}': "onPress={() => setPicker('investor')}",
-    'onPress={() => onOpenMore ? onOpenMore() : onBack?.()}\n        style={styles.investorFloatingButton}': "onPress={() => setPicker('investor')}\n        style={styles.investorFloatingButton}",
-}
+old_filter = '<CompactFilter label="المستثمر" value={investorLabel} onPress={() => onOpenMore ? onOpenMore() : onBack?.()} />'
+new_filter = '<CompactFilter label="المستثمر" value={investorLabel} onPress={() => setPicker(\'investor\')} />'
+text = text.replace(old_filter, new_filter)
 
-changed = False
-for old, new in replacements.items():
-    if old in text:
-        text = text.replace(old, new)
-        changed = True
+# Keep the bottom-left floating button as the shortcut to More, not investor filter.
+old_floating = "onPress={() => setPicker('investor')}\n        style={styles.investorFloatingButton}"
+new_floating = "onPress={() => onOpenMore ? onOpenMore() : onBack?.()}\n        style={styles.investorFloatingButton}"
+text = text.replace(old_floating, new_floating)
 
-if "label=\"المستثمر\" value={investorLabel} onPress={() => setPicker('investor')}" not in text:
+if new_filter not in text:
     raise SystemExit('Investor compact filter was not patched correctly')
 
-if "style={styles.investorFloatingButton}" in text and "onPress={() => setPicker('investor')}\n        style={styles.investorFloatingButton}" not in text:
-    raise SystemExit('Investor floating button was not patched correctly')
+if old_floating in text:
+    raise SystemExit('Floating More button is still wired to investor picker')
+
+if "onPress={() => onOpenMore ? onOpenMore() : onBack?.()}\n        style={styles.investorFloatingButton}" not in text:
+    raise SystemExit('Floating More button was not restored correctly')
 
 path.write_text(text, encoding='utf-8')
-print('Patched Ta3meed investor filter buttons to open investor picker')
+print('Patched Ta3meed: top investor filter opens investor picker; floating button opens More')
