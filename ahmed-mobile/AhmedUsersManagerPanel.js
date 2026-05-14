@@ -40,6 +40,12 @@ export default function AhmedUsersManagerPanel() {
     setMessage('تم اختيار الحساب.');
   };
 
+  const logout = () => {
+    setCurrentAhmedUserId(null);
+    setSelectedId('');
+    setMessage('تم تسجيل الخروج. اختر مستخدمًا للدخول مرة أخرى.');
+  };
+
   const loadUsers = async () => {
     try {
       const json = await userApi('GET');
@@ -48,7 +54,6 @@ export default function AhmedUsersManagerPanel() {
       const current = getCurrentAhmedUserId();
       const found = list.find((user) => String(user.id) === String(current));
       if (found) setSelectedId(String(found.id));
-      if (!current && list[0]?.id) choose(list[0].id);
       setMessage('');
     } catch (error) {
       setMessage(error.message || 'تعذر تحميل المستخدمين');
@@ -85,6 +90,13 @@ export default function AhmedUsersManagerPanel() {
       </View>
 
       <View style={{ padding: 14, alignItems: 'flex-end' }}>
+        <View style={{ width: '100%', backgroundColor: selectedId ? '#ecfdf5' : '#fff7ed', borderRadius: 18, borderWidth: 1, borderColor: selectedId ? '#99f6e4' : '#fed7aa', padding: 12, marginBottom: 12, alignItems: 'flex-end' }}>
+          <Text style={{ color: selectedId ? '#0f766e' : '#c2410c', fontWeight: '900', textAlign: 'right' }}>{selectedId ? `الحساب الحالي رقم ${selectedId}` : 'لا يوجد حساب محدد حاليًا'}</Text>
+          <TouchableOpacity onPress={logout} style={{ marginTop: 9, minHeight: 38, borderRadius: 14, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+            <Text style={{ color: '#be123c', fontWeight: '900' }}>خروج</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={{ color: '#0f766e', fontWeight: '900', textAlign: 'right', marginBottom: 8 }}>إضافة مستخدم جديد</Text>
         <TextInput value={name} onChangeText={setName} placeholder="الاسم الظاهر" placeholderTextColor="#94a3b8" style={inputStyle} />
         <TextInput value={username} onChangeText={setUsername} placeholder="اسم الدخول" placeholderTextColor="#94a3b8" autoCapitalize="none" style={[inputStyle, { marginTop: 8 }]} />
