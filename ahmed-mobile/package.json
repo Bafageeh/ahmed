@@ -6,16 +6,20 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "web:export": "expo export --platform web --output-dir dist-web"
   },
   "dependencies": {
+    "@expo/metro-runtime": "latest",
     "@expo/vector-icons": "^15.0.3",
     "expo": "55.0.0",
     "expo-image-manipulator": "~55.0.16",
     "expo-image-picker": "~55.0.20",
     "expo-status-bar": "latest",
     "react": "19.2.0",
-    "react-native": "0.83.2"
+    "react-dom": "19.2.0",
+    "react-native": "0.83.2",
+    "react-native-web": "latest"
   },
   "private": true
 }
