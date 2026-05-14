@@ -11,23 +11,16 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccounts';
+import { ahmedUserHeaders, getCurrentAhmedUserId } from './ahmedCurrentUser';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
-
-const defaultInvestors = [
-  { code: 'ahmed', name: 'أحمد' },
-  { code: 'sara', name: 'سارة' },
-  { code: 'amal', name: 'آمال' },
-  { code: 'mother', name: 'أمي' },
-  { code: 'father', name: 'الوالد' },
-];
 
 function investorKey(allocation) {
   return String(allocation?.investor_code || allocation?.investor_name || '').trim();
 }
 
 function buildInvestors(items) {
-  const map = new Map(defaultInvestors.map((investor) => [investor.code, investor]));
+  const map = new Map();
 
   items.forEach((item) => {
     (item.allocations || []).forEach((allocation) => {
@@ -45,6 +38,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [backRequestVersion, setBackRequestVersion] = useState(0);
+  const [loadedUserId, setLoadedUserId] = useState(getCurrentAhmedUserId());
 
   const investors = useMemo(() => buildInvestors(items), [items]);
 
@@ -52,12 +46,13 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
     setLoading(true);
     setMessage('');
     try {
-      const response = await fetch(`${API_URL}/ta3meed/investments`, { headers: { Accept: 'application/json' } });
+      const response = await fetch(`${API_URL}/ta3meed/investments`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'تعذر تحميل المستثمرين');
       setItems(Array.isArray(json.data) ? json.data : []);
+      setLoadedUserId(getCurrentAhmedUserId());
     } catch (error) {
-      setMessage(error.message || 'تعذر تحميل المستثمرين، ستظهر الحسابات الأساسية فقط.');
+      setMessage(error.message || 'تعذر تحميل المستثمرين.');
     } finally {
       setLoading(false);
     }
@@ -66,6 +61,10 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (loadedUserId !== getCurrentAhmedUserId()) load();
+  });
 
   const requestBack = () => {
     setBackRequestVersion((value) => value + 1);
@@ -91,7 +90,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
         <View style={screenStyles.heroCard}>
           <Text style={screenStyles.heroKicker}>#S-110 · شاشة مستقلة</Text>
           <Text style={screenStyles.heroTitle}>إدارة أرصدة مستثمري تعميد</Text>
-          <Text style={screenStyles.heroText}>هذه الشاشة منفصلة عن فلتر المستثمرين. اختر المستثمر ثم أضف رصيدًا أو سجل سحبًا أو عدّل واحذف حركات الرصيد.</Text>
+          <Text style={screenStyles.heroText}>كل حساب مستخدم له مستثمروه المستقلون. اختر المستثمر ثم أضف رصيدًا أو سجل سحبًا أو عدّل واحذف حركات الرصيد.</Text>
         </View>
 
         {loading ? <ActivityIndicator color="#0f766e" style={screenStyles.loader} /> : null}
