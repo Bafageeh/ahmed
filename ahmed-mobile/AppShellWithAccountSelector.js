@@ -4,6 +4,27 @@ import AppShell from './AppShell';
 import { getCurrentAhmedUserId, setCurrentAhmedUserId } from './ahmedCurrentUser';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const USER_PATHS = ['/ahmed/users', '/users', '/accounts'];
+
+async function userApi(method = 'GET', payload = null) {
+  let lastMessage = '';
+  for (const path of USER_PATHS) {
+    try {
+      const response = await fetch(`${API_URL}${path}`, {
+        method,
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: payload ? JSON.stringify(payload) : undefined,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (response.ok) return json;
+      lastMessage = json.message || `تعذر الوصول إلى ${path}`;
+      if (response.status !== 404) break;
+    } catch (error) {
+      lastMessage = error.message || 'تعذر الاتصال بالسيرفر';
+    }
+  }
+  throw new Error(lastMessage || 'تعذر تحميل المستخدمين. قد يحتاج السيرفر لتحديث الراوتات.');
+}
 
 export default function AppShellWithAccountSelector() {
   const [open, setOpen] = useState(false);
@@ -25,9 +46,7 @@ export default function AppShellWithAccountSelector() {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch(`${API_URL}/ahmed/users`, { headers: { Accept: 'application/json' } });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.message || 'تعذر تحميل المستخدمين');
+      const json = await userApi('GET');
       const list = Array.isArray(json.data) ? json.data : [];
       setUsers(list);
       const current = getCurrentAhmedUserId();
@@ -52,13 +71,7 @@ export default function AppShellWithAccountSelector() {
     if (!cleanUsername) return setMessage('أدخل اسم الدخول.');
     if (!cleanPassword) return setMessage('أدخل الرقم السري.');
     try {
-      const response = await fetch(`${API_URL}/ahmed/users`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ name: cleanName, username: cleanUsername, password: cleanPassword }),
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.message || 'تعذر إنشاء المستخدم');
+      const json = await userApi('POST', { name: cleanName, username: cleanUsername, password: cleanPassword });
       setName('');
       setUsername('');
       setPassword('');
