@@ -190,12 +190,14 @@ const originalUseMemo = React.useMemo;
 let renderingTa3meed = false;
 let stateHookIndex = 0;
 let currentInvestorFilter = 'all';
+let currentSetPicker = null;
 
 React.useState = function patchedTa3meedUseState(initialState) {
   const hookIndex = stateHookIndex;
   stateHookIndex += 1;
   const stateTuple = originalUseState.call(this, initialState);
   if (renderingTa3meed && hookIndex === 6) currentInvestorFilter = stateTuple[0] || 'all';
+  if (renderingTa3meed && hookIndex === 10) currentSetPicker = stateTuple[1];
   return stateTuple;
 };
 
@@ -255,6 +257,12 @@ export default function Ta3meedNoResetFilterScreen(props) {
     setMessage('');
     setModalMode('edit');
     setModalOpen(true);
+  };
+
+  const openInvestorPickerFromLegacyButton = () => {
+    if (typeof currentSetPicker === 'function') {
+      currentSetPicker('investor');
+    }
   };
 
   const saveOpportunity = async () => {
@@ -338,9 +346,10 @@ export default function Ta3meedNoResetFilterScreen(props) {
 
   renderingTa3meed = true;
   stateHookIndex = 0;
+  currentSetPicker = null;
   let screen;
   try {
-    screen = <Ta3meedCompactFiltersScreen key={screenKey} {...props} />;
+    screen = <Ta3meedCompactFiltersScreen key={screenKey} {...props} onOpenMore={openInvestorPickerFromLegacyButton} />;
   } finally {
     renderingTa3meed = false;
     React.createElement = originalCreateElement;
