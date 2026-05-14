@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AhmedUserController extends Controller
@@ -14,7 +15,7 @@ class AhmedUserController extends Controller
     {
         return response()->json([
             'data' => DB::table('users')
-                ->select(['id', 'name', 'email', 'created_at', 'updated_at'])
+                ->select($this->userSelect())
                 ->orderBy('id')
                 ->get(),
         ]);
@@ -24,31 +25,45 @@ class AhmedUserController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['nullable', 'email', 'max:190'],
+            'username' => ['required', 'string', 'max:80'],
+            'password' => ['required', 'string', 'min:4', 'max:100'],
         ]);
 
-        $email = strtolower(trim($data['email'] ?? ''));
-        if ($email === '') {
-            $email = 'user-' . time() . '-' . Str::lower(Str::random(6)) . '@ahmed.local';
+        $username = trim($data['username']);
+        if (Schema::hasColumn('users', 'username') && DB::table('users')->where('username', $username)->exists()) {
+            return response()->json(['message' => 'اسم المستخدم مستخدم سابقًا'], 422);
         }
 
-        if (DB::table('users')->where('email', $email)->exists()) {
-            return response()->json(['message' => 'هذا البريد مستخدم سابقًا'], 422);
-        }
+        $email = 'user-' . time() . '-' . Str::lower(Str::random(8)) . '@ahmed.local';
 
-        $id = DB::table('users')->insertGetId([
+        $insert = [
             'name' => trim($data['name']),
             'email' => $email,
-            'password' => Hash::make(Str::random(32)),
+            'password' => Hash::make($data['password']),
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('users', 'username')) {
+            $insert['username'] = $username;
+        }
+
+        $id = DB::table('users')->insertGetId($insert);
 
         return response()->json([
             'data' => DB::table('users')
-                ->select(['id', 'name', 'email', 'created_at', 'updated_at'])
+                ->select($this->userSelect())
                 ->where('id', $id)
                 ->first(),
         ], 201);
+    }
+
+    private function userSelect(): array
+    {
+        $fields = ['id', 'name', 'created_at', 'updated_at'];
+        if (Schema::hasColumn('users', 'username')) {
+            $fields[] = 'username';
+        }
+        return $fields;
     }
 }
