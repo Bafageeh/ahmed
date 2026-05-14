@@ -9,7 +9,8 @@ export default function AppShellWithAccountSelector() {
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [selectedId, setSelectedId] = useState(getCurrentAhmedUserId() || '');
   const [label, setLabel] = useState(getCurrentAhmedUserId() ? `حساب ${getCurrentAhmedUserId()}` : 'الحساب الأساسي');
   const [message, setMessage] = useState('');
@@ -45,22 +46,22 @@ export default function AppShellWithAccountSelector() {
 
   const addUser = async () => {
     const cleanName = String(name || '').trim();
-    const cleanEmail = String(email || '').trim();
-    if (!cleanName) {
-      setMessage('أدخل اسم المستخدم الجديد.');
-      return;
-    }
+    const cleanUsername = String(username || '').trim();
+    const cleanPassword = String(password || '').trim();
+    if (!cleanName) return setMessage('أدخل اسم المستخدم الظاهر.');
+    if (!cleanUsername) return setMessage('أدخل اسم الدخول.');
+    if (!cleanPassword) return setMessage('أدخل الرقم السري.');
     try {
-      const payload = cleanEmail ? { name: cleanName, email: cleanEmail } : { name: cleanName };
       const response = await fetch(`${API_URL}/ahmed/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ name: cleanName, username: cleanUsername, password: cleanPassword }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'تعذر إنشاء المستخدم');
       setName('');
-      setEmail('');
+      setUsername('');
+      setPassword('');
       if (json.data?.id) choose(json.data.id, json.data.name);
       await loadUsers();
       setMessage('تم إنشاء المستخدم واختياره.');
@@ -78,16 +79,17 @@ export default function AppShellWithAccountSelector() {
       <AppShell />
       <View pointerEvents="box-none" style={{ position: 'absolute', top: 42, left: 14, right: 14, alignItems: 'flex-start' }}>
         {open ? (
-          <View style={{ width: 310, maxHeight: 520, backgroundColor: '#ffffff', borderRadius: 24, padding: 14, borderWidth: 1, borderColor: '#dbe3ea', shadowColor: '#0f172a', shadowOpacity: 0.12, shadowRadius: 14 }}>
+          <View style={{ width: 310, maxHeight: 540, backgroundColor: '#ffffff', borderRadius: 24, padding: 14, borderWidth: 1, borderColor: '#dbe3ea', shadowColor: '#0f172a', shadowOpacity: 0.12, shadowRadius: 14 }}>
             <View style={{ flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
               <Text style={{ color: '#0f172a', fontWeight: '900', textAlign: 'right', fontSize: 16 }}>إدارة المستخدمين</Text>
               <TouchableOpacity onPress={() => setOpen(false)} style={{ minWidth: 64, minHeight: 34, borderRadius: 14, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#475569', fontWeight: '900' }}>إغلاق</Text></TouchableOpacity>
             </View>
-            <Text style={{ color: '#64748b', fontWeight: '800', textAlign: 'right', lineHeight: 20 }}>كل مستخدم مستقل تمامًا وله مستثمرو تعميد وبياناته الخاصة.</Text>
+            <Text style={{ color: '#64748b', fontWeight: '800', textAlign: 'right', lineHeight: 20 }}>كل مستخدم مستقل تمامًا وله اسم دخول ورقم سري وبياناته الخاصة.</Text>
             <View style={{ marginTop: 12, backgroundColor: '#f8fafc', borderRadius: 18, padding: 10, borderWidth: 1, borderColor: '#e2e8f0' }}>
               <Text style={{ color: '#0f766e', fontWeight: '900', textAlign: 'right', marginBottom: 8 }}>إضافة مستخدم جديد</Text>
-              <TextInput value={name} onChangeText={setName} placeholder="اسم المستخدم" placeholderTextColor="#94a3b8" style={{ minHeight: 42, borderRadius: 14, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, textAlign: 'right', color: '#0f172a', fontWeight: '800' }} />
-              <TextInput value={email} onChangeText={setEmail} placeholder="البريد اختياري" placeholderTextColor="#94a3b8" autoCapitalize="none" keyboardType="email-address" style={{ marginTop: 8, minHeight: 42, borderRadius: 14, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, textAlign: 'right', color: '#0f172a', fontWeight: '800' }} />
+              <TextInput value={name} onChangeText={setName} placeholder="الاسم الظاهر" placeholderTextColor="#94a3b8" style={{ minHeight: 42, borderRadius: 14, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, textAlign: 'right', color: '#0f172a', fontWeight: '800' }} />
+              <TextInput value={username} onChangeText={setUsername} placeholder="اسم الدخول" placeholderTextColor="#94a3b8" autoCapitalize="none" style={{ marginTop: 8, minHeight: 42, borderRadius: 14, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, textAlign: 'right', color: '#0f172a', fontWeight: '800' }} />
+              <TextInput value={password} onChangeText={setPassword} placeholder="الرقم السري" placeholderTextColor="#94a3b8" secureTextEntry style={{ marginTop: 8, minHeight: 42, borderRadius: 14, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 10, textAlign: 'right', color: '#0f172a', fontWeight: '800' }} />
               <TouchableOpacity onPress={addUser} style={{ marginTop: 9, minHeight: 40, borderRadius: 14, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#ffffff', fontWeight: '900' }}>إنشاء المستخدم</Text></TouchableOpacity>
             </View>
             <Text style={{ color: '#0f172a', fontWeight: '900', textAlign: 'right', marginTop: 12, marginBottom: 8 }}>المستخدمون</Text>
@@ -97,6 +99,7 @@ export default function AppShellWithAccountSelector() {
                 return (
                   <TouchableOpacity key={user.id} onPress={() => choose(user.id, user.name)} style={{ marginBottom: 8, padding: 11, borderRadius: 16, backgroundColor: active ? '#ecfdf5' : '#f8fafc', borderWidth: 1, borderColor: active ? '#99f6e4' : '#e2e8f0', alignItems: 'flex-end' }}>
                     <Text style={{ color: active ? '#0f766e' : '#0f172a', fontWeight: '900', textAlign: 'right' }}>{user.name}</Text>
+                    <Text style={{ color: '#64748b', fontWeight: '800', textAlign: 'right', marginTop: 3 }}>اسم الدخول: {user.username || '-'}</Text>
                     <Text style={{ color: '#64748b', fontWeight: '800', textAlign: 'right', marginTop: 3 }}>رقم الحساب: {user.id}</Text>
                   </TouchableOpacity>
                 );
