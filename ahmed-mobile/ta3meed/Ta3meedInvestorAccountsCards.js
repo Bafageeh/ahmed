@@ -50,12 +50,6 @@ function isInactive(o) {
   return hasStatus(o, cancelledStatuses) || isEndedOrReceived(o);
 }
 function investorEndedProfitOf(o) {
-  const actual = n(o?.actual_profit_amount);
-  if (actual > 0) return actual;
-  const contribution = n(o?.contribution_profit_amount);
-  if (contribution > 0) return contribution;
-  const expected = n(o?.expected_profit_amount);
-  if (expected > 0) return expected;
   return Math.max(0, n(o?.received_amount) - n(o?.invested_amount));
 }
 function normalizeAccount(raw, investor) {
@@ -133,7 +127,7 @@ function Home({ investor, account, message, setScreen }) {
     ['نصيبه المستلم', n(account?.activeReceived), 'violet'],
     ['رأس المال', capital, 'main'],
     ['ربح متوقع', n(account?.expectedProfit), 'amber'],
-    ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue', 'مجموع ربح حصة المستثمر للفرص المستلمة/المنتهية'],
+    ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
     ['عدد الفرص', n(account?.opportunitiesCount), 'slate', '', false, true],
   ];
   return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map(([title, value, color, note, wide, count]) => <Card key={title} title={title} value={value} color={color} note={note} wide={wide} count={count} />)}</View>{account?.netBalance !== null && account?.netBalance !== undefined ? <Text style={[styles.investorPaymentMeta, { textAlign: 'center', marginTop: 12 }]}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /><Nav title="#S-114 تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={() => setScreen('opportunities')} /></>;
@@ -178,4 +172,4 @@ function ManageEntries({ investor, account, reload }) {
 function TypeButton({ label, active, onPress, danger }) { return <TouchableOpacity style={[styles.investorEntryTypeButton, active && styles.investorEntryTypeButtonActive, active && danger && styles.investorEntryTypeButtonDanger]} onPress={onPress}><Text style={[styles.investorEntryTypeText, active && styles.investorEntryTypeTextActive]}>{label}</Text></TouchableOpacity>; }
 
 function SimpleList({ title, rows }) { return <><Text style={styles.investorScreenTitle}>{title}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((r, i) => <View key={r.id || i} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{money(r.amount || r.received_amount || 0, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>{r.date || r.entry_date || r.receipt_date || '-'}</Text>{r.description || r.notes ? <Text style={styles.investorPaymentMeta}>{r.description || r.notes}</Text> : null}</View>)}</>; }
-function OpportunityList({ investor, rows }) { return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((o, i) => <View key={`${o.opportunity_id || i}-${o.allocation_id || i}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{o.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(o.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(o.received_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(o.remaining_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه المتوقع: {money(o.expected_profit_amount, 2)}</Text></View>)}</>; }
+function OpportunityList({ investor, rows }) { return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((o, i) => <View key={`${o.opportunity_id || i}-${o.allocation_id || i}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{o.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(o.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(o.received_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(o.remaining_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه الفعلي: {money(o.ended_profit_amount ?? Math.max(0, n(o.received_amount) - n(o.invested_amount)), 2)}</Text></View>)}</>; }
