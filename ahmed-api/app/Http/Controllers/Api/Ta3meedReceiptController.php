@@ -118,7 +118,6 @@ class Ta3meedReceiptController extends Controller
         $data = $request->validate([
             'receipt_date' => ['required', 'date'],
             'notes' => ['nullable', 'string'],
-            'preserve_status' => ['nullable', 'string'],
         ]);
 
         if (! Schema::hasTable('ta3meed_receipts')) {
@@ -130,19 +129,7 @@ class Ta3meedReceiptController extends Controller
             return response()->json(['message' => 'Receipt not found'], 404);
         }
 
-        $investmentBefore = DB::table('investment_opportunities')
-            ->where('id', (int) $receipt->opportunity_id)
-            ->first();
-
-        $preservedStatus = $data['preserve_status'] ?? ($investmentBefore->status ?? null);
-        $preservedAllocationStatuses = collect();
-        if (Schema::hasTable('investment_opportunity_allocations')) {
-            $preservedAllocationStatuses = DB::table('investment_opportunity_allocations')
-                ->where('opportunity_id', (int) $receipt->opportunity_id)
-                ->pluck('status', 'id');
-        }
-
-        DB::transaction(function () use ($receipt, $data, $preservedStatus, $preservedAllocationStatuses) {
+        DB::transaction(function () use ($receipt, $data) {
             $update = [
                 'receipt_date' => $data['receipt_date'],
                 'updated_at' => now(),
@@ -160,45 +147,39 @@ class Ta3meedReceiptController extends Controller
                     ->update(['updated_at' => now()]);
             }
 
-            // تعديل تاريخ الدفعة فقط لا يغيّر حالة الفرصة أو حالة المستثمرين.
-            // لذلك لا نستدعي recalculate، ونثبت الحالة التي كانت قبل تعديل التاريخ.
-            if ($preservedStatus !== null && Schema::hasTable('investment_opportunities')) {
-                $opportunityUpdate = [
-                    'status' => $preservedStatus,
-                    'updated_at' => now(),
-                ];
+            // تعديل تاريخ الدفعة فقط: لا نحول الفرصة إلى مستلم جزئيًا أو مستلم.
+            // نعتمد أن الفرصة تبقى نشطة لأن العملية ليست عملية سداد جديدة ولا استلام.
+            $opportunityUpdate = [
+                'status' => 'active',
+                'updated_at' => now(),
+            ];
 
-                if (in_array($preservedStatus, ['active', 'partial_received'], true)) {
-                    if (Schema::hasColumn('investment_opportunities', 'completed_at')) {
-                        $opportunityUpdate['completed_at'] = null;
-                    }
-                    if (Schema::hasColumn('investment_opportunities', 'received_at')) {
-                        $opportunityUpdate['received_at'] = null;
-                    }
-                }
-
-                DB::table('investment_opportunities')
-                    ->where('id', (int) $receipt->opportunity_id)
-                    ->update($opportunityUpdate);
+            if (Schema::hasColumn('investment_opportunities', 'completed_at')) {
+                $opportunityUpdate['completed_at'] = null;
+            }
+            if (Schema::hasColumn('investment_opportunities', 'received_at')) {
+                $opportunityUpdate['received_at'] = null;
             }
 
+            DB::table('investment_opportunities')
+                ->where('id', (int) $receipt->opportunity_id)
+                ->update($opportunityUpdate);
+
             if (Schema::hasTable('investment_opportunity_allocations')) {
-                foreach ($preservedAllocationStatuses as $allocationId => $status) {
-                    DB::table('investment_opportunity_allocations')
-                        ->where('id', (int) $allocationId)
-                        ->update([
-                            'status' => $status,
-                            'updated_at' => now(),
-                        ]);
-                }
+                DB::table('investment_opportunity_allocations')
+                    ->where('opportunity_id', (int) $receipt->opportunity_id)
+                    ->update([
+                        'status' => 'active',
+                        'updated_at' => now(),
+                    ]);
             }
         });
 
         return response()->json([
             'data' => [
                 'updated' => true,
-                'status_unchanged' => true,
-                'preserved_status' => $preservedStatus,
+                'date_only' => true,
+                'forced_status' => 'active',
                 'receipt' => DB::table('ta3meed_receipts')->where('id', $id)->first(),
                 'investment' => $this->readInvestment((int) $receipt->opportunity_id),
             ],
