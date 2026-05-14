@@ -8,6 +8,7 @@ RUNTIME_BASE="/home/pmsa/apps"
 API_DIR="$PROJECT_PATH/ahmed-api"
 MOBILE_DIR="$PROJECT_PATH/ahmed-mobile"
 WEB_EXPORT_DIR="$MOBILE_DIR/dist-web"
+WEB_PUBLIC_DIR="$API_DIR/public/webapp"
 LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
 
 log() { echo "[Ahmed Expo Clean Restart] $1"; }
@@ -52,23 +53,39 @@ if [ -d "$API_DIR/public" ]; then
   rm -rf "$WEB_EXPORT_DIR"
 
   set +e
-  npm install --no-save --package-lock=false --legacy-peer-deps react-dom@19.2.0 react-native-web @expo/metro-runtime >/tmp/ahmed-web-deps.log 2>&1
+  npm install --legacy-peer-deps >/tmp/ahmed-web-deps.log 2>&1
   WEB_DEPS_STATUS=$?
-  npx expo export --platform web --output-dir "$WEB_EXPORT_DIR" >/tmp/ahmed-web-export.log 2>&1
+  EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$WEB_EXPORT_DIR" >/tmp/ahmed-web-export.log 2>&1
   WEB_EXPORT_STATUS=$?
   set -e
 
   if [ "$WEB_DEPS_STATUS" -eq 0 ] && [ "$WEB_EXPORT_STATUS" -eq 0 ] && [ -f "$WEB_EXPORT_DIR/index.html" ]; then
     log "Publishing experimental web app to Laravel public/webapp"
-    rm -rf "$API_DIR/public/webapp"
-    mkdir -p "$API_DIR/public/webapp"
-    cp -a "$WEB_EXPORT_DIR/." "$API_DIR/public/webapp/"
-    log "Experimental web app URL: https://$DOMAIN/webapp"
+    rm -rf "$WEB_PUBLIC_DIR"
+    mkdir -p "$WEB_PUBLIC_DIR"
+    cp -a "$WEB_EXPORT_DIR/." "$WEB_PUBLIC_DIR/"
+
+    if [ -f "$WEB_PUBLIC_DIR/index.html" ]; then
+      # Safety fallback for subdirectory hosting if any absolute Expo asset path remains.
+      python3 - <<'PY'
+from pathlib import Path
+p = Path('"$WEB_PUBLIC_DIR"') / 'index.html'
+s = p.read_text(encoding='utf-8')
+s = s.replace('href="/_expo/', 'href="/webapp/_expo/')
+s = s.replace('src="/_expo/', 'src="/webapp/_expo/')
+s = s.replace('href="/assets/', 'href="/webapp/assets/')
+s = s.replace('src="/assets/', 'src="/webapp/assets/')
+p.write_text(s, encoding='utf-8')
+PY
+    fi
+
+    log "Experimental web app URL: https://$DOMAIN/webapp/"
   else
     log "WARNING: Experimental Expo web export failed; mobile app restart will continue."
     log "Web deps log: /tmp/ahmed-web-deps.log"
     log "Web export log: /tmp/ahmed-web-export.log"
-    tail -n 80 /tmp/ahmed-web-export.log || true
+    tail -n 80 /tmp/ahmed-web-deps.log || true
+    tail -n 120 /tmp/ahmed-web-export.log || true
   fi
 else
   log "Skipping experimental web export because $API_DIR/public was not found"
@@ -108,6 +125,6 @@ echo $! > "$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.pid"
 sleep 10
 log "Expo PID: $(cat "$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.pid")"
 log "Expo URL: exp://$DOMAIN:$EXPO_PORT"
-log "Web URL: https://$DOMAIN/webapp"
+log "Web URL: https://$DOMAIN/webapp/"
 log "Log file: $LOG_FILE"
 tail -n 80 "$LOG_FILE" || true
