@@ -11,13 +11,16 @@ class Ta3meedInvestorAccountController extends Controller
 {
     public function show(Request $request, string $code)
     {
+        $userId = $this->userId($request);
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
 
-        $investor = DB::table('investment_investors')
-            ->where('code', $code)
-            ->orWhere('name', $code)
-            ->first();
+        $investorQuery = DB::table('investment_investors')
+            ->where(function ($query) use ($code) {
+                $query->where('code', $code)->orWhere('name', $code);
+            });
+        $this->scopeUser($investorQuery, 'investment_investors', $userId);
+        $investor = $investorQuery->first();
 
         if (! $investor) {
             return response()->json(['message' => 'Investor not found'], 404);
@@ -28,10 +31,13 @@ class Ta3meedInvestorAccountController extends Controller
             return response()->json(['message' => 'Ta3meed platform not found'], 404);
         }
 
-        $opportunities = DB::table('investment_opportunity_allocations')
+        $opportunityQuery = DB::table('investment_opportunity_allocations')
             ->join('investment_opportunities', 'investment_opportunity_allocations.opportunity_id', '=', 'investment_opportunities.id')
             ->where('investment_opportunities.platform_id', $platform->id)
-            ->where('investment_opportunity_allocations.investor_id', $investor->id)
+            ->where('investment_opportunity_allocations.investor_id', $investor->id);
+        $this->scopeUser($opportunityQuery, 'investment_opportunity_allocations', $userId);
+
+        $opportunities = $opportunityQuery
             ->select([
                 'investment_opportunities.id as opportunity_id',
                 'investment_opportunities.reference_number',
@@ -63,17 +69,10 @@ class Ta3meedInvestorAccountController extends Controller
                     ? round(($investedAmount / (float) $row->principal_amount) * 100, 6)
                     : 0;
 
-                $shareRatio = ((float) $row->share_percent) / 100;
-                $opportunityProfitShare = $shareRatio > 0
-                    ? round(((float) $row->opportunity_expected_profit) * $shareRatio, 2)
-                    : 0;
-
-                // Keep profit investor-specific: never expose full opportunity profit as the investor's profit.
-                $row->actual_profit_amount = ((float) $row->actual_profit_amount) !== 0.0
-                    ? round((float) $row->actual_profit_amount, 2)
-                    : $opportunityProfitShare;
-
-                $row->contribution_profit_amount = $opportunityProfitShare;
+                $actualProfit = max(0, $receivedAmount - $investedAmount);
+                $row->actual_profit_amount = round($actualProfit, 2);
+                $row->contribution_profit_amount = round($actualProfit, 2);
+                $row->ended_profit_amount = round($actualProfit, 2);
 
                 $registeredRate = (float) $row->expected_rate;
                 if ($registeredRate <= 0 && $investedAmount > 0 && $expectedProfitAmount > 0) {
@@ -82,17 +81,14 @@ class Ta3meedInvestorAccountController extends Controller
                 $row->registered_profit_rate = round($registeredRate, 6);
 
                 $status = strtolower(trim((string) ($row->opportunity_status ?: $row->allocation_status)));
-                $closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
+                $closedStatuses = ['received', 'completed', 'closed', 'finished', 'ended'];
                 $isEnded = in_array($status, $closedStatuses, true) || ((float) $row->remaining_amount) <= 0;
-                $actualReceivedProfit = max(0, $receivedAmount - $investedAmount);
                 $shouldShowActualRate = $isEnded
                     && $investedAmount > 0
-                    && $actualReceivedProfit > 0
-                    && $expectedTotal > 0
-                    && $receivedAmount < $expectedTotal;
+                    && $actualProfit > 0;
 
-                $row->actual_received_profit_amount = $shouldShowActualRate ? round($actualReceivedProfit, 2) : null;
-                $row->actual_received_profit_rate = $shouldShowActualRate ? round(($actualReceivedProfit / $investedAmount) * 100, 6) : null;
+                $row->actual_received_profit_amount = $shouldShowActualRate ? round($actualProfit, 2) : null;
+                $row->actual_received_profit_rate = $shouldShowActualRate ? round(($actualProfit / $investedAmount) * 100, 6) : null;
                 $row->show_actual_received_profit_rate = $shouldShowActualRate;
 
                 return $row;
@@ -105,6 +101,7 @@ class Ta3meedInvestorAccountController extends Controller
                 ->join('investment_opportunities', 'ta3meed_receipt_allocations.opportunity_id', '=', 'investment_opportunities.id')
                 ->where('ta3meed_receipt_allocations.investor_id', $investor->id)
                 ->where('investment_opportunities.platform_id', $platform->id);
+            $this->scopeUser($receiptQuery, 'ta3meed_receipt_allocations', $userId);
 
             if ($fromDate) {
                 $receiptQuery->whereDate('ta3meed_receipts.receipt_date', '>=', $fromDate);
@@ -134,6 +131,7 @@ class Ta3meedInvestorAccountController extends Controller
         if (Schema::hasTable('ta3meed_investor_account_entries')) {
             $manualQuery = DB::table('ta3meed_investor_account_entries')
                 ->where('investor_id', $investor->id);
+            $this->scopeUser($manualQuery, 'ta3meed_investor_account_entries', $userId);
 
             if ($fromDate) {
                 $manualQuery->whereDate('entry_date', '>=', $fromDate);
@@ -149,6 +147,9 @@ class Ta3meedInvestorAccountController extends Controller
         }
 
         $timeline = $this->timeline($receiptEntries, $manualEntries);
+        $endedProfit = $opportunities
+            ->filter(fn ($row) => in_array(strtolower(trim((string) ($row->opportunity_status ?: $row->allocation_status))), ['received', 'completed', 'closed', 'finished', 'ended'], true) || ((float) $row->remaining_amount) <= 0)
+            ->sum('ended_profit_amount');
 
         $summary = [
             'invested' => round((float) $opportunities->sum('invested_amount'), 2),
@@ -156,6 +157,7 @@ class Ta3meedInvestorAccountController extends Controller
             'expected_total' => round((float) $opportunities->sum('expected_total'), 2),
             'received' => round((float) $opportunities->sum('received_amount'), 2),
             'actual_profit' => round((float) $opportunities->sum('actual_profit_amount'), 2),
+            'ended_profit' => round((float) $endedProfit, 2),
             'remaining' => round((float) $opportunities->sum('remaining_amount'), 2),
             'period_received' => round((float) $receiptEntries->sum('received_amount'), 2),
             'manual_balance' => round((float) $manualEntries->sum('amount'), 2),
@@ -171,7 +173,7 @@ class Ta3meedInvestorAccountController extends Controller
                 'investor' => $investor,
                 'filters' => [
                     'from_date' => $fromDate,
-                    'to_date' => $toDate,
+                    'to_date' => $ToDate ?? $toDate,
                 ],
                 'summary' => $summary,
                 'opportunities' => $opportunities,
@@ -219,5 +221,22 @@ class Ta3meedInvestorAccountController extends Controller
                 return ($entry['date'] ?: '0000-00-00') . '-' . $entry['id'];
             })
             ->values();
+    }
+
+    private function userId(Request $request): int
+    {
+        $id = (int) $request->header('X-Ahmed-User-Id', 0);
+        if ($id > 0 && Schema::hasTable('users') && DB::table('users')->where('id', $id)->exists()) {
+            return $id;
+        }
+
+        return Schema::hasTable('users') ? (int) (DB::table('users')->orderBy('id')->value('id') ?: 1) : 1;
+    }
+
+    private function scopeUser($query, string $table, int $userId): void
+    {
+        if (Schema::hasColumn($table, 'user_id')) {
+            $query->where($table . '.user_id', $userId);
+        }
     }
 }
