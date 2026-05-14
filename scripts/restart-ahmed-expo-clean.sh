@@ -5,7 +5,9 @@ PROJECT_PATH="${AHMED_PROJECT_PATH:-/home/pmsa/apps/ahmed}"
 DOMAIN="${AHMED_DOMAIN:-ahmed.pm.sa}"
 EXPO_PORT="${AHMED_EXPO_PORT:-8082}"
 RUNTIME_BASE="/home/pmsa/apps"
+API_DIR="$PROJECT_PATH/ahmed-api"
 MOBILE_DIR="$PROJECT_PATH/ahmed-mobile"
+WEB_EXPORT_DIR="$MOBILE_DIR/dist-web"
 LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
 
 log() { echo "[Ahmed Expo Clean Restart] $1"; }
@@ -45,6 +47,33 @@ cd "$MOBILE_DIR"
 log "Writing mobile environment"
 echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 
+if [ -d "$API_DIR/public" ]; then
+  log "Building experimental Expo web app from mobile source"
+  rm -rf "$WEB_EXPORT_DIR"
+
+  set +e
+  npm install --no-save --package-lock=false --legacy-peer-deps react-dom@19.2.0 react-native-web @expo/metro-runtime >/tmp/ahmed-web-deps.log 2>&1
+  WEB_DEPS_STATUS=$?
+  npx expo export --platform web --output-dir "$WEB_EXPORT_DIR" >/tmp/ahmed-web-export.log 2>&1
+  WEB_EXPORT_STATUS=$?
+  set -e
+
+  if [ "$WEB_DEPS_STATUS" -eq 0 ] && [ "$WEB_EXPORT_STATUS" -eq 0 ] && [ -f "$WEB_EXPORT_DIR/index.html" ]; then
+    log "Publishing experimental web app to Laravel public/webapp"
+    rm -rf "$API_DIR/public/webapp"
+    mkdir -p "$API_DIR/public/webapp"
+    cp -a "$WEB_EXPORT_DIR/." "$API_DIR/public/webapp/"
+    log "Experimental web app URL: https://$DOMAIN/webapp"
+  else
+    log "WARNING: Experimental Expo web export failed; mobile app restart will continue."
+    log "Web deps log: /tmp/ahmed-web-deps.log"
+    log "Web export log: /tmp/ahmed-web-export.log"
+    tail -n 80 /tmp/ahmed-web-export.log || true
+  fi
+else
+  log "Skipping experimental web export because $API_DIR/public was not found"
+fi
+
 log "Clearing Expo and Metro caches"
 rm -rf .expo .expo-shared node_modules/.cache .metro-cache
 rm -rf "$RUNTIME_BASE/.cache/expo" "$RUNTIME_BASE/.cache/metro" "$RUNTIME_BASE/.cache/react-native"
@@ -79,5 +108,6 @@ echo $! > "$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.pid"
 sleep 10
 log "Expo PID: $(cat "$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.pid")"
 log "Expo URL: exp://$DOMAIN:$EXPO_PORT"
+log "Web URL: https://$DOMAIN/webapp"
 log "Log file: $LOG_FILE"
 tail -n 80 "$LOG_FILE" || true
