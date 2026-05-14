@@ -25,9 +25,10 @@ const platforms = [
   { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'قريبًا.' },
 ];
 
-export default function AppShell() {
+export default function AppShell({ currentUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('wealth');
   const [investmentScreen, setInvestmentScreen] = useState('list');
+  const isAdmin = Boolean(currentUser?.is_admin);
   const openTab = (tab) => { setActiveTab(tab); setInvestmentScreen('list'); };
   const openInvestments = () => { setActiveTab('investments'); setInvestmentScreen('list'); };
   const inFullScreen = (activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen)) || activeTab === 'usersManager';
@@ -35,8 +36,8 @@ export default function AppShell() {
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
-    if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} />;
-    if (activeTab === 'more') return <MoreScreen goTo={openTab} setInvestmentScreen={setInvestmentScreen} setActiveTab={setActiveTab} />;
+    if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
+    if (activeTab === 'more') return <MoreScreen goTo={openTab} setInvestmentScreen={setInvestmentScreen} setActiveTab={setActiveTab} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenMore={() => openTab('more')} />;
       if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => setInvestmentScreen('list')} />;
@@ -64,12 +65,12 @@ function InvestmentsScreen({ openPlatform }) {
 function ReportsScreen({ goTo }) {
   return <ScreenWrap><Header badge="مركز التقارير" title="تقارير أحمد" subtitle="مركز التقارير والاختصارات." icon="reports" /><View style={styles.grid}><Quick title="احصائيات" icon="stats" onPress={() => goTo('stats')} /><Quick title="استثماراتي" icon="investments" onPress={() => goTo('investments')} /><Quick title="ثروتي" icon="wealth" onPress={() => goTo('wealth')} /><Quick title="مزيد" icon="more" onPress={() => goTo('more')} /></View></ScreenWrap>;
 }
-function UsersManagerScreen({ onBack }) {
-  return <ScreenWrap><View style={styles.simpleTopBar}><TouchableOpacity style={styles.simpleBackButton} onPress={onBack}><UiIcon name="back" size={24} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.simpleTopTitle}>إدارة المستخدمين</Text><View style={styles.simpleBackButton} /></View><Header badge="Ahmed" title="إدارة المستخدمين" subtitle="إضافة المستخدمين واختيار الحساب الحالي والخروج." icon="users" /><AhmedUsersManagerPanel /></ScreenWrap>;
+function UsersManagerScreen({ onBack, currentUser }) {
+  return <ScreenWrap><View style={styles.simpleTopBar}><TouchableOpacity style={styles.simpleBackButton} onPress={onBack}><UiIcon name="back" size={24} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.simpleTopTitle}>إدارة المستخدمين</Text><View style={styles.simpleBackButton} /></View><Header badge="Ahmed" title="إدارة المستخدمين" subtitle="هذه الشاشة للمدير فقط، ولا تسمح بتغيير حساب الجلسة أو مشاهدة بيانات مستخدم آخر." icon="users" /><AhmedUsersManagerPanel currentUser={currentUser} /></ScreenWrap>;
 }
-function MoreScreen({ goTo, setInvestmentScreen, setActiveTab }) {
+function MoreScreen({ goTo, setInvestmentScreen, setActiveTab, currentUser, isAdmin, onLogout }) {
   const openInvestment = (screen) => { setActiveTab('investments'); setInvestmentScreen(screen); };
-  return <ScreenWrap><Header badge="Ahmed" title="مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.menu}><MenuRow title="إدارة المستخدمين" text="إضافة مستخدم واختيار الحساب الحالي" icon="users" onPress={() => goTo('usersManager')} /><MenuRow title="احصائيات" text="احصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment('ta3meedImageImport')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment('ta3meedAccounts')} last /></View></ScreenWrap>;
+  return <ScreenWrap><Header badge={currentUser?.name || 'Ahmed'} title="مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.currentUserCard}><Text style={styles.currentUserTitle}>الحساب الحالي</Text><Text style={styles.currentUserText}>{currentUser?.name || '-'}</Text><Text style={styles.currentUserText}>اسم الدخول: {currentUser?.username || '-'}</Text></View><View style={styles.menu}>{isAdmin ? <MenuRow title="إدارة المستخدمين" text="إضافة وتعديل المستخدمين للمدير فقط" icon="users" onPress={() => goTo('usersManager')} /> : null}<MenuRow title="احصائيات" text="احصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment('ta3meedImageImport')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment('ta3meedAccounts')} /><MenuRow title="خروج" text="إقفال الجلسة والعودة لشاشة الدخول" icon="close" onPress={onLogout} last /></View></ScreenWrap>;
 }
 function Quick({ title, icon, onPress }) { return <TouchableOpacity onPress={onPress} style={styles.card}><View style={styles.iconBox}><UiIcon name={icon} size={24} /></View><Text style={styles.cardTitle}>{title}</Text></TouchableOpacity>; }
 function MenuRow({ title, text, icon, onPress, last }) { return <TouchableOpacity onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast]}><View style={styles.menuIcon}><UiIcon name={icon} size={24} /></View><View style={styles.menuTextBlock}><Text style={styles.menuTitle}>{title}</Text><Text style={styles.menuText}>{text}</Text></View><UiIcon name="back" size={22} color={ICON_COLOR_SOFT} /></TouchableOpacity>; }
@@ -88,6 +89,9 @@ const styles = StyleSheet.create({
   headerBadgeText: { color: '#cbd5e1', fontWeight: '900' },
   headerTitle: { marginTop: 16, color: '#fff', fontSize: 34, fontWeight: '900', textAlign: 'right' },
   headerSubtitle: { marginTop: 8, color: '#cbd5e1', lineHeight: 23, textAlign: 'right', fontWeight: '700' },
+  currentUserCard: { marginTop: 14, backgroundColor: '#ecfdf5', borderRadius: 22, borderWidth: 1, borderColor: '#99f6e4', padding: 14, alignItems: 'flex-end' },
+  currentUserTitle: { color: '#0f766e', fontWeight: '900', fontSize: 17, textAlign: 'right' },
+  currentUserText: { marginTop: 4, color: '#0f172a', fontWeight: '800', textAlign: 'right' },
   grid: { marginTop: 16, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
   card: { flexBasis: '47.5%', flexGrow: 1, minHeight: 150, backgroundColor: '#fff', borderRadius: 26, padding: 16, borderWidth: 1, borderColor: '#dbe7e5', alignItems: 'flex-end' },
   disabledCard: { opacity: 0.72, backgroundColor: '#f8fafc' },
