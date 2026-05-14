@@ -30,11 +30,12 @@ export default function AppShell() {
   const [investmentScreen, setInvestmentScreen] = useState('list');
   const openTab = (tab) => { setActiveTab(tab); setInvestmentScreen('list'); };
   const openInvestments = () => { setActiveTab('investments'); setInvestmentScreen('list'); };
-  const inFullScreen = activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen);
+  const inFullScreen = (activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen)) || activeTab === 'usersManager';
 
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
+    if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} setInvestmentScreen={setInvestmentScreen} setActiveTab={setActiveTab} />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenMore={() => openTab('more')} />;
@@ -63,9 +64,12 @@ function InvestmentsScreen({ openPlatform }) {
 function ReportsScreen({ goTo }) {
   return <ScreenWrap><Header badge="مركز التقارير" title="تقارير أحمد" subtitle="مركز التقارير والاختصارات." icon="reports" /><View style={styles.grid}><Quick title="احصائيات" icon="stats" onPress={() => goTo('stats')} /><Quick title="استثماراتي" icon="investments" onPress={() => goTo('investments')} /><Quick title="ثروتي" icon="wealth" onPress={() => goTo('wealth')} /><Quick title="مزيد" icon="more" onPress={() => goTo('more')} /></View></ScreenWrap>;
 }
+function UsersManagerScreen({ onBack }) {
+  return <ScreenWrap><View style={styles.simpleTopBar}><TouchableOpacity style={styles.simpleBackButton} onPress={onBack}><UiIcon name="back" size={24} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.simpleTopTitle}>إدارة المستخدمين</Text><View style={styles.simpleBackButton} /></View><Header badge="Ahmed" title="إدارة المستخدمين" subtitle="إضافة المستخدمين واختيار الحساب الحالي والخروج." icon="users" /><AhmedUsersManagerPanel /></ScreenWrap>;
+}
 function MoreScreen({ goTo, setInvestmentScreen, setActiveTab }) {
   const openInvestment = (screen) => { setActiveTab('investments'); setInvestmentScreen(screen); };
-  return <ScreenWrap><Header badge="Ahmed" title="مزيد" subtitle="إدارة المستخدمين والاختصارات." icon="settings" /><AhmedUsersManagerPanel /><View style={styles.menu}><MenuRow title="احصائيات" text="احصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment('ta3meedImageImport')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment('ta3meedAccounts')} last /></View></ScreenWrap>;
+  return <ScreenWrap><Header badge="Ahmed" title="مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.menu}><MenuRow title="إدارة المستخدمين" text="إضافة مستخدم واختيار الحساب الحالي" icon="users" onPress={() => goTo('usersManager')} /><MenuRow title="احصائيات" text="احصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment('ta3meedImageImport')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment('ta3meedAccounts')} last /></View></ScreenWrap>;
 }
 function Quick({ title, icon, onPress }) { return <TouchableOpacity onPress={onPress} style={styles.card}><View style={styles.iconBox}><UiIcon name={icon} size={24} /></View><Text style={styles.cardTitle}>{title}</Text></TouchableOpacity>; }
 function MenuRow({ title, text, icon, onPress, last }) { return <TouchableOpacity onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast]}><View style={styles.menuIcon}><UiIcon name={icon} size={24} /></View><View style={styles.menuTextBlock}><Text style={styles.menuTitle}>{title}</Text><Text style={styles.menuText}>{text}</Text></View><UiIcon name="back" size={22} color={ICON_COLOR_SOFT} /></TouchableOpacity>; }
@@ -76,6 +80,9 @@ const styles = StyleSheet.create({
   noTabs: { paddingBottom: 0 },
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   page: { padding: 18, paddingBottom: 34 },
+  simpleTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 10 },
+  simpleBackButton: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
+  simpleTopTitle: { color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'center' },
   header: { marginTop: 10, backgroundColor: '#0f172a', borderRadius: 30, padding: 24, borderWidth: 1, borderColor: '#1e293b' },
   headerBadge: { alignSelf: 'flex-start', flexDirection: 'row-reverse', gap: 7, alignItems: 'center', backgroundColor: 'rgba(148,163,184,0.18)', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
   headerBadgeText: { color: '#cbd5e1', fontWeight: '900' },
