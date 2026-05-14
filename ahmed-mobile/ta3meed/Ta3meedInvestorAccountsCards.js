@@ -21,6 +21,8 @@ const colors = {
   slate: ['#f8fafc', '#e2e8f0', '#475569', '#0f172a'],
   red: ['#fff1f2', '#fecdd3', '#be123c', '#881337'],
 };
+const endedOrReceivedStatuses = ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done', 'مستلم', 'مستلمة', 'تم الاستلام', 'منتهي', 'منتهية'];
+const cancelledStatuses = ['cancelled', 'canceled', 'void', 'ملغي', 'ملغية', 'ملغاة'];
 
 function keyOf(v) { return aliases[String(v || '').trim()] || String(v || '').trim(); }
 function buildInvestors(investors) {
@@ -32,17 +34,39 @@ function buildInvestors(investors) {
   });
   return Array.from(map.values());
 }
-function isClosed(o) {
-  const status = String(o?.opportunity_status || o?.allocation_status || '').toLowerCase();
-  return ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'].includes(status) || n(o?.remaining_amount) <= 0;
+function statusValues(o) {
+  return [o?.opportunity_status, o?.allocation_status]
+    .map((status) => String(status || '').trim().toLowerCase())
+    .filter(Boolean);
+}
+function hasStatus(o, statuses) {
+  return statusValues(o).some((status) => statuses.includes(status));
+}
+function isEndedOrReceived(o) {
+  if (hasStatus(o, cancelledStatuses)) return false;
+  return hasStatus(o, endedOrReceivedStatuses) || (n(o?.received_amount) > 0 && n(o?.remaining_amount) <= 0);
+}
+function isInactive(o) {
+  return hasStatus(o, cancelledStatuses) || isEndedOrReceived(o);
+}
+function investorEndedProfitOf(o) {
+  const actual = n(o?.actual_profit_amount);
+  if (actual > 0) return actual;
+  const contribution = n(o?.contribution_profit_amount);
+  if (contribution > 0) return contribution;
+  const expected = n(o?.expected_profit_amount);
+  if (expected > 0) return expected;
+  return Math.max(0, n(o?.received_amount) - n(o?.invested_amount));
 }
 function normalizeAccount(raw, investor) {
   const summary = raw?.summary || {};
   const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
-  const active = opportunities.filter((o) => !isClosed(o));
+  const active = opportunities.filter((o) => !isInactive(o));
   const activeInvested = active.reduce((sum, o) => sum + n(o.invested_amount), 0);
   const activeReceived = active.reduce((sum, o) => sum + n(o.received_amount), 0);
-  const endedProfit = opportunities.filter(isClosed).reduce((sum, o) => sum + (n(o.actual_profit_amount) || n(o.contribution_profit_amount) || n(o.expected_profit_amount) || Math.max(0, n(o.received_amount) - n(o.invested_amount))), 0);
+  const endedProfit = summary.ended_profit !== undefined
+    ? n(summary.ended_profit)
+    : opportunities.filter(isEndedOrReceived).reduce((sum, o) => sum + investorEndedProfitOf(o), 0);
   const entries = Array.isArray(raw?.entries) && raw.entries.length ? raw.entries : (Array.isArray(raw?.manual_entries) ? raw.manual_entries : []);
   return {
     investor,
@@ -109,7 +133,7 @@ function Home({ investor, account, message, setScreen }) {
     ['نصيبه المستلم', n(account?.activeReceived), 'violet'],
     ['رأس المال', capital, 'main'],
     ['ربح متوقع', n(account?.expectedProfit), 'amber'],
-    ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue'],
+    ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue', 'مجموع ربح حصة المستثمر للفرص المستلمة/المنتهية'],
     ['عدد الفرص', n(account?.opportunitiesCount), 'slate', '', false, true],
   ];
   return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map(([title, value, color, note, wide, count]) => <Card key={title} title={title} value={value} color={color} note={note} wide={wide} count={count} />)}</View>{account?.netBalance !== null && account?.netBalance !== undefined ? <Text style={[styles.investorPaymentMeta, { textAlign: 'center', marginTop: 12 }]}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /><Nav title="#S-114 تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={() => setScreen('opportunities')} /></>;
