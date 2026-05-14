@@ -67,9 +67,10 @@ if [ -d "$API_DIR/public" ]; then
 
     if [ -f "$WEB_PUBLIC_DIR/index.html" ]; then
       # Safety fallback for subdirectory hosting if any absolute Expo asset path remains.
-      python3 - <<'PY'
+      WEB_PUBLIC_DIR="$WEB_PUBLIC_DIR" python3 - <<'PY'
+import os
 from pathlib import Path
-p = Path('"$WEB_PUBLIC_DIR"') / 'index.html'
+p = Path(os.environ['WEB_PUBLIC_DIR']) / 'index.html'
 s = p.read_text(encoding='utf-8')
 s = s.replace('href="/_expo/', 'href="/webapp/_expo/')
 s = s.replace('src="/_expo/', 'src="/webapp/_expo/')
