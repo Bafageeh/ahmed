@@ -1,5 +1,5 @@
 import { registerRootComponent } from 'expo';
-import App from './AppShell';
+import App from './AppShellWithAccountSelector';
 import { ahmedUserHeaders } from './ahmedCurrentUser';
 
 const baseFetch = globalThis.fetch;
