@@ -25,6 +25,14 @@ log "Fetching latest main"
 git fetch origin main
 git reset --hard origin/main
 
+if [ -d "$API_DIR" ]; then
+  log "Updating Laravel database and caches"
+  cd "$API_DIR"
+  php artisan optimize:clear || true
+  php artisan migrate --force
+  cd "$PROJECT_PATH"
+fi
+
 log "Applying mobile patches"
 for patch in scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-sort-by-withdrawal-date.py scripts/patch-ta3meed-investor-badges.py scripts/patch-ta3meed-card-direct-investor-badges.py; do
   if [ -f "$patch" ]; then
@@ -49,25 +57,28 @@ log "Writing mobile environment"
 echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 
 if [ -d "$API_DIR/public" ]; then
-  log "Building experimental Expo web app from mobile source"
+  log "Building Expo web app from mobile source"
   rm -rf "$WEB_EXPORT_DIR"
 
-  set +e
-  npm install --legacy-peer-deps >/tmp/ahmed-web-deps.log 2>&1
-  WEB_DEPS_STATUS=$?
-  EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$WEB_EXPORT_DIR" >/tmp/ahmed-web-export.log 2>&1
-  WEB_EXPORT_STATUS=$?
-  set -e
+  npm install --legacy-peer-deps
+  EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$WEB_EXPORT_DIR"
 
-  if [ "$WEB_DEPS_STATUS" -eq 0 ] && [ "$WEB_EXPORT_STATUS" -eq 0 ] && [ -f "$WEB_EXPORT_DIR/index.html" ]; then
-    log "Publishing experimental web app to Laravel public/webapp"
-    rm -rf "$WEB_PUBLIC_DIR"
-    mkdir -p "$WEB_PUBLIC_DIR"
-    cp -a "$WEB_EXPORT_DIR/." "$WEB_PUBLIC_DIR/"
+  if [ ! -f "$WEB_EXPORT_DIR/index.html" ]; then
+    echo "ERROR: Expo web export completed but index.html was not created." >&2
+    exit 1
+  fi
 
-    if [ -f "$WEB_PUBLIC_DIR/index.html" ]; then
-      # Safety fallback for subdirectory hosting if any absolute Expo asset path remains.
-      WEB_PUBLIC_DIR="$WEB_PUBLIC_DIR" python3 - <<'PY'
+  if grep -q "Ahmed Web Test" "$WEB_EXPORT_DIR/index.html"; then
+    echo "ERROR: Expo web export produced the old placeholder page." >&2
+    exit 1
+  fi
+
+  log "Publishing Expo web app to Laravel public/webapp"
+  rm -rf "$WEB_PUBLIC_DIR"
+  mkdir -p "$WEB_PUBLIC_DIR"
+  cp -a "$WEB_EXPORT_DIR/." "$WEB_PUBLIC_DIR/"
+
+  WEB_PUBLIC_DIR="$WEB_PUBLIC_DIR" python3 - <<'PY'
 import os
 from pathlib import Path
 p = Path(os.environ['WEB_PUBLIC_DIR']) / 'index.html'
@@ -78,18 +89,10 @@ s = s.replace('href="/assets/', 'href="/webapp/assets/')
 s = s.replace('src="/assets/', 'src="/webapp/assets/')
 p.write_text(s, encoding='utf-8')
 PY
-    fi
 
-    log "Experimental web app URL: https://$DOMAIN/webapp/"
-  else
-    log "WARNING: Experimental Expo web export failed; mobile app restart will continue."
-    log "Web deps log: /tmp/ahmed-web-deps.log"
-    log "Web export log: /tmp/ahmed-web-export.log"
-    tail -n 80 /tmp/ahmed-web-deps.log || true
-    tail -n 120 /tmp/ahmed-web-export.log || true
-  fi
+  log "Web app URL: https://$DOMAIN/webapp/"
 else
-  log "Skipping experimental web export because $API_DIR/public was not found"
+  log "Skipping web export because $API_DIR/public was not found"
 fi
 
 log "Clearing Expo and Metro caches"
