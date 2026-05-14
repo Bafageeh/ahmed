@@ -129,7 +129,21 @@ class Ta3meedReceiptController extends Controller
             return response()->json(['message' => 'Receipt not found'], 404);
         }
 
-        DB::transaction(function () use ($receipt, $data) {
+        $investmentBefore = DB::table('investment_opportunities')
+            ->where('id', (int) $receipt->opportunity_id)
+            ->first();
+        $previousOpportunityStatus = $investmentBefore->status ?? 'active';
+        $previousCompletedAt = $investmentBefore->completed_at ?? null;
+        $previousReceivedAt = $investmentBefore->received_at ?? null;
+
+        $previousAllocationStatuses = collect();
+        if (Schema::hasTable('investment_opportunity_allocations')) {
+            $previousAllocationStatuses = DB::table('investment_opportunity_allocations')
+                ->where('opportunity_id', (int) $receipt->opportunity_id)
+                ->pluck('status', 'id');
+        }
+
+        DB::transaction(function () use ($receipt, $data, $previousOpportunityStatus, $previousCompletedAt, $previousReceivedAt, $previousAllocationStatuses) {
             $update = [
                 'receipt_date' => $data['receipt_date'],
                 'updated_at' => now(),
@@ -147,18 +161,16 @@ class Ta3meedReceiptController extends Controller
                     ->update(['updated_at' => now()]);
             }
 
-            // تعديل تاريخ الدفعة فقط: لا نحول الفرصة إلى مستلم جزئيًا أو مستلم أو متأخر.
-            // حالة date_only تُعرض في التطبيق كنشط ولا تدخل في منطق التأخير.
             $opportunityUpdate = [
-                'status' => 'date_only',
+                'status' => $previousOpportunityStatus,
                 'updated_at' => now(),
             ];
 
             if (Schema::hasColumn('investment_opportunities', 'completed_at')) {
-                $opportunityUpdate['completed_at'] = null;
+                $opportunityUpdate['completed_at'] = $previousCompletedAt;
             }
             if (Schema::hasColumn('investment_opportunities', 'received_at')) {
-                $opportunityUpdate['received_at'] = null;
+                $opportunityUpdate['received_at'] = $previousReceivedAt;
             }
 
             DB::table('investment_opportunities')
@@ -166,12 +178,14 @@ class Ta3meedReceiptController extends Controller
                 ->update($opportunityUpdate);
 
             if (Schema::hasTable('investment_opportunity_allocations')) {
-                DB::table('investment_opportunity_allocations')
-                    ->where('opportunity_id', (int) $receipt->opportunity_id)
-                    ->update([
-                        'status' => 'date_only',
-                        'updated_at' => now(),
-                    ]);
+                foreach ($previousAllocationStatuses as $allocationId => $status) {
+                    DB::table('investment_opportunity_allocations')
+                        ->where('id', (int) $allocationId)
+                        ->update([
+                            'status' => $status,
+                            'updated_at' => now(),
+                        ]);
+                }
             }
         });
 
@@ -179,7 +193,7 @@ class Ta3meedReceiptController extends Controller
             'data' => [
                 'updated' => true,
                 'date_only' => true,
-                'forced_status' => 'date_only',
+                'restored_status' => $previousOpportunityStatus,
                 'receipt' => DB::table('ta3meed_receipts')->where('id', $id)->first(),
                 'investment' => $this->readInvestment((int) $receipt->opportunity_id),
             ],
