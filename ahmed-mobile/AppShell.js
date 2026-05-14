@@ -19,8 +19,6 @@ const tabs = [
 
 const investmentPlatforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد، التصنيفات، المستثمرين، السداد، والمتأخرات.' },
-  { key: 'ta3meedAccounts', name: 'حسابات المستثمرين', icon: 'users', text: 'شاشة مستقلة لإضافة رصيد المستثمر وتعديل وحذف حركات الرصيد.' },
-  { key: 'ta3meedImageImport', name: 'استيراد صورة تعميد', icon: 'ta3meed', text: 'رفع صورة الفرصة وقراءة بياناتها ثم إضافة أو تحديث الفرصة.' },
   { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون النشطة والمستلمة.' },
   { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'جاهزة لإضافة فرص دينار وحساباتها.' },
   { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'جاهزة لإضافة فرص ترميز ومتابعتها.' },
@@ -52,6 +50,11 @@ export default function AppShell() {
     setInvestmentScreen('ta3meedAccounts');
   };
 
+  const openTa3meedImageImport = () => {
+    setActiveTab('investments');
+    setInvestmentScreen('ta3meedImageImport');
+  };
+
   const inFullScreenInvestment = activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen);
 
   const renderScreen = () => {
@@ -64,7 +67,7 @@ export default function AppShell() {
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
-    if (activeTab === 'more') return <MoreScreen goTo={openTab} openTa3meedInvestors={openTa3meedInvestors} openTa3meedAccounts={openTa3meedAccounts} />;
+    if (activeTab === 'more') return <MoreScreen goTo={openTab} openTa3meedInvestors={openTa3meedInvestors} openTa3meedAccounts={openTa3meedAccounts} openTa3meedImageImport={openTa3meedImageImport} />;
     return <WealthScreen openInvestments={openInvestments} />;
   };
 
@@ -96,8 +99,8 @@ function ReportsScreen({ goTo }) {
   return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}><Header badge="مركز التقارير" title="تقارير أحمد" subtitle="الدائرة الوسطى تفتح مركز التقارير بدون عرض اسم التبويب في الأسفل." icon="reports" /><View style={styles.reportHeroCard}><View style={styles.reportIcon}><UiIcon name="reports" size={31} color="#ffffff" /></View><View style={styles.reportInfo}><Text style={styles.reportTitle}>لوحة التقارير الرئيسية</Text><Text style={styles.reportText}>مركز مخصص للتقارير القادمة، مع اختصارات للشاشات الأساسية.</Text></View></View><View style={styles.quickGrid}><QuickAction title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" onPress={() => goTo('stats')} /><QuickAction title="استثماراتي" text="منصات الاستثمار فقط" icon="investments" onPress={() => goTo('investments')} /><QuickAction title="ثروتي" text="الدخل والمنصات العامة" icon="wealth" onPress={() => goTo('wealth')} /><QuickAction title="مزيد" text="إعدادات وروابط" icon="more" onPress={() => goTo('more')} /></View></ScrollView></SafeAreaView>;
 }
 
-function MoreScreen({ goTo, openTa3meedInvestors, openTa3meedAccounts }) {
-  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}><Header badge="Ahmed" title="مزيد" subtitle="اختصارات ثابتة للوصول السريع إلى الشاشات الرئيسية." icon="settings" /><View style={styles.menuCard}><MenuRow title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="حسابات المستثمرين" text="إضافة رصيد وتعديل وحذف حركات المستثمرين" icon="users" onPress={openTa3meedAccounts} last /></View></ScrollView></SafeAreaView>;
+function MoreScreen({ goTo, openTa3meedInvestors, openTa3meedAccounts, openTa3meedImageImport }) {
+  return <SafeAreaView style={styles.safe}><ScrollView contentContainerStyle={styles.pageContainer} showsVerticalScrollIndicator={false}><Header badge="Ahmed" title="مزيد" subtitle="اختصارات ثابتة للوصول السريع إلى الشاشات الرئيسية." icon="settings" /><View style={styles.menuCard}><MenuRow title="احصائيات" text="احصائيات عامة ولكل منصة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير الرئيسي" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="رفع صورة الفرصة وقراءة بياناتها ثم إضافة أو تحديث الفرصة" icon="ta3meed" onPress={openTa3meedImageImport} /><MenuRow title="حسابات المستثمرين" text="إضافة رصيد وتعديل وحذف حركات المستثمرين" icon="users" onPress={openTa3meedAccounts} last /></View></ScrollView></SafeAreaView>;
 }
 
 function Header({ badge, title, subtitle, icon }) {
