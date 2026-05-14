@@ -120,15 +120,15 @@ function Home({ investor, account, message, setScreen }) {
   const cash = balance - ta3meed;
   const capital = balance + n(account?.endedProfit);
   const cards = [
-    ['مستثمر تعميد', ta3meed, 'main', 'إجمالي المستثمر النشط - نصيبه المستلم', true],
-    ['الرصيد اليدوي', balance, 'blue'],
+    ['مستثمر تعميد', ta3meed, 'main', 'الاستثمار النشط - النصيب المستلم', true],
+    ['الرصيد اليدوي', balance, 'blue', 'مجموع الإضافات - مجموع السحوبات'],
     ['الكاش', cash, cash < 0 ? 'red' : 'amber', 'الرصيد اليدوي - مستثمر تعميد'],
-    ['إجمالي المستثمر', n(account?.activeInvested), 'slate'],
-    ['نصيبه المستلم', n(account?.activeReceived), 'violet'],
-    ['رأس المال', capital, 'main'],
-    ['ربح متوقع', n(account?.expectedProfit), 'amber'],
+    ['إجمالي المستثمر', n(account?.activeInvested), 'slate', 'مجموع مبالغ الفرص النشطة'],
+    ['نصيبه المستلم', n(account?.activeReceived), 'violet', 'مجموع المستلم من الفرص النشطة'],
+    ['رأس المال', capital, 'main', 'الرصيد اليدوي + ربح تعميد المنتهي'],
+    ['ربح متوقع', n(account?.expectedProfit), 'amber', 'مجموع الربح المتوقع لحصة المستثمر'],
     ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
-    ['عدد الفرص', n(account?.opportunitiesCount), 'slate', '', false, true],
+    ['عدد الفرص', n(account?.opportunitiesCount), 'slate', 'عدد فرص المستثمر في تعميد', false, true],
   ];
   return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map(([title, value, color, note, wide, count]) => <Card key={title} title={title} value={value} color={color} note={note} wide={wide} count={count} />)}</View>{account?.netBalance !== null && account?.netBalance !== undefined ? <Text style={[styles.investorPaymentMeta, { textAlign: 'center', marginTop: 12 }]}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /><Nav title="#S-114 تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={() => setScreen('opportunities')} /></>;
 }
