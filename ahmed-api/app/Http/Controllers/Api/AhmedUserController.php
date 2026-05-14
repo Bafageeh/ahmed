@@ -58,6 +58,47 @@ class AhmedUserController extends Controller
         ], 201);
     }
 
+    public function update(Request $request, int $id)
+    {
+        $user = DB::table('users')->where('id', $id)->first();
+        if (! $user) {
+            return response()->json(['message' => 'المستخدم غير موجود'], 404);
+        }
+
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:120'],
+            'username' => ['required', 'string', 'max:80'],
+            'password' => ['nullable', 'string', 'min:4', 'max:100'],
+        ]);
+
+        $username = trim($data['username']);
+        if (Schema::hasColumn('users', 'username') && DB::table('users')->where('username', $username)->where('id', '!=', $id)->exists()) {
+            return response()->json(['message' => 'اسم المستخدم مستخدم سابقًا'], 422);
+        }
+
+        $update = [
+            'name' => trim($data['name']),
+            'updated_at' => now(),
+        ];
+
+        if (Schema::hasColumn('users', 'username')) {
+            $update['username'] = $username;
+        }
+
+        if (! empty($data['password'])) {
+            $update['password'] = Hash::make($data['password']);
+        }
+
+        DB::table('users')->where('id', $id)->update($update);
+
+        return response()->json([
+            'data' => DB::table('users')
+                ->select($this->userSelect())
+                ->where('id', $id)
+                ->first(),
+        ]);
+    }
+
     private function userSelect(): array
     {
         $fields = ['id', 'name', 'created_at', 'updated_at'];
