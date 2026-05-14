@@ -148,12 +148,14 @@ class Ta3meedReceiptController extends Controller
                     ->update(['updated_at' => now()]);
             }
 
-            $this->recalculate((int) $receipt->opportunity_id, false);
+            // تعديل تاريخ الدفعة فقط لا يغير حالة الفرصة أو حالة المستثمرين.
+            // لا نستدعي recalculate هنا حتى لا تتحول الحالة إلى مستلم جزئيًا أو مستلم.
         });
 
         return response()->json([
             'data' => [
                 'updated' => true,
+                'status_unchanged' => true,
                 'receipt' => DB::table('ta3meed_receipts')->where('id', $id)->first(),
                 'investment' => $this->readInvestment((int) $receipt->opportunity_id),
             ],
