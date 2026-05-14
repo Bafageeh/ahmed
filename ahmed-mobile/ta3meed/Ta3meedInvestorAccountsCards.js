@@ -132,7 +132,20 @@ function Home({ investor, account, message, setScreen }) {
   ];
   return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map(([title, value, color, note, wide, count]) => <Card key={title} title={title} value={value} color={color} note={note} wide={wide} count={count} />)}</View>{account?.netBalance !== null && account?.netBalance !== undefined ? <Text style={[styles.investorPaymentMeta, { textAlign: 'center', marginTop: 12 }]}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /><Nav title="#S-114 تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح المتوقع." onPress={() => setScreen('opportunities')} /></>;
 }
-function Card({ title, value, color = 'slate', note, wide, count }) { const c = colors[color] || colors.slate; return <View style={{ flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: wide ? 128 : 108, borderRadius: 24, padding: 15, backgroundColor: c[0], borderWidth: 1, borderColor: c[1], alignItems: 'flex-end', justifyContent: 'center' }}><Text style={{ color: c[2], fontWeight: '900', fontSize: 13, textAlign: 'right' }}>{title}</Text><Text style={{ color: c[3], fontWeight: '900', fontSize: wide ? 27 : 20, marginTop: 7, textAlign: 'right' }}>{count ? value : `${money(value, 2)} ر.س`}</Text>{note ? <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 11, marginTop: 5, textAlign: 'right' }}>{note}</Text> : null}</View>; }
+function Card({ title, value, color = 'slate', note, wide, count }) {
+  const c = colors[color] || colors.slate;
+  return (
+    <View style={{ flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: wide ? 128 : 108, borderRadius: 24, overflow: 'hidden', backgroundColor: c[0], borderWidth: 1, borderColor: c[1] }}>
+      <View style={{ width: '100%', paddingVertical: wide ? 12 : 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: c[1], alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: c[2], fontWeight: '900', fontSize: 13, textAlign: 'center' }}>{title}</Text>
+      </View>
+      <View style={{ flex: 1, width: '100%', paddingHorizontal: 14, paddingVertical: wide ? 16 : 13, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: c[3], fontWeight: '900', fontSize: wide ? 27 : 20, textAlign: 'center', writingDirection: 'rtl' }}>{count ? value : `${money(value, 2)} ر.س`}</Text>
+        {note ? <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 11, marginTop: 7, textAlign: 'center', lineHeight: 17, writingDirection: 'rtl' }}>{note}</Text> : null}
+      </View>
+    </View>
+  );
+}
 function Nav({ title, text, onPress }) { return <TouchableOpacity style={styles.investorAccountButton} onPress={onPress}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={styles.investorAccountButtonText}>{title}</Text><Text style={styles.investorScreenSubtitle}>{text}</Text></View><Text style={styles.investorAccountButtonIcon}>›</Text></TouchableOpacity>; }
 
 function ManageEntries({ investor, account, reload }) {
