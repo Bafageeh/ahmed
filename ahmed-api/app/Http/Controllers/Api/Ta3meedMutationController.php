@@ -11,6 +11,7 @@ class Ta3meedMutationController extends Controller
 {
     public function update(Request $request, int $id)
     {
+        $userId = $this->userId($request);
         $data = $request->validate([
             'code' => ['required', 'string', 'max:100'],
             'total_amount' => ['required', 'numeric', 'min:0'],
@@ -28,52 +29,42 @@ class Ta3meedMutationController extends Controller
         ]);
 
         $platform = $this->platform();
-        if (! $platform) {
-            return response()->json(['message' => 'Ta3meed platform not found'], 404);
-        }
+        if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
-        $investment = DB::table('investment_opportunities')
-            ->where('id', $id)
-            ->where('platform_id', $platform->id)
-            ->first();
-
-        if (! $investment) {
-            return response()->json(['message' => 'Investment not found'], 404);
-        }
+        $investmentQuery = DB::table('investment_opportunities')->where('id', $id)->where('platform_id', $platform->id);
+        $this->scopeUser($investmentQuery, 'investment_opportunities', $userId);
+        $investment = $investmentQuery->first();
+        if (! $investment) return response()->json(['message' => 'Investment not found'], 404);
 
         $totalAmount = round((float) $data['total_amount'], 2);
         $profit = round((float) ($data['profit'] ?? 0), 2);
         $rate = $data['profit_rate'] ?? ($totalAmount > 0 ? round(($profit / $totalAmount) * 100, 4) : null);
         $meta = $this->meta($data, $investment->metadata);
 
-        DB::table('investment_opportunities')
-            ->where('id', $id)
-            ->update([
-                'title' => 'تعميد - ' . $data['code'],
-                'reference_number' => $data['code'],
-                'principal_amount' => $totalAmount,
-                'expected_profit_amount' => $profit,
-                'expected_rate' => $rate,
-                'start_date' => $data['start_date'] ?? null,
-                'maturity_date' => $data['maturity_date'] ?? null,
-                'metadata' => json_encode($meta, JSON_UNESCAPED_UNICODE),
-                'notes' => $data['notes'] ?? null,
-                'updated_at' => now(),
-            ]);
+        DB::table('investment_opportunities')->where('id', $id)->update([
+            'title' => 'تعميد - ' . $data['code'],
+            'reference_number' => $data['code'],
+            'principal_amount' => $totalAmount,
+            'expected_profit_amount' => $profit,
+            'expected_rate' => $rate,
+            'start_date' => $data['start_date'] ?? null,
+            'maturity_date' => $data['maturity_date'] ?? null,
+            'metadata' => json_encode($meta, JSON_UNESCAPED_UNICODE),
+            'notes' => $data['notes'] ?? null,
+            'updated_at' => now(),
+        ]);
 
         if (array_key_exists('allocations', $data)) {
-            DB::table('investment_opportunity_allocations')->where('opportunity_id', $id)->delete();
+            $deleteQuery = DB::table('investment_opportunity_allocations')->where('opportunity_id', $id);
+            $this->scopeUser($deleteQuery, 'investment_opportunity_allocations', $userId);
+            $deleteQuery->delete();
 
             foreach (($data['allocations'] ?? []) as $allocation) {
-                $investorId = $this->investorId($allocation['investor']);
+                $investorId = $this->investorId($allocation['investor'], $userId);
                 $amount = round((float) $allocation['amount'], 2);
-                if ($amount <= 0) {
-                    continue;
-                }
-
+                if ($amount <= 0) continue;
                 $allocationProfit = $totalAmount > 0 ? round($profit * ($amount / $totalAmount), 2) : 0;
-
-                DB::table('investment_opportunity_allocations')->insert([
+                $insert = [
                     'opportunity_id' => $id,
                     'investor_id' => $investorId,
                     'invested_amount' => $amount,
@@ -83,151 +74,105 @@ class Ta3meedMutationController extends Controller
                     'status' => $investment->status,
                     'created_at' => now(),
                     'updated_at' => now(),
-                ]);
+                ];
+                $this->attachUser($insert, 'investment_opportunity_allocations', $userId);
+                DB::table('investment_opportunity_allocations')->insert($insert);
             }
         }
 
-        return response()->json(['data' => $this->readInvestment($id)]);
+        return response()->json(['data' => $this->readInvestment($id, $userId)]);
     }
 
-    public function receive(int $id)
+    public function receive(Request $request, int $id)
     {
+        $userId = $this->userId($request);
         $platform = $this->platform();
-        if (! $platform) {
-            return response()->json(['message' => 'Ta3meed platform not found'], 404);
-        }
+        if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
-        $investment = DB::table('investment_opportunities')
-            ->where('id', $id)
-            ->where('platform_id', $platform->id)
-            ->first();
-
-        if (! $investment) {
-            return response()->json(['message' => 'Investment not found'], 404);
-        }
+        $investmentQuery = DB::table('investment_opportunities')->where('id', $id)->where('platform_id', $platform->id);
+        $this->scopeUser($investmentQuery, 'investment_opportunities', $userId);
+        $investment = $investmentQuery->first();
+        if (! $investment) return response()->json(['message' => 'Investment not found'], 404);
 
         $receivedDate = now()->toDateString();
-        $update = [
-            'status' => 'received',
-            'actual_profit_amount' => $investment->expected_profit_amount,
-            'updated_at' => now(),
-        ];
-        if (Schema::hasColumn('investment_opportunities', 'completed_at')) {
-            $update['completed_at'] = $receivedDate;
-        }
-        if (Schema::hasColumn('investment_opportunities', 'received_at')) {
-            $update['received_at'] = $receivedDate;
-        }
+        $update = ['status' => 'received', 'actual_profit_amount' => $investment->expected_profit_amount, 'updated_at' => now()];
+        if (Schema::hasColumn('investment_opportunities', 'completed_at')) $update['completed_at'] = $receivedDate;
+        if (Schema::hasColumn('investment_opportunities', 'received_at')) $update['received_at'] = $receivedDate;
+        DB::table('investment_opportunities')->where('id', $id)->update($update);
 
-        DB::table('investment_opportunities')
-            ->where('id', $id)
-            ->update($update);
-
-        $allocations = DB::table('investment_opportunity_allocations')
-            ->where('opportunity_id', $id)
-            ->get();
-
-        foreach ($allocations as $allocation) {
-            DB::table('investment_opportunity_allocations')
-                ->where('id', $allocation->id)
-                ->update([
-                    'actual_profit_amount' => $allocation->expected_profit_amount,
-                    'received_amount' => ((float) $allocation->invested_amount) + ((float) $allocation->expected_profit_amount),
-                    'status' => 'received',
-                    'updated_at' => now(),
-                ]);
+        $allocationsQuery = DB::table('investment_opportunity_allocations')->where('opportunity_id', $id);
+        $this->scopeUser($allocationsQuery, 'investment_opportunity_allocations', $userId);
+        foreach ($allocationsQuery->get() as $allocation) {
+            DB::table('investment_opportunity_allocations')->where('id', $allocation->id)->update([
+                'actual_profit_amount' => $allocation->expected_profit_amount,
+                'received_amount' => ((float) $allocation->invested_amount) + ((float) $allocation->expected_profit_amount),
+                'status' => 'received',
+                'updated_at' => now(),
+            ]);
         }
 
-        return response()->json(['data' => $this->readInvestment($id)]);
+        return response()->json(['data' => $this->readInvestment($id, $userId)]);
     }
 
-    public function investorAccount(string $code)
+    public function investorAccount(Request $request, string $code)
     {
-        $investor = $this->investorByCode($code);
-        if (! $investor) {
-            return response()->json(['message' => 'Investor not found'], 404);
-        }
-
-        return response()->json(['data' => $this->readInvestorAccount($investor)]);
+        $userId = $this->userId($request);
+        $investor = $this->investorByCode($code, $userId);
+        if (! $investor) return response()->json(['message' => 'Investor not found'], 404);
+        return response()->json(['data' => $this->readInvestorAccount($investor, $userId)]);
     }
 
     public function storeInvestorAccountEntry(Request $request, string $code)
     {
-        $investor = $this->investorByCode($code);
-        if (! $investor) {
-            return response()->json(['message' => 'Investor not found'], 404);
-        }
-
+        $userId = $this->userId($request);
+        $investor = $this->investorByCode($code, $userId);
+        if (! $investor) return response()->json(['message' => 'Investor not found'], 404);
         $amount = $this->signedEntryAmount($request);
-
-        DB::table('ta3meed_investor_account_entries')->insert([
+        $insert = [
             'investor_id' => $investor->id,
             'amount' => $amount,
             'entry_date' => $request->input('entry_date') ?: now()->toDateString(),
             'notes' => $request->input('notes'),
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
-
-        return response()->json(['data' => $this->readInvestorAccount($investor)], 201);
+        ];
+        $this->attachUser($insert, 'ta3meed_investor_account_entries', $userId);
+        DB::table('ta3meed_investor_account_entries')->insert($insert);
+        return response()->json(['data' => $this->readInvestorAccount($investor, $userId)], 201);
     }
 
     public function updateInvestorAccountEntry(Request $request, string $code, int $entryId)
     {
-        $investor = $this->investorByCode($code);
-        if (! $investor) {
-            return response()->json(['message' => 'Investor not found'], 404);
-        }
-
-        $entry = DB::table('ta3meed_investor_account_entries')
-            ->where('id', $entryId)
-            ->where('investor_id', $investor->id)
-            ->first();
-
-        if (! $entry) {
-            return response()->json(['message' => 'Entry not found'], 404);
-        }
-
-        DB::table('ta3meed_investor_account_entries')
-            ->where('id', $entryId)
-            ->update([
-                'amount' => $this->signedEntryAmount($request),
-                'entry_date' => $request->input('entry_date') ?: now()->toDateString(),
-                'notes' => $request->input('notes'),
-                'updated_at' => now(),
-            ]);
-
-        return response()->json(['data' => $this->readInvestorAccount($investor)]);
+        $userId = $this->userId($request);
+        $investor = $this->investorByCode($code, $userId);
+        if (! $investor) return response()->json(['message' => 'Investor not found'], 404);
+        $entryQuery = DB::table('ta3meed_investor_account_entries')->where('id', $entryId)->where('investor_id', $investor->id);
+        $this->scopeUser($entryQuery, 'ta3meed_investor_account_entries', $userId);
+        if (! $entryQuery->first()) return response()->json(['message' => 'Entry not found'], 404);
+        DB::table('ta3meed_investor_account_entries')->where('id', $entryId)->update([
+            'amount' => $this->signedEntryAmount($request),
+            'entry_date' => $request->input('entry_date') ?: now()->toDateString(),
+            'notes' => $request->input('notes'),
+            'updated_at' => now(),
+        ]);
+        return response()->json(['data' => $this->readInvestorAccount($investor, $userId)]);
     }
 
-    public function deleteInvestorAccountEntry(string $code, int $entryId)
+    public function deleteInvestorAccountEntry(Request $request, string $code, int $entryId)
     {
-        $investor = $this->investorByCode($code);
-        if (! $investor) {
-            return response()->json(['message' => 'Investor not found'], 404);
-        }
-
-        $deleted = DB::table('ta3meed_investor_account_entries')
-            ->where('id', $entryId)
-            ->where('investor_id', $investor->id)
-            ->delete();
-
-        if (! $deleted) {
-            return response()->json(['message' => 'Entry not found'], 404);
-        }
-
-        return response()->json(['data' => $this->readInvestorAccount($investor)]);
+        $userId = $this->userId($request);
+        $investor = $this->investorByCode($code, $userId);
+        if (! $investor) return response()->json(['message' => 'Investor not found'], 404);
+        $deleteQuery = DB::table('ta3meed_investor_account_entries')->where('id', $entryId)->where('investor_id', $investor->id);
+        $this->scopeUser($deleteQuery, 'ta3meed_investor_account_entries', $userId);
+        $deleted = $deleteQuery->delete();
+        if (! $deleted) return response()->json(['message' => 'Entry not found'], 404);
+        return response()->json(['data' => $this->readInvestorAccount($investor, $userId)]);
     }
 
     private function signedEntryAmount(Request $request): float
     {
-        $data = $request->validate([
-            'amount' => ['required', 'numeric', 'min:0.01'],
-            'type' => ['nullable', 'in:deposit,withdrawal'],
-            'entry_date' => ['nullable', 'date'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
+        $data = $request->validate(['amount' => ['required', 'numeric', 'min:0.01'], 'type' => ['nullable', 'in:deposit,withdrawal'], 'entry_date' => ['nullable', 'date'], 'notes' => ['nullable', 'string']]);
         $amount = round((float) $data['amount'], 2);
         return (($data['type'] ?? 'deposit') === 'withdrawal') ? $amount * -1 : $amount;
     }
@@ -242,90 +187,79 @@ class Ta3meedMutationController extends Controller
         $meta = [];
         if ($old) {
             $decoded = json_decode($old, true);
-            if (is_array($decoded)) {
-                $meta = $decoded;
-            }
+            if (is_array($decoded)) $meta = $decoded;
         }
-
         $meta['category'] = $data['category'] ?? ($meta['category'] ?? null);
         $meta['months'] = $data['months'] ?? ($meta['months'] ?? null);
         $meta['withdrawal_date'] = $data['start_date'] ?? ($meta['withdrawal_date'] ?? null);
         $meta['returned_amount'] = $data['returned_amount'] ?? ($meta['returned_amount'] ?? null);
-
         return $meta;
     }
 
-    private function investorId(string $name): int
+    private function investorId(string $name, int $userId): int
     {
-        $codes = [
-            'أحمد' => 'ahmed',
-            'سارة' => 'sara',
-            'أمل' => 'amal',
-            'امال' => 'amal',
-            'أمي' => 'mother',
-            'امي' => 'mother',
-            'الوالد' => 'father',
-        ];
-
-        $code = $codes[$name] ?? strtolower(trim(str_replace(' ', '_', $name)));
-        $id = DB::table('investment_investors')->where('code', $code)->value('id');
-
-        if ($id) {
-            return (int) $id;
-        }
-
-        return DB::table('investment_investors')->insertGetId([
-            'code' => $code,
-            'name' => $name,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $code = strtolower(trim(str_replace(' ', '_', $name)));
+        $query = DB::table('investment_investors')->where('code', $code);
+        $this->scopeUser($query, 'investment_investors', $userId);
+        $id = $query->value('id');
+        if ($id) return (int) $id;
+        $insert = ['code' => $code, 'name' => $name, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()];
+        $this->attachUser($insert, 'investment_investors', $userId);
+        return DB::table('investment_investors')->insertGetId($insert);
     }
 
-    private function investorByCode(string $code)
+    private function investorByCode(string $code, int $userId)
     {
-        return DB::table('investment_investors')
-            ->where('code', $code)
-            ->orWhere('name', $code)
-            ->first();
+        $query = DB::table('investment_investors')->where(function ($q) use ($code) { $q->where('code', $code)->orWhere('name', $code); });
+        $this->scopeUser($query, 'investment_investors', $userId);
+        return $query->first();
     }
 
-    private function readInvestorAccount($investor): array
+    private function readInvestorAccount($investor, int $userId): array
     {
-        $entries = DB::table('ta3meed_investor_account_entries')
-            ->where('investor_id', $investor->id)
-            ->orderByDesc('entry_date')
-            ->orderByDesc('id')
-            ->get();
-
-        return [
-            'investor' => $investor,
-            'balance' => round((float) $entries->sum('amount'), 2),
-            'entries' => $entries,
-        ];
+        $query = DB::table('ta3meed_investor_account_entries')->where('investor_id', $investor->id);
+        $this->scopeUser($query, 'ta3meed_investor_account_entries', $userId);
+        $entries = $query->orderByDesc('entry_date')->orderByDesc('id')->get();
+        return ['investor' => $investor, 'balance' => round((float) $entries->sum('amount'), 2), 'entries' => $entries];
     }
 
-    private function readInvestment(int $id)
+    private function readInvestment(int $id, int $userId)
     {
-        $item = DB::table('investment_opportunities')->where('id', $id)->first();
-
+        $query = DB::table('investment_opportunities')->where('id', $id);
+        $this->scopeUser($query, 'investment_opportunities', $userId);
+        $item = $query->first();
         if ($item) {
-            $item->allocations = DB::table('investment_opportunity_allocations')
+            $allocationQuery = DB::table('investment_opportunity_allocations')
                 ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
-                ->where('investment_opportunity_allocations.opportunity_id', $id)
-                ->select([
-                    'investment_opportunity_allocations.id',
-                    'investment_investors.name as investor_name',
-                    'investment_investors.code as investor_code',
-                    'investment_opportunity_allocations.invested_amount',
-                    'investment_opportunity_allocations.expected_profit_amount',
-                    'investment_opportunity_allocations.received_amount',
-                    'investment_opportunity_allocations.status',
-                ])
-                ->get();
+                ->where('investment_opportunity_allocations.opportunity_id', $id);
+            $this->scopeUser($allocationQuery, 'investment_opportunity_allocations', $userId);
+            $item->allocations = $allocationQuery->select([
+                'investment_opportunity_allocations.id',
+                'investment_investors.name as investor_name',
+                'investment_investors.code as investor_code',
+                'investment_opportunity_allocations.invested_amount',
+                'investment_opportunity_allocations.expected_profit_amount',
+                'investment_opportunity_allocations.received_amount',
+                'investment_opportunity_allocations.status',
+            ])->get();
         }
-
         return $item;
+    }
+
+    private function userId(Request $request): int
+    {
+        $id = (int) $request->header('X-Ahmed-User-Id', 0);
+        if ($id > 0 && Schema::hasTable('users') && DB::table('users')->where('id', $id)->exists()) return $id;
+        return Schema::hasTable('users') ? (int) (DB::table('users')->orderBy('id')->value('id') ?: 1) : 1;
+    }
+
+    private function scopeUser($query, string $table, int $userId): void
+    {
+        if (Schema::hasColumn($table, 'user_id')) $query->where($table . '.user_id', $userId);
+    }
+
+    private function attachUser(array &$data, string $table, int $userId): void
+    {
+        if (Schema::hasColumn($table, 'user_id')) $data['user_id'] = $userId;
     }
 }
