@@ -209,6 +209,21 @@ function realInvestmentDaysOf(item, meta, receipts) {
   return daysBetweenDates(startDate, lastReceiptDate);
 }
 
+
+function withdrawalSortValue(item) {
+  const meta = metaOf(item);
+  const dateText = String(
+    meta.withdrawal_date ||
+    item.withdrawal_date ||
+    item.investment_date ||
+    item.start_date ||
+    item.created_at ||
+    ''
+  ).slice(0, 10);
+  const value = dateText ? new Date(`${dateText}T00:00:00`).getTime() : 0;
+  return Number.isFinite(value) ? value : 0;
+}
+
 function formatRealInvestmentDuration(days) {
   if (!days) return '-';
 
@@ -314,7 +329,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
         ...(item.allocations || []).map((allocation) => allocation.investor_name),
       ].filter(Boolean).join(' ').toLowerCase();
       return text.includes(keyword);
-    });
+    }).sort((a, b) => withdrawalSortValue(b) - withdrawalSortValue(a));
   }, [items, statusFilter, categoryFilter, investorFilter, query]);
 
   const totals = useMemo(() => {
@@ -470,7 +485,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
     setEditingReceiptDate('');
   };
 
-  const saveReceiptDate = async (receipt) => {
+  const saveReceiptDate = async (receipt, ownerItem = null) => {
     const date = String(editingReceiptDate || '').trim();
     if (!date) {
       setMessage('أدخل تاريخ الدفعة أولًا');
@@ -482,13 +497,22 @@ export default function Ta3meedCompactFiltersScreen({ onBack }) {
       await apiJson(`/ta3meed/receipts/${receipt.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ receipt_date: date, notes: receipt.notes || null }),
+        body: JSON.stringify({
+          receipt_date: date,
+          notes: receipt.notes || null,
+        }),
       });
 
-      setMessage('تم تعديل تاريخ الدفعة وإعادة حساب الفرصة');
+      setMessage('تم تعديل تاريخ الدفعة فقط بدون تغيير حالة الفرصة');
+      setItems((currentItems) => currentItems.map((item) => {
+        if (String(item.id) !== String(receipt.opportunity_id)) return item;
+        return {
+          ...item,
+          receipts: (item.receipts || []).map((row) => String(row.id) === String(receipt.id) ? { ...row, receipt_date: date, notes: receipt.notes || null } : row),
+        };
+      }));
       setEditingReceiptId(null);
       setEditingReceiptDate('');
-      await load(true);
     } catch (error) {
       setMessage(error.message || 'تعذر تعديل تاريخ الدفعة');
     } finally {
@@ -728,7 +752,7 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   ) : null;
 
 return <View style={[styles.card, { borderColor: status.color }]}>
-<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View>{ta3meedCardInvestorBadges}<View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
+<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={[styles.cardTitleBlock, styles.cardTitleLeft]}><Text style={[styles.cardCode, styles.cardCodeLeft]}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={[styles.cardMeta, styles.cardMetaLeft]}>يستحق {item.maturity_date || '-'}</Text></View></View>{ta3meedCardInvestorBadges}<View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
           <View style={styles.withdrawalEditBox}>
             {editingWithdrawalId === item.id ? (
               <>
@@ -777,7 +801,7 @@ return <View style={[styles.card, { borderColor: status.color }]}>
             style={{ minWidth: 120, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, textAlign: 'right', color: '#0f172a', fontWeight: '900', fontSize: 12 }}
           />
           <View style={{ flexDirection: 'row-reverse', gap: 6 }}>
-            <TouchableOpacity onPress={() => saveReceiptDate(receipt)} disabled={savingReceiptDateId === receipt.id} style={{ backgroundColor: '#0f766e', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+            <TouchableOpacity onPress={() => saveReceiptDate(receipt, item)} disabled={savingReceiptDateId === receipt.id} style={{ backgroundColor: '#0f766e', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
               <Text style={{ color: '#0f172a', fontWeight: '900', fontSize: 11 }}>{savingReceiptDateId === receipt.id ? '...' : 'حفظ'}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={cancelEditReceiptDate} style={{ backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
@@ -798,6 +822,21 @@ function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, 
 }
 
 const styles = StyleSheet.create({
+
+  cardTitleLeft: {
+    marginRight: 'auto',
+    alignItems: 'flex-start',
+    textAlign: 'left',
+  },
+  cardCodeLeft: {
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  cardMetaLeft: {
+    textAlign: 'left',
+    writingDirection: 'rtl',
+  },
+
 
   investorBadgesBox: {
     marginTop: 10,
