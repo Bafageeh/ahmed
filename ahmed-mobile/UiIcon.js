@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform, Text } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export const ICON_COLOR = '#7c3aed';
@@ -38,7 +39,66 @@ const iconMap = {
   settings: ['Ionicons', 'settings-outline'],
 };
 
+const webIconMap = {
+  add: '+',
+  save: '▣',
+  edit: '✎',
+  delete: '⌫',
+  receive: '✓',
+  complete: '✓',
+  search: '⌕',
+  filter: '≡',
+  refresh: '↻',
+  view: '◉',
+  done: '✓',
+  close: '×',
+  back: '‹',
+  more: '⋮',
+  alert: '!',
+  stats: '▥',
+  reports: '☷',
+  investments: '↗',
+  money: '﷼',
+  wallet: '▤',
+  users: '♙',
+  properties: '▦',
+  contracts: '▤',
+  payments: '▭',
+  wealth: '◇',
+  ta3meed: '▥',
+  moneymoon: '◐',
+  dinar: '$',
+  tokenize: '⬡',
+  settings: '⚙',
+};
+
+function WebIcon({ name, size, color, style }) {
+  const glyph = webIconMap[name] || webIconMap.more;
+  return (
+    <Text
+      selectable={false}
+      style={[
+        {
+          color,
+          fontSize: size,
+          lineHeight: Math.round(size * 1.12),
+          fontWeight: '900',
+          textAlign: 'center',
+          includeFontPadding: false,
+        },
+        style,
+      ]}
+    >
+      {glyph}
+    </Text>
+  );
+}
+
 export default function UiIcon({ name, size = 22, color = ICON_COLOR, style }) {
+  if (Platform.OS === 'web') {
+    return <WebIcon name={name} size={size} color={color} style={style} />;
+  }
+
   const [library, iconName] = iconMap[name] || iconMap.more;
   const IconComponent = library === 'Ionicons' ? Ionicons : MaterialCommunityIcons;
   return <IconComponent name={iconName} size={size} color={color} style={style} />;
