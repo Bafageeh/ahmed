@@ -703,8 +703,32 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   const realInvestmentDays = realInvestmentDaysOf(item, meta, receipts);
   const realInvestmentDuration = formatRealInvestmentDuration(realInvestmentDays);
 
-  return <View style={[styles.card, { borderColor: status.color }]}>
-<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View><View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
+  
+  const ta3meedCardInvestorBadges = (item.allocations || []).length ? (
+    <View style={styles.investorBadgesBox}>
+      <View style={styles.investorBadgesHeader}>
+        <Text style={styles.investorBadgesCount}>{(item.allocations || []).length} مستثمر</Text>
+        <Text style={styles.investorBadgesTitle}>المستثمرين</Text>
+      </View>
+      <View style={styles.investorBadgesWrap}>
+        {(item.allocations || []).map((allocation, index) => {
+          const investorName = allocation.investor_name || allocation.investor_code || 'مستثمر';
+          const invested = n(allocation.invested_amount);
+          const received = n(allocation.received_amount);
+          const remainingShare = Math.max(0, invested - Math.min(invested, received));
+          return (
+            <View key={`ta3meed-investor-badge-${allocation.id || index}`} style={styles.investorBadge}>
+              <Text style={styles.investorBadgeName} numberOfLines={1}>{investorName}</Text>
+              <Text style={styles.investorBadgeAmount}>{money(remainingShare, 0)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  ) : null;
+
+return <View style={[styles.card, { borderColor: status.color }]}>
+<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={styles.cardTitleBlock}><Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text></View></View>{ta3meedCardInvestorBadges}<View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
           <View style={styles.withdrawalEditBox}>
             {editingWithdrawalId === item.id ? (
               <>
@@ -774,6 +798,61 @@ function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, 
 }
 
 const styles = StyleSheet.create({
+
+  investorBadgesBox: {
+    marginTop: 10,
+    marginBottom: 10,
+    padding: 10,
+    borderRadius: 18,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  investorBadgesHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  investorBadgesTitle: {
+    color: '#334155',
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  investorBadgesCount: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  investorBadgesWrap: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  investorBadge: {
+    maxWidth: '100%',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+  },
+  investorBadgeName: {
+    color: '#0f172a',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  investorBadgeAmount: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   header: { paddingHorizontal: 22, paddingTop: 34, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
   headerIcon: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
