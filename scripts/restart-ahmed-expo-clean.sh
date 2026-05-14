@@ -34,10 +34,10 @@ if [ -d "$API_DIR" ]; then
 fi
 
 log "Applying mobile patches"
-for patch in scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-sort-by-withdrawal-date.py scripts/patch-ta3meed-investor-badges.py scripts/patch-ta3meed-card-direct-investor-badges.py; do
+for patch in scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-sort-by-withdrawal-date.py scripts/patch-ta3meed-investor-badges.py scripts/patch-ta3meed-card-direct-investor-badges.py scripts/patch-ta3meed-investor-filter-button.py; do
   if [ -f "$patch" ]; then
     log "Running $patch"
-    python3 "$patch" || true
+    python3 "$patch"
   fi
 done
 
@@ -47,6 +47,10 @@ grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/
   exit 1
 }
 
+grep -n "setPicker('investor')" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
+  echo "ERROR: Ta3meed investor filter button does not open investor picker." >&2
+  exit 1
+}
 grep -n "floatingButtonStyle" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
 grep -n "investor-badge" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
 grep -n "investorBadgesBox" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
