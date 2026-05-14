@@ -147,10 +147,10 @@ class Ta3meedReceiptController extends Controller
                     ->update(['updated_at' => now()]);
             }
 
-            // تعديل تاريخ الدفعة فقط: لا نحول الفرصة إلى مستلم جزئيًا أو مستلم.
-            // نعتمد أن الفرصة تبقى نشطة لأن العملية ليست عملية سداد جديدة ولا استلام.
+            // تعديل تاريخ الدفعة فقط: لا نحول الفرصة إلى مستلم جزئيًا أو مستلم أو متأخر.
+            // حالة date_only تُعرض في التطبيق كنشط ولا تدخل في منطق التأخير.
             $opportunityUpdate = [
-                'status' => 'active',
+                'status' => 'date_only',
                 'updated_at' => now(),
             ];
 
@@ -169,7 +169,7 @@ class Ta3meedReceiptController extends Controller
                 DB::table('investment_opportunity_allocations')
                     ->where('opportunity_id', (int) $receipt->opportunity_id)
                     ->update([
-                        'status' => 'active',
+                        'status' => 'date_only',
                         'updated_at' => now(),
                     ]);
             }
@@ -179,7 +179,7 @@ class Ta3meedReceiptController extends Controller
             'data' => [
                 'updated' => true,
                 'date_only' => true,
-                'forced_status' => 'active',
+                'forced_status' => 'date_only',
                 'receipt' => DB::table('ta3meed_receipts')->where('id', $id)->first(),
                 'investment' => $this->readInvestment((int) $receipt->opportunity_id),
             ],
