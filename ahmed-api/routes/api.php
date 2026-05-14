@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AhmedUserController;
 use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
@@ -32,6 +33,9 @@ Route::post('/data-deletion', function (Request $request) {
         'confirmation_code' => $confirmationCode,
     ]);
 });
+
+Route::get('/ahmed/users', [AhmedUserController::class, 'index']);
+Route::post('/ahmed/users', [AhmedUserController::class, 'store']);
 
 Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index']);
 Route::get('/moneymoon/investments', [MoneyMoonController::class, 'index']);
