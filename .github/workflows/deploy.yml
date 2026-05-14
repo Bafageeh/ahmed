@@ -28,15 +28,33 @@ jobs:
             export AHMED_DOMAIN="ahmed.pm.sa"
             export AHMED_EXPO_PORT="8082"
 
-            if [ -z "$AHMED_PROJECT_PATH" ]; then
-              export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
+            # داخل jailshell لحساب pmsa المسار الصحيح هو /home/pmsa/apps/ahmed.
+            # المسار /mnt/home-storage/... يعمل غالبًا من root فقط وقد يفشل في SSH Action.
+            if [ -z "$AHMED_PROJECT_PATH" ] || [ ! -d "$AHMED_PROJECT_PATH" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then
+                export AHMED_PROJECT_PATH="/home/pmsa/apps/ahmed"
+              elif [ -d "/mnt/home-storage/home/pmsa/apps/ahmed" ]; then
+                export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
+              else
+                echo "ERROR: Ahmed project path not found"
+                echo "Tried: $AHMED_PROJECT_PATH"
+                echo "Tried: /home/pmsa/apps/ahmed"
+                echo "Tried: /mnt/home-storage/home/pmsa/apps/ahmed"
+                exit 1
+              fi
             fi
 
             cd "$AHMED_PROJECT_PATH"
 
+            echo "[Ahmed Deploy] Project path: $AHMED_PROJECT_PATH"
             echo "[Ahmed Deploy] Bootstrap latest files from GitHub"
             git fetch origin main
             git reset --hard origin/main
 
-            chmod +x scripts/deploy-ahmed.sh
-            bash scripts/deploy-ahmed.sh
+            chmod +x scripts/restart-ahmed-expo-clean.sh scripts/deploy-ahmed.sh 2>/dev/null || true
+
+            if [ -f scripts/restart-ahmed-expo-clean.sh ]; then
+              bash scripts/restart-ahmed-expo-clean.sh
+            else
+              bash scripts/deploy-ahmed.sh
+            fi
