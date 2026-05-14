@@ -36,6 +36,10 @@ Route::post('/data-deletion', function (Request $request) {
 
 Route::get('/ahmed/users', [AhmedUserController::class, 'index']);
 Route::post('/ahmed/users', [AhmedUserController::class, 'store']);
+Route::get('/users', [AhmedUserController::class, 'index']);
+Route::post('/users', [AhmedUserController::class, 'store']);
+Route::get('/accounts', [AhmedUserController::class, 'index']);
+Route::post('/accounts', [AhmedUserController::class, 'store']);
 
 Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index']);
 Route::get('/moneymoon/investments', [MoneyMoonTenantController::class, 'index']);
