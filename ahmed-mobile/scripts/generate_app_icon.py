@@ -1,103 +1,27 @@
 from pathlib import Path
-from PIL import Image, ImageDraw, ImageFilter
-import math
+from base64 import b64decode
+from PIL import Image
+import io
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'
 ASSETS.mkdir(parents=True, exist_ok=True)
 
-SIZE = 1024
-BG1 = (30, 16, 78)
-BG2 = (92, 45, 162)
-GOLD = (246, 210, 118)
-GOLD_DARK = (179, 128, 45)
-WHITE_GOLD = (255, 244, 188)
+# Exact Ahmed icon design approved in the branding preview.
+ICON_BASE64 = """
+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
+"""
 
-img = Image.new('RGBA', (SIZE, SIZE), BG1 + (255,))
-p = img.load()
-for y in range(SIZE):
-    for x in range(SIZE):
-        dx = (x - SIZE * 0.78) / SIZE
-        dy = (y - SIZE * 0.18) / SIZE
-        t = max(0, min(1, 1 - math.sqrt(dx * dx + dy * dy) * 1.55))
-        r = int(BG1[0] * (1 - t) + BG2[0] * t)
-        g = int(BG1[1] * (1 - t) + BG2[1] * t)
-        b = int(BG1[2] * (1 - t) + BG2[2] * t)
-        p[x, y] = (r, g, b, 255)
+raw = b64decode("".join(ICON_BASE64.split()))
+base_icon = Image.open(io.BytesIO(raw)).convert('RGBA').resize((1024, 1024), Image.LANCZOS)
 
-# soft inner glow
-layer = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-d = ImageDraw.Draw(layer)
-d.ellipse((120, 115, 970, 960), outline=(255, 255, 255, 30), width=8)
-img = Image.alpha_composite(img, layer.filter(ImageFilter.GaussianBlur(3)))
-
-def draw_gold_line(draw, points, width=48):
-    shadow = [(x + 12, y + 14) for x, y in points]
-    draw.line(shadow, fill=(0, 0, 0, 70), width=width, joint='curve')
-    draw.line(points, fill=GOLD_DARK + (255,), width=width + 10, joint='curve')
-    draw.line(points, fill=GOLD + (255,), width=width, joint='curve')
-    draw.line([(x - 3, y - 4) for x, y in points], fill=WHITE_GOLD + (190,), width=max(8, width // 5), joint='curve')
-
-# gold crescent / protective curve
-arc = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-ad = ImageDraw.Draw(arc)
-ad.arc((110, 135, 900, 900), start=135, end=332, fill=GOLD_DARK + (255,), width=35)
-ad.arc((115, 130, 900, 895), start=135, end=332, fill=GOLD + (255,), width=25)
-ad.arc((135, 142, 890, 870), start=140, end=325, fill=WHITE_GOLD + (120,), width=7)
-img = Image.alpha_composite(img, arc)
-
-d = ImageDraw.Draw(img)
-
-# growth bars
-bar_w = 88
-bars = [265, 365, 470]
-heights = [170, 255, 350]
-for x, h in zip(bars, heights):
-    y0 = 650 - h
-    d.rounded_rectangle((x + 10, y0 + 12, x + bar_w + 10, 665 + 12), radius=14, fill=(0, 0, 0, 70))
-    d.rounded_rectangle((x, y0, x + bar_w, 665), radius=14, fill=GOLD_DARK + (255,))
-    d.rounded_rectangle((x + 7, y0 + 7, x + bar_w - 7, 658), radius=11, fill=GOLD + (255,))
-    d.rectangle((x + 12, y0 + 12, x + bar_w - 22, y0 + 58), fill=WHITE_GOLD + (150,))
-
-# Arabic-style Alef mark
-# main vertical
-x = 590
-d.rounded_rectangle((x + 10, 230 + 13, x + 96 + 10, 675 + 13), radius=38, fill=(0, 0, 0, 65))
-d.rounded_rectangle((x, 230, x + 96, 675), radius=38, fill=GOLD_DARK + (255,))
-d.rounded_rectangle((x + 8, 238, x + 88, 665), radius=32, fill=GOLD + (255,))
-d.rectangle((x + 16, 250, x + 44, 520), fill=WHITE_GOLD + (120,))
-# hamza hint
-d.arc((600, 120, 735, 235), start=35, end=310, fill=WHITE_GOLD + (255,), width=35)
-d.line((665, 190, 715, 205), fill=WHITE_GOLD + (255,), width=24)
-
-# rising arrow
-arrow_points = [(210, 705), (345, 635), (480, 585), (610, 525), (755, 365)]
-draw_gold_line(d, arrow_points, 42)
-d.polygon([(750, 315), (842, 445), (690, 435)], fill=GOLD + (255,))
-d.polygon([(752, 319), (835, 438), (758, 412)], fill=WHITE_GOLD + (110,))
-
-# palm / base curve
-base = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-bd = ImageDraw.Draw(base)
-bd.pieslice((135, 600, 685, 915), start=195, end=350, fill=GOLD + (255,))
-bd.pieslice((190, 600, 710, 830), start=190, end=350, fill=BG1 + (255,))
-bd.pieslice((390, 565, 830, 875), start=20, end=170, fill=GOLD + (255,))
-bd.pieslice((440, 605, 760, 790), start=20, end=170, fill=BG1 + (255,))
-img = Image.alpha_composite(img, base)
-
-# slight vignette
-v = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
-vd = ImageDraw.Draw(v)
-vd.rounded_rectangle((0, 0, SIZE, SIZE), radius=220, outline=(0, 0, 0, 95), width=28)
-img = Image.alpha_composite(img, v.filter(ImageFilter.GaussianBlur(8)))
-
-# Save app icons
 icon_path = ASSETS / 'icon.png'
 adaptive_path = ASSETS / 'adaptive-icon.png'
 splash_path = ASSETS / 'splash-icon.png'
-img.save(icon_path)
-img.save(adaptive_path)
-img.resize((512, 512), Image.LANCZOS).save(splash_path)
+
+base_icon.save(icon_path)
+base_icon.save(adaptive_path)
+base_icon.resize((512, 512), Image.LANCZOS).save(splash_path)
 
 print(f'Generated {icon_path}')
 print(f'Generated {adaptive_path}')
