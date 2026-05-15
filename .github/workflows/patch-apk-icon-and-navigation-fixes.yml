@@ -29,67 +29,7 @@ jobs:
           root = Path('ahmed-mobile')
 
           ui = root / 'UiIcon.js'
-          ui.write_text("""import React from 'react';
-import { Text } from 'react-native';
-
-export const ICON_COLOR = '#7c3aed';
-export const ICON_COLOR_SOFT = '#38bdf8';
-export const ICON_COLOR_DARK = '#312e81';
-
-const iconMap = {
-  add: '+',
-  save: '▣',
-  edit: '✎',
-  delete: '⌫',
-  receive: '✓',
-  complete: '✓',
-  search: '⌕',
-  filter: '≡',
-  refresh: '↻',
-  view: '◉',
-  done: '✓',
-  close: '×',
-  back: '‹',
-  more: '⋮',
-  alert: '!',
-  stats: '▥',
-  reports: '☷',
-  investments: '↗',
-  money: '﷼',
-  wallet: '▤',
-  users: '♙',
-  properties: '▦',
-  contracts: '▤',
-  payments: '▭',
-  wealth: '◇',
-  ta3meed: '▥',
-  moneymoon: '◐',
-  dinar: '$',
-  tokenize: '⬡',
-  settings: '⚙',
-};
-
-export default function UiIcon({ name, size = 22, color = ICON_COLOR, style }) {
-  const glyph = iconMap[name] || iconMap.more;
-  return (
-    <Text
-      selectable={false}
-      style={[
-        {
-          color,
-          fontSize: size,
-          lineHeight: Math.round(size * 1.12),
-          fontWeight: '900',
-          textAlign: 'center',
-          includeFontPadding: false,
-        },
-        style,
-      ]}
-    >
-      {glyph}
-    </Text>
-  );
-}
+          ui.write_text("""export { default, ICON_COLOR, ICON_COLOR_SOFT, ICON_COLOR_DARK } from './UiTextIcon';
 """, encoding='utf-8')
 
           compact = root / 'Ta3meedCompactFiltersScreen.js'
@@ -124,10 +64,11 @@ export default function UiIcon({ name, size = 22, color = ICON_COLOR, style }) {
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ahmed-mobile/UiIcon.js ahmed-mobile/Ta3meedCompactFiltersScreen.js ahmed-mobile/Ta3meedNoResetFilterScreen.js ahmed-mobile/app.json
+          git add ahmed-mobile/UiIcon.js ahmed-mobile/UiTextIcon.js ahmed-mobile/Ta3meedCompactFiltersScreen.js ahmed-mobile/Ta3meedNoResetFilterScreen.js ahmed-mobile/app.json
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
             git commit -m "Fix APK icons and Ta3meed navigation [skip apk patch]"
             git push
           fi
+# trigger patch rerun
