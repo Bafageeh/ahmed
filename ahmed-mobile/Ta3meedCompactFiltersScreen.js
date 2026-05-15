@@ -646,7 +646,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
 
         <View style={styles.compactFiltersCard}>
           <View style={styles.compactFilterGrid}>
-            <CompactFilter label="المستثمر" value={investorLabel} onPress={() => onOpenMore ? onOpenMore() : onBack?.()} />
+            <CompactFilter label="المستثمر" value={investorLabel} onPress={() => setPicker('investor')} />
             <CompactFilter label="التصنيف" value={categoryLabel} onPress={() => setPicker('category')} />
             <CompactFilter label="الحالة" value={statusLabel} onPress={() => setPicker('status')} />
           </View>
@@ -677,7 +677,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
       <TouchableOpacity
         activeOpacity={0.86}
         onPress={() => onOpenMore ? onOpenMore() : onBack?.()}
-        style={styles.investorFloatingButton}
+        style={styles.moreFloatingButton}
       >
         <UiIcon name="more" size={27} color={ICON_COLOR_DARK} />
       </TouchableOpacity>
@@ -865,7 +865,7 @@ function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, 
 
 const styles = StyleSheet.create({
 
-  investorFloatingButton: {
+  moreFloatingButton: {
     position: 'absolute',
     bottom: 24,
     left: 24,
