@@ -1,0 +1,49 @@
+name: Apply Ta3meed button fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/patch-ta3meed-buttons.js"
+      - ".github/workflows/apply-ta3meed-button-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ta3meed button fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run Ta3meed button patch
+        run: node scripts/patch-ta3meed-buttons.js
+
+      - name: Bump APK version
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const p = 'ahmed-mobile/app.json';
+          const app = JSON.parse(fs.readFileSync(p, 'utf8'));
+          app.expo.version = '1.0.9';
+          app.expo.android.versionCode = 10;
+          fs.writeFileSync(p, JSON.stringify(app, null, 2) + '\n');
+          NODE
+
+      - name: Commit patched files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/Ta3meedCompactFiltersScreen.js ahmed-mobile/Ta3meedNoResetFilterScreen.js ahmed-mobile/app.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Fix Ta3meed investor filter and more buttons [skip ta3meed button fix]"
+            git push
+          fi
