@@ -18,9 +18,11 @@
     "expo-local-authentication": "*",
     "expo-secure-store": "*",
     "expo-status-bar": "latest",
+    "lucide-react-native": "^1.16.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-native": "0.83.2",
+    "react-native-svg": "^15.15.5",
     "react-native-web": "latest"
   },
   "private": true
