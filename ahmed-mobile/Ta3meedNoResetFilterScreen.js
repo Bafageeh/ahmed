@@ -127,7 +127,7 @@ export default function Ta3meedNoResetFilterScreen(props) {
   } catch {}
 
   const wrapElement = (type, elementProps, createOriginal, extraArgs = []) => {
-    if (renderingTa3meed && typeof type === 'function' && elementProps?.label === 'المستثمر') {
+    if (false && renderingTa3meed && typeof type === 'function' && elementProps?.label === 'المستثمر') {
       return createOriginal(type, { ...elementProps, onPress: openInvestorPicker }, ...extraArgs);
     }
     if (renderingTa3meed && type === TouchableOpacity && isMoreFloatingButtonStyle(elementProps?.style)) {
