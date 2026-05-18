@@ -9,6 +9,64 @@ const CATEGORIES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
 const today = () => new Date().toISOString().slice(0, 10);
 const n = (value) => Number(value || 0);
 
+function maturityDateText(item) {
+  return String(item?.maturity_date || item?.due_date || '').slice(0, 10);
+}
+
+function maturitySortValue(item) {
+  const dateText = maturityDateText(item);
+  if (!dateText) return null;
+  const value = new Date(`${dateText}T00:00:00`).getTime();
+  return Number.isFinite(value) ? value : null;
+}
+
+function sortTa3meedByMaturity(items) {
+  return [...(items || [])].sort((a, b) => {
+    const aValue = maturitySortValue(a);
+    const bValue = maturitySortValue(b);
+    const aMissing = aValue === null;
+    const bMissing = bValue === null;
+
+    if (aMissing && !bMissing) return -1;
+    if (!aMissing && bMissing) return 1;
+    if (!aMissing && !bMissing && aValue !== bValue) return aValue - bValue;
+
+    return String(a?.reference_number || a?.code || a?.id || '').localeCompare(String(b?.reference_number || b?.code || b?.id || ''), 'ar');
+  });
+}
+
+function patchTa3meedInvestmentFetchSorting() {
+  if (globalThis.__ta3meedMaturitySortFetchPatched || typeof globalThis.fetch !== 'function') return;
+
+  const originalFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+    const requestUrl = String(args?.[0]?.url || args?.[0] || '');
+    const method = String(args?.[1]?.method || args?.[0]?.method || 'GET').toUpperCase();
+    const isTa3meedList = method === 'GET' && requestUrl.includes('/ta3meed/investments');
+
+    if (!isTa3meedList || !response || typeof response.text !== 'function') return response;
+
+    const originalText = response.text.bind(response);
+    response.text = async () => {
+      const text = await originalText();
+      try {
+        const json = text ? JSON.parse(text) : {};
+        if (Array.isArray(json.data)) json.data = sortTa3meedByMaturity(json.data);
+        return JSON.stringify(json);
+      } catch {
+        return text;
+      }
+    };
+
+    return response;
+  };
+
+  globalThis.__ta3meedMaturitySortFetchPatched = true;
+}
+
+patchTa3meedInvestmentFetchSorting();
+
 function containsResetFilterText(node) {
   if (typeof node === 'string') return node.includes(RESET_FILTER_TEXT);
   if (Array.isArray(node)) return node.some(containsResetFilterText);
