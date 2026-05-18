@@ -39,6 +39,9 @@ python3 scripts/fix-ta3meed-screen-normalization.py
 log "Applying Ta3meed edit modal layout patch"
 python3 scripts/patch-ta3meed-edit-modal-layout.py
 
+log "Applying Ta3meed extra fields patch"
+python3 scripts/patch-ta3meed-extra-fields.py
+
 log "Verifying Ta3meed normalized screen"
 if grep -n "resetButtonText" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" | grep -q "hasFilters"; then
   echo "ERROR: Ta3meed reset filter button still exists." >&2
@@ -54,6 +57,22 @@ grep -n "<EditField label=\"تاريخ الاستحقاق\"" "$MOBILE_DIR/Ta3mee
 }
 grep -n "function EditField" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
   echo "ERROR: Ta3meed edit modal labeled fields were not applied." >&2
+  exit 1
+}
+grep -n "<EditField label=\"اسم الشركة\"" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
+  echo "ERROR: Ta3meed company name field is missing." >&2
+  exit 1
+}
+grep -n "<EditField label=\"المهام\"" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
+  echo "ERROR: Ta3meed tasks field is missing." >&2
+  exit 1
+}
+grep -n "<EditField label=\"المنفذ\"" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
+  echo "ERROR: Ta3meed executor field is missing." >&2
+  exit 1
+}
+grep -n "company_name" "$API_DIR/app/Http/Controllers/Api/Ta3meedMutationController.php" >/dev/null || {
+  echo "ERROR: Ta3meed API company_name support is missing." >&2
   exit 1
 }
 
