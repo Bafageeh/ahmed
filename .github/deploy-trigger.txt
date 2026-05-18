@@ -1,1 +1,1 @@
-trigger clean deploy after removing legacy workflow
+trigger enforced ta3meed deploy with reset removal and maturity sorting
