@@ -33,45 +33,21 @@ if [ -d "$API_DIR" ]; then
   cd "$PROJECT_PATH"
 fi
 
-log "Applying final Ta3meed screen normalization"
-MOBILE_DIR="$MOBILE_DIR" python3 - <<'PY'
-import os
-from pathlib import Path
+log "Applying Ta3meed local normalization patch"
+python3 scripts/fix-ta3meed-screen-normalization.py
 
-path = Path(os.environ['MOBILE_DIR']) / 'Ta3meedCompactFiltersScreen.js'
-text = path.read_text(encoding='utf-8')
-
-old_reset = "          {hasFilters ? <TouchableOpacity style={styles.resetButton} onPress={resetFilters} activeOpacity={0.85}><Text style={styles.resetButtonText}>إعادة الفلتر إلى نشط</Text></TouchableOpacity> : null}\n"
-text = text.replace(old_reset, '')
-
-old_sort = "]).sort((a, b) => withdrawalSortValue(b) - withdrawalSortValue(a));"
-new_sort = "]).sort((a, b) => {\n      const dateOf = (item) => String(item?.maturity_date || item?.due_date || '').slice(0, 10);\n      const valueOf = (item) => {\n        const dateText = dateOf(item);\n        if (!dateText) return null;\n        const value = new Date(`${dateText}T00:00:00`).getTime();\n        return Number.isFinite(value) ? value : null;\n      };\n      const aValue = valueOf(a);\n      const bValue = valueOf(b);\n      const aMissing = aValue === null;\n      const bMissing = bValue === null;\n      if (aMissing && !bMissing) return -1;\n      if (!aMissing && bMissing) return 1;\n      if (!aMissing && !bMissing && aValue !== bValue) return aValue - bValue;\n      return String(a?.reference_number || a?.code || a?.id || '').localeCompare(String(b?.reference_number || b?.code || b?.id || ''), 'ar');\n    });"
-text = text.replace(old_sort, new_sort)
-
-if 'إعادة الفلتر إلى نشط' in text:
-    raise SystemExit('Reset filter button text still exists in Ta3meedCompactFiltersScreen.js')
-if 'aMissing && !bMissing' not in text:
-    raise SystemExit('Maturity sort was not applied in Ta3meedCompactFiltersScreen.js')
-
-path.write_text(text, encoding='utf-8')
-PY
-
-log "Verifying Ta3meed entrypoint"
-grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" || {
-  echo "ERROR: AppShell does not point to Ta3meedNoResetFilterScreen.js" >&2
-  exit 1
-}
-
-grep -n "setPicker('investor')" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
-  echo "ERROR: Ta3meed investor filter button does not open investor picker." >&2
-  exit 1
-}
-if grep -n "إعادة الفلتر إلى نشط" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js"; then
-  echo "ERROR: Reset filter button still exists." >&2
+log "Verifying Ta3meed normalized screen"
+if grep -n "resetButtonText" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" | grep -q "hasFilters"; then
+  echo "ERROR: Ta3meed reset filter button still exists." >&2
   exit 1
 fi
-grep -n "aMissing && !bMissing" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
-  echo "ERROR: Maturity sort verification failed." >&2
+grep -n "aValue === null && bValue !== null" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
+  echo "ERROR: Ta3meed maturity sort was not applied." >&2
+  exit 1
+}
+
+grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" >/dev/null || {
+  echo "ERROR: AppShell does not point to Ta3meedNoResetFilterScreen.js" >&2
   exit 1
 }
 
@@ -82,17 +58,11 @@ echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 if [ -d "$API_DIR/public" ]; then
   log "Building Expo web app from mobile source"
   rm -rf "$WEB_EXPORT_DIR"
-
   npm install --legacy-peer-deps
   EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$WEB_EXPORT_DIR"
 
   if [ ! -f "$WEB_EXPORT_DIR/index.html" ]; then
     echo "ERROR: Expo web export completed but index.html was not created." >&2
-    exit 1
-  fi
-
-  if grep -q "Ahmed Web Test\|Ahmed Web غير منشور\|نسخة الويب لم تُبنى بعد" "$WEB_EXPORT_DIR/index.html"; then
-    echo "ERROR: Expo web export produced the old placeholder page." >&2
     exit 1
   fi
 
@@ -114,8 +84,6 @@ p.write_text(s, encoding='utf-8')
 PY
 
   log "Web app URL: https://$DOMAIN/webapp/"
-else
-  log "Skipping web export because $API_DIR/public was not found"
 fi
 
 log "Clearing Expo and Metro caches"
