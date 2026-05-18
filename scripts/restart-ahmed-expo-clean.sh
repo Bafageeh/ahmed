@@ -33,7 +33,28 @@ if [ -d "$API_DIR" ]; then
   cd "$PROJECT_PATH"
 fi
 
-log "Legacy Ta3meed patch scripts are disabled; current screens are used directly from GitHub"
+log "Applying final Ta3meed screen normalization"
+MOBILE_DIR="$MOBILE_DIR" python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ['MOBILE_DIR']) / 'Ta3meedCompactFiltersScreen.js'
+text = path.read_text(encoding='utf-8')
+
+old_reset = "          {hasFilters ? <TouchableOpacity style={styles.resetButton} onPress={resetFilters} activeOpacity={0.85}><Text style={styles.resetButtonText}>إعادة الفلتر إلى نشط</Text></TouchableOpacity> : null}\n"
+text = text.replace(old_reset, '')
+
+old_sort = "]).sort((a, b) => withdrawalSortValue(b) - withdrawalSortValue(a));"
+new_sort = "]).sort((a, b) => {\n      const dateOf = (item) => String(item?.maturity_date || item?.due_date || '').slice(0, 10);\n      const valueOf = (item) => {\n        const dateText = dateOf(item);\n        if (!dateText) return null;\n        const value = new Date(`${dateText}T00:00:00`).getTime();\n        return Number.isFinite(value) ? value : null;\n      };\n      const aValue = valueOf(a);\n      const bValue = valueOf(b);\n      const aMissing = aValue === null;\n      const bMissing = bValue === null;\n      if (aMissing && !bMissing) return -1;\n      if (!aMissing && bMissing) return 1;\n      if (!aMissing && !bMissing && aValue !== bValue) return aValue - bValue;\n      return String(a?.reference_number || a?.code || a?.id || '').localeCompare(String(b?.reference_number || b?.code || b?.id || ''), 'ar');\n    });"
+text = text.replace(old_sort, new_sort)
+
+if 'إعادة الفلتر إلى نشط' in text:
+    raise SystemExit('Reset filter button text still exists in Ta3meedCompactFiltersScreen.js')
+if 'aMissing && !bMissing' not in text:
+    raise SystemExit('Maturity sort was not applied in Ta3meedCompactFiltersScreen.js')
+
+path.write_text(text, encoding='utf-8')
+PY
 
 log "Verifying Ta3meed entrypoint"
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" || {
@@ -45,8 +66,14 @@ grep -n "setPicker('investor')" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || 
   echo "ERROR: Ta3meed investor filter button does not open investor picker." >&2
   exit 1
 }
-grep -n "floatingButtonStyle" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
-grep -n "sortTa3meedByMaturity" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
+if grep -n "إعادة الفلتر إلى نشط" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js"; then
+  echo "ERROR: Reset filter button still exists." >&2
+  exit 1
+fi
+grep -n "aMissing && !bMissing" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
+  echo "ERROR: Maturity sort verification failed." >&2
+  exit 1
+}
 
 cd "$MOBILE_DIR"
 log "Writing mobile environment"
