@@ -1,1 +1,1 @@
-trigger deploy 2026-05-18T17:00:00+03:00
+trigger clean deploy after removing legacy workflow
