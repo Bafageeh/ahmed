@@ -12,20 +12,6 @@ WEB_PUBLIC_DIR="$API_DIR/public/webapp"
 LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
 
 log() { echo "[Ahmed Expo Clean Restart] $1"; }
-run_optional_patch() {
-  local patch="$1"
-  if [ -f "$patch" ]; then
-    log "Running optional $patch"
-    python3 "$patch" || log "Optional patch skipped/failed without blocking deploy: $patch"
-  fi
-}
-run_required_patch() {
-  local patch="$1"
-  if [ -f "$patch" ]; then
-    log "Running required $patch"
-    python3 "$patch"
-  fi
-}
 
 if [ ! -d "$PROJECT_PATH/.git" ]; then
   echo "ERROR: $PROJECT_PATH is not a Git repository." >&2
@@ -47,12 +33,7 @@ if [ -d "$API_DIR" ]; then
   cd "$PROJECT_PATH"
 fi
 
-log "Applying mobile patches"
-run_optional_patch scripts/patch-ta3meed-receipt-date-preserve-status.py
-run_optional_patch scripts/patch-ta3meed-sort-by-withdrawal-date.py
-run_optional_patch scripts/patch-ta3meed-investor-badges.py
-run_optional_patch scripts/patch-ta3meed-card-direct-investor-badges.py
-run_required_patch scripts/patch-ta3meed-investor-filter-button.py
+log "Legacy Ta3meed patch scripts are disabled; current screens are used directly from GitHub"
 
 log "Verifying Ta3meed entrypoint"
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" || {
@@ -64,11 +45,8 @@ grep -n "setPicker('investor')" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || 
   echo "ERROR: Ta3meed investor filter button does not open investor picker." >&2
   exit 1
 }
-grep -n "style={styles.investorFloatingButton}" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
 grep -n "floatingButtonStyle" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
-grep -n "investor-badge" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
-grep -n "investorBadgesBox" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
-grep -n "withdrawalSortValue" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || true
+grep -n "sortTa3meedByMaturity" "$MOBILE_DIR/Ta3meedNoResetFilterScreen.js" || true
 
 cd "$MOBILE_DIR"
 log "Writing mobile environment"
