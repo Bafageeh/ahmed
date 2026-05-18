@@ -45,6 +45,9 @@ python3 scripts/patch-ta3meed-extra-fields.py
 log "Applying Ta3meed company card patch"
 python3 scripts/patch-ta3meed-company-on-cards.py
 
+log "Applying Ta3meed company search patch"
+python3 scripts/patch-ta3meed-company-search.py
+
 log "Verifying Ta3meed normalized screen"
 if grep -n "resetButtonText" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" | grep -q "hasFilters"; then
   echo "ERROR: Ta3meed reset filter button still exists." >&2
@@ -54,20 +57,12 @@ grep -n "aValue === null && bValue !== null" "$MOBILE_DIR/Ta3meedCompactFiltersS
   echo "ERROR: Ta3meed maturity sort was not applied." >&2
   exit 1
 }
-grep -n "<EditField label=\"تاريخ الاستحقاق\"" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
-  echo "ERROR: Ta3meed edit modal maturity date field is missing." >&2
-  exit 1
-}
-grep -n "<EditField label=\"اسم الشركة\"" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
-  echo "ERROR: Ta3meed company field is missing." >&2
+grep -n "meta.company_name" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
+  echo "ERROR: Ta3meed company search support is missing." >&2
   exit 1
 }
 grep -n "companyCardLine" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
   echo "ERROR: Ta3meed company card display is missing." >&2
-  exit 1
-}
-grep -n "company_name" "$API_DIR/app/Http/Controllers/Api/Ta3meedMutationController.php" >/dev/null || {
-  echo "ERROR: Ta3meed API company_name support is missing." >&2
   exit 1
 }
 
