@@ -8,6 +8,7 @@ import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
 import MoneyMoonScreen from './MoneyMoonActiveOnlyScreen';
 import WealthScreen from './WealthScreen';
 import AhmedUsersManagerPanel from './AhmedUsersManagerPanel';
+import SecureVaultScreen from './SecureVaultScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
 
 const tabs = [
@@ -31,12 +32,13 @@ export default function AppShell({ currentUser, onLogout }) {
   const isAdmin = Boolean(currentUser?.is_admin);
   const openTab = (tab) => { setActiveTab(tab); setInvestmentScreen('list'); };
   const openInvestments = () => { setActiveTab('investments'); setInvestmentScreen('list'); };
-  const inFullScreen = (activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen)) || activeTab === 'usersManager';
+  const inFullScreen = (activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen)) || activeTab === 'usersManager' || activeTab === 'secureVault';
 
   const renderScreen = () => {
     if (activeTab === 'stats') return <StatsDashboardScreen />;
     if (activeTab === 'reports') return <ReportsScreen goTo={openTab} />;
     if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
+    if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} setInvestmentScreen={setInvestmentScreen} setActiveTab={setActiveTab} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenMore={() => openTab('more')} />;
@@ -70,7 +72,7 @@ function UsersManagerScreen({ onBack, currentUser }) {
 }
 function MoreScreen({ goTo, setInvestmentScreen, setActiveTab, currentUser, isAdmin, onLogout }) {
   const openInvestment = (screen) => { setActiveTab('investments'); setInvestmentScreen(screen); };
-  return <ScreenWrap><Header badge={currentUser?.name || 'Ahmed'} title="مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.currentUserCard}><Text style={styles.currentUserTitle}>الحساب الحالي</Text><Text style={styles.currentUserText}>{currentUser?.name || '-'}</Text><Text style={styles.currentUserText}>اسم الدخول: {currentUser?.username || '-'}</Text></View><View style={styles.menu}>{isAdmin ? <MenuRow title="إدارة المستخدمين" text="إضافة وتعديل المستخدمين للمدير فقط" icon="users" onPress={() => goTo('usersManager')} /> : null}<MenuRow title="احصائيات" text="احصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment('ta3meedImageImport')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment('ta3meedAccounts')} /><MenuRow title="خروج" text="إقفال الجلسة والعودة لشاشة الدخول" icon="close" onPress={onLogout} last /></View></ScreenWrap>;
+  return <ScreenWrap><Header badge={currentUser?.name || 'Ahmed'} title="مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.currentUserCard}><Text style={styles.currentUserTitle}>الحساب الحالي</Text><Text style={styles.currentUserText}>{currentUser?.name || '-'}</Text><Text style={styles.currentUserText}>اسم الدخول: {currentUser?.username || '-'}</Text></View><View style={styles.menu}>{isAdmin ? <MenuRow title="إدارة المستخدمين" text="إضافة وتعديل المستخدمين للمدير فقط" icon="users" onPress={() => goTo('usersManager')} /> : null}<MenuRow title="الخزنة الآمنة" text="حفظ الحسابات والبطاقات وCVV والبيانات الحساسة" icon="settings" onPress={() => goTo('secureVault')} /><MenuRow title="احصائيات" text="احصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><MenuRow title="تقارير" text="مركز التقارير" icon="reports" onPress={() => goTo('reports')} /><MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment('ta3meedImageImport')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment('ta3meedAccounts')} /><MenuRow title="خروج" text="إقفال الجلسة والعودة لشاشة الدخول" icon="close" onPress={onLogout} last /></View></ScreenWrap>;
 }
 function Quick({ title, icon, onPress }) { return <TouchableOpacity onPress={onPress} style={styles.card}><View style={styles.iconBox}><UiIcon name={icon} size={24} /></View><Text style={styles.cardTitle}>{title}</Text></TouchableOpacity>; }
 function MenuRow({ title, text, icon, onPress, last }) { return <TouchableOpacity onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast]}><View style={styles.menuIcon}><UiIcon name={icon} size={24} /></View><View style={styles.menuTextBlock}><Text style={styles.menuTitle}>{title}</Text><Text style={styles.menuText}>{text}</Text></View><UiIcon name="back" size={22} color={ICON_COLOR_SOFT} /></TouchableOpacity>; }
