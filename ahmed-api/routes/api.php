@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonTenantController;
+use App\Http\Controllers\Api\SecureVaultController;
 use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
 use App\Http\Controllers\Api\Ta3meedImageImportController;
@@ -55,6 +56,12 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::get('/accounts', [AhmedUserController::class, 'index']);
     Route::post('/accounts', [AhmedUserController::class, 'store']);
     Route::put('/accounts/{id}', [AhmedUserController::class, 'update']);
+
+    Route::get('/secure-vault', [SecureVaultController::class, 'index']);
+    Route::post('/secure-vault', [SecureVaultController::class, 'store']);
+    Route::get('/secure-vault/{id}', [SecureVaultController::class, 'show']);
+    Route::put('/secure-vault/{id}', [SecureVaultController::class, 'update']);
+    Route::delete('/secure-vault/{id}', [SecureVaultController::class, 'destroy']);
 
     Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index']);
     Route::get('/moneymoon/investments', [MoneyMoonTenantController::class, 'index']);
