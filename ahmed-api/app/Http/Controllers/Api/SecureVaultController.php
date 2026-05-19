@@ -11,8 +11,7 @@ use Illuminate\Validation\Rule;
 class SecureVaultController extends Controller
 {
     private array $categories = ['banks', 'accounts', 'websites', 'cards', 'subscriptions', 'other'];
-    private array $types = ['login', 'card', 'note', 'subscription'];
-    private array $importance = ['normal', 'important', 'very_sensitive'];
+    private array $types = ['login', 'card', 'subscription'];
 
     public function index(Request $request)
     {
@@ -70,7 +69,6 @@ class SecureVaultController extends Controller
             'owner_group' => $data['owner_group'] ?? null,
             'category' => $data['category'],
             'record_type' => $data['record_type'],
-            'importance' => $data['importance'] ?? 'normal',
             'is_favorite' => (bool) ($data['is_favorite'] ?? false),
             'title' => $data['title'],
             'username' => $data['username'] ?? null,
@@ -112,7 +110,6 @@ class SecureVaultController extends Controller
             'owner_group' => $data['owner_group'] ?? null,
             'category' => $data['category'],
             'record_type' => $data['record_type'],
-            'importance' => $data['importance'] ?? 'normal',
             'is_favorite' => (bool) ($data['is_favorite'] ?? false),
             'title' => $data['title'],
             'username' => $data['username'] ?? null,
@@ -157,7 +154,6 @@ class SecureVaultController extends Controller
             'owner_group' => ['nullable', 'string', 'max:80'],
             'category' => ['required', Rule::in($this->categories)],
             'record_type' => ['required', Rule::in($this->types)],
-            'importance' => ['nullable', Rule::in($this->importance)],
             'is_favorite' => ['nullable', 'boolean'],
             'title' => ['required', 'string', 'max:255'],
             'username' => ['nullable', 'string', 'max:255'],
@@ -207,8 +203,6 @@ class SecureVaultController extends Controller
             'category_label' => $this->categoryLabel($item->category),
             'record_type' => $item->record_type,
             'record_type_label' => $this->typeLabel($item->record_type),
-            'importance' => $item->importance,
-            'importance_label' => $this->importanceLabel($item->importance),
             'is_favorite' => (bool) $item->is_favorite,
             'title' => $item->title,
             'username' => $item->username,
@@ -273,7 +267,6 @@ class SecureVaultController extends Controller
         return [
             'categories' => collect($this->categories)->map(fn ($value) => ['value' => $value, 'label' => $this->categoryLabel($value)])->values()->all(),
             'types' => collect($this->types)->map(fn ($value) => ['value' => $value, 'label' => $this->typeLabel($value)])->values()->all(),
-            'importance' => collect($this->importance)->map(fn ($value) => ['value' => $value, 'label' => $this->importanceLabel($value)])->values()->all(),
         ];
     }
 
@@ -293,18 +286,8 @@ class SecureVaultController extends Controller
     {
         return match ($value) {
             'card' => 'بطاقة',
-            'note' => 'ملاحظة',
             'subscription' => 'اشتراك',
             default => 'دخول',
-        };
-    }
-
-    private function importanceLabel(string $value): string
-    {
-        return match ($value) {
-            'important' => 'مهم',
-            'very_sensitive' => 'حساس جدًا',
-            default => 'عادي',
         };
     }
 }
