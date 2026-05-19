@@ -97,4 +97,4 @@ jobs:
           name: Ahmed-android-apk
           path: ahmed-mobile/build-output/ahmed-release.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 15
