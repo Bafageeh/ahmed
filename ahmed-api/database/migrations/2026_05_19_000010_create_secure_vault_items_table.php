@@ -23,6 +23,9 @@ return new class extends Migration
             $table->string('phone')->nullable();
             $table->string('purpose')->nullable();
             $table->string('tags')->nullable();
+            $table->string('bank_name')->nullable();
+            $table->text('bank_iban_encrypted')->nullable();
+            $table->string('bank_account_short')->nullable();
             $table->string('cardholder_name')->nullable();
             $table->string('card_brand')->nullable();
             $table->text('card_number_encrypted')->nullable();
