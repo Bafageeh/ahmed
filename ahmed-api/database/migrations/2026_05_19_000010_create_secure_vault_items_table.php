@@ -14,7 +14,6 @@ return new class extends Migration
             $table->string('owner_group', 80)->nullable()->index();
             $table->string('category', 40)->default('other')->index();
             $table->string('record_type', 40)->default('login')->index();
-            $table->string('importance', 40)->default('normal')->index();
             $table->boolean('is_favorite')->default(false)->index();
             $table->string('title');
             $table->string('username')->nullable();
