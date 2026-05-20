@@ -18,7 +18,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "icon": "./assets/icon.png"
+      "icon": "./assets/icon.png",
+      "bundleIdentifier": "sa.pm.ahmed",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "sa.pm.ahmed",
@@ -29,7 +33,10 @@
       }
     },
     "extra": {
-      "apiUrl": "https://ahmed.pm.sa/api"
+      "apiUrl": "https://ahmed.pm.sa/api",
+      "eas": {
+        "projectId": "85d588cc-f97a-4907-a248-0e778d83d674"
+      }
     }
   }
 }

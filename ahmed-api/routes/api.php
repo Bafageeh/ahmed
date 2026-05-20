@@ -15,8 +15,11 @@ use App\Http\Controllers\Api\Ta3meedMutationController;
 use App\Http\Controllers\Api\Ta3meedReceiptController;
 use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Http\Request;
+use App\Http\Controllers\Api\MonthlyIncomeController;
 use Illuminate\Support\Facades\Route;
+
 use Illuminate\Support\Str;
+
 
 Route::get('/health', function () {
     return response()->json([
@@ -103,3 +106,8 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
     Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
 });
+
+Route::get('/monthly-incomes', [MonthlyIncomeController::class, 'index']);
+Route::post('/monthly-incomes', [MonthlyIncomeController::class, 'store']);
+Route::put('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'update']);
+Route::delete('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'destroy']);

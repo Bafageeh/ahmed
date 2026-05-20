@@ -25,7 +25,7 @@ const emptyForm = {
 };
 
 export default function SecureVaultScreen({ onBack }) {
-  const [locked, setLocked] = useState(true);
+  const [locked, setLocked] = useState(false);
   const [pinExists, setPinExists] = useState(false);
   const [pin, setPin] = useState('');
   const [newPin, setNewPin] = useState('');
@@ -171,7 +171,7 @@ export default function SecureVaultScreen({ onBack }) {
     <View style={styles.header}><Text style={styles.badge}>🔐 الخزنة</Text><Text style={styles.title}>الخزنة الآمنة</Text><Text style={styles.subtitle}>حسابات بنكية، بطاقات، وبيانات دخول محفوظة بأمان.</Text></View>
     <View style={styles.summaryRow}><View style={styles.summaryCard}><Text style={styles.summaryValue}>{items.length}</Text><Text style={styles.summaryLabel}>إجمالي السجلات</Text></View><View style={styles.summaryCard}><Text style={styles.summaryValue}>{items.filter((i) => i.is_favorite).length}</Text><Text style={styles.summaryLabel}>مفضلة</Text></View></View>
     <View style={styles.actionsRow}><TouchableOpacity style={styles.quickButton} onPress={() => startAdd('subscription')}><Text style={styles.quickText}>+ حسابات</Text></TouchableOpacity><TouchableOpacity style={styles.quickButton} onPress={() => startAdd('card')}><Text style={styles.quickText}>+ بطاقة</Text></TouchableOpacity><TouchableOpacity style={styles.quickButton} onPress={() => startAdd('login')}><Text style={styles.quickText}>+ دخول</Text></TouchableOpacity></View>
-    <TouchableOpacity style={[styles.lockSmallButton, { marginTop: 8, alignSelf: 'flex-end' }]} onPress={() => { setLocked(true); setRevealedId(null); }}><Text style={styles.lockSmallText}>قفل الخزنة</Text></TouchableOpacity>
+
     <TextInput value={search} onChangeText={setSearch} placeholder="بحث داخل الخزنة" style={styles.input} />
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}><Chip label="الكل" active={category === 'all'} onPress={() => setCategory('all')} />{categoryOptions.map((option) => <Chip key={option.value} label={option.label} active={category === option.value} onPress={() => setCategory(option.value)} />)}</ScrollView>
     {formOpen ? <VaultForm form={form} setField={setField} editingId={editingId} saving={saving} message={message} saveItem={saveItem} cancel={() => { setFormOpen(false); setEditingId(null); setForm(emptyForm); }} /> : null}

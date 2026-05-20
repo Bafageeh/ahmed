@@ -4,8 +4,8 @@
   "main": "index.js",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "web:export": "expo export --platform web --output-dir dist-web"
   },
@@ -15,7 +15,7 @@
     "expo": "55.0.0",
     "expo-image-manipulator": "~55.0.16",
     "expo-image-picker": "~55.0.20",
-    "expo-local-authentication": "*",
+    "expo-local-authentication": "~55.0.14",
     "expo-secure-store": "*",
     "expo-status-bar": "latest",
     "lucide-react-native": "^1.16.0",
@@ -25,5 +25,8 @@
     "react-native-svg": "^15.15.5",
     "react-native-web": "latest"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "eas-cli": "^19.0.1"
+  }
 }

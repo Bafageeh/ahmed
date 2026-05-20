@@ -17,6 +17,7 @@ import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const CATEGORIES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
+const INVESTOR_COLORS = ['#0f766e', '#2563eb', '#9333ea', '#ea580c', '#be123c', '#0891b2'];
 const STATUS_FILTERS = [
   ['all', 'الكل'],
   ['active', 'نشط'],
@@ -303,6 +304,9 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
     months: '',
     start_date: today(),
     maturity_date: '',
+    company_name: '',
+    tasks: '',
+    executor: '',
     allocations: '',
     notes: '',
   });
@@ -359,10 +363,25 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
         meta.category,
         category,
         meta.withdrawal_date,
+        meta.company_name,
+        item.company_name,
         ...(item.allocations || []).map((allocation) => allocation.investor_name),
       ].filter(Boolean).join(' ').toLowerCase();
       return text.includes(keyword);
-    }).sort((a, b) => withdrawalSortValue(b) - withdrawalSortValue(a));
+    }).sort((a, b) => {
+      const dateValue = (item) => {
+        const dateText = String(item?.maturity_date || item?.due_date || '').slice(0, 10);
+        if (!dateText) return null;
+        const value = new Date(`${dateText}T00:00:00`).getTime();
+        return Number.isFinite(value) ? value : null;
+      };
+      const aValue = dateValue(a);
+      const bValue = dateValue(b);
+      if (aValue === null && bValue !== null) return -1;
+      if (aValue !== null && bValue === null) return 1;
+      if (aValue !== null && bValue !== null && aValue !== bValue) return aValue - bValue;
+      return String(a?.reference_number || a?.code || a?.id || '').localeCompare(String(b?.reference_number || b?.code || b?.id || ''), 'ar');
+    });
   }, [items, statusFilter, categoryFilter, investorFilter, query]);
 
   const totals = useMemo(() => {
@@ -567,6 +586,9 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
       months: String(n(meta.months || item.months || item.duration_months) || ''),
       start_date: String(meta.withdrawal_date || item.withdrawal_date || item.start_date || item.investment_date || today()).slice(0, 10),
       maturity_date: String(item.maturity_date || '').slice(0, 10),
+      company_name: String(meta.company_name || item.company_name || ''),
+      tasks: String(meta.tasks || item.tasks || ''),
+      executor: String(meta.executor || item.executor || ''),
       allocations: (item.allocations || []).map((allocation) => `${allocation.investor_name || allocation.investor_code || ''} ${n(allocation.invested_amount)}`.trim()).filter(Boolean).join('\n'),
       notes: item.notes || '',
     });
@@ -608,6 +630,9 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
           start_date: opportunityForm.start_date || null,
           withdrawal_date: opportunityForm.start_date || null,
           maturity_date: opportunityForm.maturity_date || null,
+          company_name: opportunityForm.company_name || null,
+          tasks: opportunityForm.tasks || null,
+          executor: opportunityForm.executor || null,
           notes: opportunityForm.notes || null,
           allocations: parseOpportunityAllocations(opportunityForm.allocations),
         }),
@@ -650,7 +675,6 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
             <CompactFilter label="التصنيف" value={categoryLabel} onPress={() => setPicker('category')} />
             <CompactFilter label="الحالة" value={statusLabel} onPress={() => setPicker('status')} />
           </View>
-          {hasFilters ? <TouchableOpacity style={styles.resetButton} onPress={resetFilters} activeOpacity={0.85}><Text style={styles.resetButtonText}>إعادة الفلتر إلى نشط</Text></TouchableOpacity> : null}
         </View>
 
         <View style={styles.metricGrid}>
@@ -695,16 +719,22 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
               <Text style={styles.modalTitle}>تعديل فرصة تعميد</Text>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <TextInput style={styles.searchInput} value={opportunityForm.code} onChangeText={(v) => setOpportunityField('code', v)} placeholder="رقم الفرصة" placeholderTextColor="#94a3b8" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.total_amount} onChangeText={(v) => setOpportunityField('total_amount', v)} placeholder="مبلغ الاستثمار" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.profit} onChangeText={(v) => setOpportunityField('profit', v)} placeholder="الربح" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.profit_rate} onChangeText={(v) => setOpportunityField('profit_rate', v)} placeholder="النسبة" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.category} onChangeText={(v) => setOpportunityField('category', v)} placeholder="التصنيف" placeholderTextColor="#94a3b8" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.months} onChangeText={(v) => setOpportunityField('months', v)} placeholder="الشهور" placeholderTextColor="#94a3b8" keyboardType="number-pad" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.start_date} onChangeText={(v) => setOpportunityField('start_date', v)} placeholder="تاريخ الاستثمار YYYY-MM-DD" placeholderTextColor="#94a3b8" textAlign="right" />
-              <TextInput style={styles.searchInput} value={opportunityForm.maturity_date} onChangeText={(v) => setOpportunityField('maturity_date', v)} placeholder="تاريخ الاستحقاق YYYY-MM-DD" placeholderTextColor="#94a3b8" textAlign="right" />
-              <TextInput style={[styles.searchInput, { minHeight: 86, textAlignVertical: 'top' }]} value={opportunityForm.allocations} onChangeText={(v) => setOpportunityField('allocations', v)} placeholder={'المستثمرين، كل سطر: الاسم المبلغ'} placeholderTextColor="#94a3b8" multiline textAlign="right" />
-              <TextInput style={[styles.searchInput, { minHeight: 70, textAlignVertical: 'top' }]} value={opportunityForm.notes} onChangeText={(v) => setOpportunityField('notes', v)} placeholder="ملاحظات" placeholderTextColor="#94a3b8" multiline textAlign="right" />
+              <View style={styles.editFormSection}>
+                <Text style={styles.editFormSectionTitle}>بيانات الفرصة</Text>
+                <EditField label="رقم الفرصة" value={opportunityForm.code} onChangeText={(v) => setOpportunityField('code', v)} placeholder="مثال: 123456" />
+                <EditField label="مبلغ الاستثمار" value={opportunityForm.total_amount} onChangeText={(v) => setOpportunityField('total_amount', v)} placeholder="مبلغ الاستثمار" keyboardType="decimal-pad" />
+                <EditField label="الربح" value={opportunityForm.profit} onChangeText={(v) => setOpportunityField('profit', v)} placeholder="قيمة الربح" keyboardType="decimal-pad" />
+                <EditField label="النسبة" value={opportunityForm.profit_rate} onChangeText={(v) => setOpportunityField('profit_rate', v)} placeholder="نسبة الربح" keyboardType="decimal-pad" />
+                <EditField label="التصنيف" value={opportunityForm.category} onChangeText={(v) => setOpportunityField('category', v)} placeholder="A+ / A / B ..." />
+                <EditField label="عدد الشهور" value={opportunityForm.months} onChangeText={(v) => setOpportunityField('months', v)} placeholder="مدة الفرصة بالشهور" keyboardType="number-pad" />
+                <EditField label="تاريخ الاستثمار" value={opportunityForm.start_date} onChangeText={(v) => setOpportunityField('start_date', v)} placeholder="YYYY-MM-DD" />
+                <EditField label="تاريخ الاستحقاق" value={opportunityForm.maturity_date} onChangeText={(v) => setOpportunityField('maturity_date', v)} placeholder="YYYY-MM-DD" />
+                <EditField label="اسم الشركة" value={opportunityForm.company_name} onChangeText={(v) => setOpportunityField('company_name', v)} placeholder="اسم الشركة المرتبطة بالفرصة" />
+                <EditField label="المهام" value={opportunityForm.tasks} onChangeText={(v) => setOpportunityField('tasks', v)} placeholder="المهام أو وصف العمل" multiline inputStyle={{ minHeight: 82, textAlignVertical: 'top' }} />
+                <EditField label="المنفذ" value={opportunityForm.executor} onChangeText={(v) => setOpportunityField('executor', v)} placeholder="اسم المنفذ" />
+                <EditField label="المستثمرون" value={opportunityForm.allocations} onChangeText={(v) => setOpportunityField('allocations', v)} placeholder={'كل سطر: الاسم المبلغ'} multiline inputStyle={{ minHeight: 96, textAlignVertical: 'top' }} />
+                <EditField label="ملاحظات" value={opportunityForm.notes} onChangeText={(v) => setOpportunityField('notes', v)} placeholder="أي ملاحظات إضافية" multiline inputStyle={{ minHeight: 78, textAlignVertical: 'top' }} />
+              </View>
               <TouchableOpacity style={styles.payButton} onPress={saveOpportunityEdit} disabled={savingOpportunityEdit}>
                 <Text style={styles.payText}>{savingOpportunityEdit ? 'جاري الحفظ...' : 'حفظ التعديل'}</Text>
               </TouchableOpacity>
@@ -715,6 +745,25 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
 
       <ReceiptModal visible={receiptOpen} onClose={() => setReceiptOpen(false)} receiptText={receiptText} setReceiptText={setReceiptText} preview={receiptPreview} parseReceipt={parseReceipt} applyReceipt={applyReceipt} saving={savingReceipt} />
     </SafeAreaView>
+  );
+}
+
+
+function EditField({ label, value, onChangeText, placeholder, keyboardType, multiline, inputStyle }) {
+  return (
+    <View style={styles.editFieldBox}>
+      <Text style={styles.editFieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.editFieldInput, inputStyle]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#94a3b8"
+        keyboardType={keyboardType}
+        multiline={multiline}
+        textAlign="right"
+      />
+    </View>
   );
 }
 
@@ -768,6 +817,7 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   const raisedMonths = raisedMonthsOf(item, meta);
   const realInvestmentDays = realInvestmentDaysOf(item, meta, receipts);
   const realInvestmentDuration = formatRealInvestmentDuration(realInvestmentDays);
+  const companyName = String(meta.company_name || item.company_name || '').trim();
 
   
   const ta3meedCardInvestorBadges = (item.allocations || []).length ? (
@@ -794,42 +844,41 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   ) : null;
 
 return <View style={[styles.card, { borderColor: status.color }]}>
-<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={[styles.cardTitleBlock, styles.cardTitleLeft]}><Text style={[styles.cardCode, styles.cardCodeLeft]}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={[styles.cardMeta, styles.cardMetaLeft]}>يستحق {item.maturity_date || '-'}</Text></View></View>{ta3meedCardInvestorBadges}<View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}><Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
-          <View style={styles.withdrawalEditBox}>
-            {editingWithdrawalId === item.id ? (
-              <>
-                <TextInput
-                  value={editingWithdrawalDate}
-                  onChangeText={setEditingWithdrawalDate}
-                  placeholder="تاريخ السحب YYYY-MM-DD"
-                  placeholderTextColor="#94a3b8"
-                  style={styles.withdrawalDateInput}
-                />
-                <View style={styles.withdrawalEditActions}>
-                  <TouchableOpacity onPress={() => saveWithdrawalDate(item)} disabled={savingWithdrawalId === item.id} style={styles.withdrawalSaveButton}>
-                    <Text style={styles.withdrawalSaveText}>{savingWithdrawalId === item.id ? '...' : 'حفظ'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={cancelEditWithdrawalDate} style={styles.withdrawalCancelButton}>
-                    <Text style={styles.withdrawalCancelText}>إلغاء</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <TouchableOpacity onPress={() => startEditWithdrawalDate(item)} style={styles.withdrawalEditButton}>
-                <Text style={styles.withdrawalEditText}>تعديل تاريخ السحب</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View><View style={[styles.cardTitleBlock, styles.cardTitleLeft]}><Text style={[styles.cardCode, styles.cardCodeLeft]}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={[styles.cardMeta, styles.cardMetaLeft]}>يستحق {item.maturity_date || '-'}</Text></View></View>{ta3meedCardInvestorBadges}<View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>الشهور المرفوعة {raisedMonths ? `${raisedMonths} شهر` : '-'}</Text><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{lastReceipt ? <Text style={styles.progressMeta}>آخر دفعة: {lastReceipt.receipt_date || '-'} · {money(lastReceipt.amount, 2)}</Text> : null}{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}>{editingWithdrawalId === item.id ? (
+<View style={styles.withdrawalInlineEditRow}>
+  <TextInput
+    value={editingWithdrawalDate}
+    onChangeText={setEditingWithdrawalDate}
+    placeholder="YYYY-MM-DD"
+    placeholderTextColor="#94a3b8"
+    style={styles.withdrawalDateInput}
+  />
+  <TouchableOpacity onPress={() => saveWithdrawalDate(item)} disabled={savingWithdrawalId === item.id} style={styles.withdrawalSaveButton}>
+    <Text style={styles.withdrawalSaveText}>{savingWithdrawalId === item.id ? '...' : 'حفظ'}</Text>
+  </TouchableOpacity>
+  <TouchableOpacity onPress={cancelEditWithdrawalDate} style={styles.withdrawalCancelButton}>
+    <Text style={styles.withdrawalCancelText}>إلغاء</Text>
+  </TouchableOpacity>
+</View>
+) : (
+<View style={styles.withdrawalDateRow}>
+  <TouchableOpacity onPress={() => startEditWithdrawalDate(item)} style={styles.withdrawalSmallIconButton}>
+    <UiIcon name="edit" size={15} color="#0f766e" />
+  </TouchableOpacity>
+  <Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
+</View>
+)}
+{companyName ? <Text style={styles.detail}>الشركة: {companyName}</Text> : null}
 <Text style={styles.detail}>المسترد: {money(meta.returned_amount, 2)}</Text><Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => {
   const isEditingDate = editingReceiptId === receipt.id;
   return (
     <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}>
-      <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 6 }}>
-        <TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={styles.deleteReceipt}>
-          <Text style={styles.deleteReceiptText}>{deletingReceiptId === receipt.id ? '...' : 'حذف'}</Text>
+      <View style={styles.receiptIconActions}>
+        <TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={[styles.receiptIconButton, styles.receiptDeleteIconButton]}>
+          <UiIcon name="delete" size={17} color="#b91c1c" />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => startEditReceiptDate(receipt)} style={[styles.deleteReceipt, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
-          <Text style={[styles.deleteReceiptText, { color: '#2563eb' }]}>تعديل</Text>
+        <TouchableOpacity onPress={() => startEditReceiptDate(receipt)} style={[styles.receiptIconButton, styles.receiptEditIconButton]}>
+          <UiIcon name="edit" size={17} color="#2563eb" />
         </TouchableOpacity>
       </View>
 
@@ -852,11 +901,44 @@ return <View style={[styles.card, { borderColor: status.color }]}>
           </View>
         </View>
       ) : (
-        <Text style={styles.receiptText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'} · {money(receipt.amount, 2)}</Text>
+        <View style={styles.receiptCompactInfo}>
+          <Text style={styles.receiptCompactText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'}</Text>
+          <Text style={styles.receiptCompactAmount}>{money(receipt.amount, 2)}</Text>
+        </View>
       )}
     </View>
   );
-}) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>{allocations.map((allocation) => { const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0; const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount); const investorRemaining = Math.max(0, expected - n(allocation.received_amount)); const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount); return <Text key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detail}>{allocation.investor_name}: نسبة {pct(share)} · مستثمر {money(allocation.invested_amount, 2)} · مستلم {money(allocation.received_amount, 2)} · ربح فعلي {money(actualProfit, 2)} · متبقي {money(investorRemaining, 2)}</Text>; })}</View> : null}</View>;
+}) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>
+<View style={styles.detailInvestorList}>
+{allocations.map((allocation, index) => {
+  const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0;
+  const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount);
+  const investorRemaining = Math.max(0, expected - n(allocation.received_amount));
+  const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount);
+  const color = INVESTOR_COLORS[index % INVESTOR_COLORS.length];
+  return (
+    <View key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detailInvestorGroup}>
+      <View style={styles.detailInvestorHeader}>
+        <View style={[styles.detailInvestorDot, { backgroundColor: color }]} />
+        <Text style={styles.detailInvestorName}>{allocation.investor_name}</Text>
+        <Text style={[styles.detailInvestorPercent, { color }]}>{pct(share)}</Text>
+      </View>
+
+      <View style={styles.detailInvestorProgressTrack}>
+        <View style={[styles.detailInvestorProgressFill, { width: `${Math.min(100, Math.max(0, share))}%`, backgroundColor: color }]} />
+      </View>
+
+      <View style={styles.detailInvestorBadges}>
+        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>نسبة</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{pct(share)}</Text></View>
+        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>مستثمر</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(allocation.invested_amount, 2)}</Text></View>
+        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>مستلم</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(allocation.received_amount, 2)}</Text></View>
+        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>ربح فعلي</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(actualProfit, 2)}</Text></View>
+        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>متبقي</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(investorRemaining, 2)}</Text></View>
+      </View>
+    </View>
+  );
+})}
+</View></View> : null}</View>;
 }
 
 function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, parseReceipt, applyReceipt, saving }) {
@@ -900,6 +982,34 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
   },
 
+
+  companyCardLine: {
+    marginTop: 8,
+    marginBottom: 6,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  companyCardLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  companyCardValue: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 13,
+    fontWeight: '900',
+    textAlign: 'left',
+    marginRight: 10,
+  },
 
   investorBadgesBox: {
     marginTop: 10,
@@ -955,6 +1065,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
+  editFormSection: { marginTop: 6, gap: 10, paddingBottom: 8 },
+  editFormSectionTitle: { color: '#0f172a', fontSize: 17, fontWeight: '900', textAlign: 'right', marginBottom: 2 },
+  editFieldBox: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, padding: 10 },
+  editFieldLabel: { color: '#334155', fontSize: 12, fontWeight: '900', textAlign: 'right', marginBottom: 7 },
+  editFieldInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', borderRadius: 12, paddingHorizontal: 11, paddingVertical: 10, color: '#0f172a', fontWeight: '900', fontSize: 13, textAlign: 'right' },
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   header: { paddingHorizontal: 22, paddingTop: 34, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
   headerIcon: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
@@ -994,6 +1109,9 @@ const styles = StyleSheet.create({
   categoryPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999 },
   categoryText: { fontSize: 9.5, fontWeight: '900' },
   rateBadgesRow: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
+  withdrawalDateRow: { marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, alignSelf: 'stretch' },
+  withdrawalInlineEditRow: { marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-end', gap: 6, alignSelf: 'stretch' },
+  withdrawalSmallIconButton: { width: 28, height: 28, borderRadius: 10, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#99f6e4', alignItems: 'center', justifyContent: 'center' },
   withdrawalEditBox: { marginTop: 7, alignItems: 'flex-end' },
   withdrawalEditButton: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 11, paddingHorizontal: 9, paddingVertical: 6 },
   withdrawalEditText: { color: '#c2410c', fontSize: 10.5, fontWeight: '900' },
@@ -1024,6 +1142,25 @@ const styles = StyleSheet.create({
   detailsBox: { marginTop: 14, backgroundColor: '#fff', borderRadius: 18, padding: 12, alignItems: 'flex-end' },
   detail: { color: '#334155', fontWeight: '900', textAlign: 'right', marginTop: 7, lineHeight: 24 },
   subTitle: { marginTop: 14, color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
+  detailInvestorList: { marginTop: 8, alignSelf: 'stretch', gap: 12 },
+  detailInvestorGroup: { alignSelf: 'stretch', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 18, padding: 10 },
+  detailInvestorHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, alignSelf: 'stretch' },
+  detailInvestorDot: { width: 13, height: 13, borderRadius: 999 },
+  detailInvestorName: { flex: 1, color: '#0f172a', fontWeight: '900', fontSize: 15, textAlign: 'right' },
+  detailInvestorPercent: { fontWeight: '900', fontSize: 15, textAlign: 'left' },
+  detailInvestorProgressTrack: { marginTop: 9, height: 9, borderRadius: 999, backgroundColor: '#e5e7eb', overflow: 'hidden', alignSelf: 'stretch' },
+  detailInvestorProgressFill: { height: '100%', borderRadius: 999 },
+  detailInvestorBadges: { marginTop: 10, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7, alignSelf: 'stretch' },
+  detailInvestorBadge: { flexBasis: '18%', flexGrow: 1, minHeight: 54, borderRadius: 15, paddingHorizontal: 4, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d1fae5', backgroundColor: '#ecfdf5' },
+  detailInvestorBadgeLabel: { color: '#0f172a', fontWeight: '800', fontSize: 8.5, textAlign: 'center' },
+  detailInvestorBadgeValue: { fontWeight: '900', fontSize: 8.5, marginTop: 2, textAlign: 'center' },
+  receiptIconActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7 },
+  receiptIconButton: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  receiptDeleteIconButton: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  receiptEditIconButton: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
+  receiptCompactInfo: { flex: 1, alignItems: 'flex-end', gap: 3 },
+  receiptCompactText: { color: '#0f172a', fontWeight: '900', fontSize: 13, textAlign: 'right' },
+  receiptCompactAmount: { color: '#334155', fontWeight: '900', fontSize: 13, textAlign: 'right' },
   muted: { color: '#94a3b8', fontWeight: '900', textAlign: 'right', marginTop: 8 },
   receiptLine: { marginTop: 8, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderRadius: 14, padding: 10 },
   fullReceiptLine: { backgroundColor: '#ecfdf5' },
