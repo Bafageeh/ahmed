@@ -181,6 +181,7 @@ class Ta3meedController extends Controller
                 $this->scopeUser($allocationsQuery, 'ta3meed_receipt_allocations', $userId);
                 $receipt->allocations = $allocationsQuery->select([
                     'investment_investors.name as investor_name',
+                    'investment_investors.code as investor_code',
                     'ta3meed_receipt_allocations.share_percent',
                     'ta3meed_receipt_allocations.received_amount',
                 ])->get();
