@@ -247,21 +247,10 @@ class Ta3meedReceiptController extends Controller
 
     private function parseMessage(string $message): array
     {
-        $normalized = trim(str_replace(["\u{200f}", "\u{200e}", ','], ['', '', ''], $message));
+        $normalized = $this->normalizeTa3meedMessage($message);
         preg_match('/(?:بقيمة|مبلغ)\s*([0-9]+(?:\.[0-9]+)?)/u', $normalized, $amountMatch);
 
-        $reference = null;
-        $patterns = [
-            '/(?:للفرصه|للفرصة|الفرصه|الفرصة)\s*(?:رقم)?\s*([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]+)/u',
-            '/(?:رقم)\s*([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]+)/u',
-            '/\b([A-Z]{2,}-[A-Z0-9]+|[A-Z]{3,}[0-9]{2,})\b/u',
-        ];
-        foreach ($patterns as $pattern) {
-            if (preg_match($pattern, $normalized, $match)) {
-                $reference = $match[1];
-                break;
-            }
-        }
+        $reference = $this->parseOpportunityReference($normalized);
 
         $hasCapitalAndProfit = str_contains($normalized, 'رأس المال') || str_contains($normalized, 'راس المال') || str_contains($normalized, 'الأرباح') || str_contains($normalized, 'الارباح');
         $hasFull = str_contains($normalized, 'سداد كلي') || $hasCapitalAndProfit;
@@ -276,6 +265,57 @@ class Ta3meedReceiptController extends Controller
             'label' => $hasFull ? 'رأس المال والأرباح / سداد كلي' : 'سداد جزئي',
             'raw' => $message,
         ];
+    }
+
+    private function normalizeTa3meedMessage(string $message): string
+    {
+        $normalized = str_replace([
+            "\u{200f}",
+            "\u{200e}",
+            "\u{202a}",
+            "\u{202b}",
+            "\u{202c}",
+            "\u{202d}",
+            "\u{202e}",
+            ',',
+            '٬',
+        ], ['', '', '', '', '', '', '', '', ''], $message);
+
+        $normalized = strtr($normalized, [
+            '٠' => '0', '١' => '1', '٢' => '2', '٣' => '3', '٤' => '4',
+            '٥' => '5', '٦' => '6', '٧' => '7', '٨' => '8', '٩' => '9',
+            '۰' => '0', '۱' => '1', '۲' => '2', '۳' => '3', '۴' => '4',
+            '۵' => '5', '۶' => '6', '۷' => '7', '۸' => '8', '۹' => '9',
+        ]);
+
+        return trim($normalized);
+    }
+
+    private function parseOpportunityReference(string $normalized): ?string
+    {
+        $english = strtoupper($normalized);
+        $patterns = [
+            '/(?:للفرصه|للفرصة|الفرصه|الفرصة)\s*(?:رقم)?\s*(?:INV\s*[-–—]?\s*)?([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
+            '/(?:رقم)\s*(?:INV\s*[-–—]?\s*)?([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
+            '/\bINV\s*[-–—]?\s*([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)\b/u',
+            '/\b([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)\b/u',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $english, $match)) {
+                return $this->cleanOpportunityReference($match[1]);
+            }
+        }
+
+        return null;
+    }
+
+    private function cleanOpportunityReference(string $reference): string
+    {
+        $reference = strtoupper(trim($reference));
+        $reference = preg_replace('/[^A-Z0-9-]/', '', $reference) ?: $reference;
+        $reference = preg_replace('/^INV-?/', '', $reference) ?: $reference;
+        return $reference;
     }
 
     private function record($investment, array $data): array
