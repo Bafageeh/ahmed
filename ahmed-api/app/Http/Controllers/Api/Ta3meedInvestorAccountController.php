@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Ta3meedInvestorName;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -14,10 +15,13 @@ class Ta3meedInvestorAccountController extends Controller
         $userId = $this->userId($request);
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
+        $canonicalCode = Ta3meedInvestorName::code($code);
 
         $investorQuery = DB::table('investment_investors')
-            ->where(function ($query) use ($code) {
-                $query->where('code', $code)->orWhere('name', $code);
+            ->where(function ($query) use ($code, $canonicalCode) {
+                $query->where('code', $canonicalCode)
+                    ->orWhere('code', $code)
+                    ->orWhere('name', $code);
             });
         $this->scopeUser($investorQuery, 'investment_investors', $userId);
         $investor = $investorQuery->first();
@@ -25,6 +29,8 @@ class Ta3meedInvestorAccountController extends Controller
         if (! $investor) {
             return response()->json(['message' => 'Investor not found'], 404);
         }
+
+        $this->normalizeInvestorRow($investor);
 
         $platform = DB::table('investment_platforms')->where('code', 'ta3meed')->first();
         if (! $platform) {
@@ -83,9 +89,7 @@ class Ta3meedInvestorAccountController extends Controller
                 $status = strtolower(trim((string) ($row->opportunity_status ?: $row->allocation_status)));
                 $closedStatuses = ['received', 'completed', 'closed', 'finished', 'ended'];
                 $isEnded = in_array($status, $closedStatuses, true) || ((float) $row->remaining_amount) <= 0;
-                $shouldShowActualRate = $isEnded
-                    && $investedAmount > 0
-                    && $actualProfit > 0;
+                $shouldShowActualRate = $isEnded && $investedAmount > 0 && $actualProfit > 0;
 
                 $row->actual_received_profit_amount = $shouldShowActualRate ? round($actualProfit, 2) : null;
                 $row->actual_received_profit_rate = $shouldShowActualRate ? round(($actualProfit / $investedAmount) * 100, 6) : null;
@@ -173,7 +177,7 @@ class Ta3meedInvestorAccountController extends Controller
                 'investor' => $investor,
                 'filters' => [
                     'from_date' => $fromDate,
-                    'to_date' => $ToDate ?? $toDate,
+                    'to_date' => $toDate,
                 ],
                 'summary' => $summary,
                 'opportunities' => $opportunities,
@@ -182,6 +186,24 @@ class Ta3meedInvestorAccountController extends Controller
                 'timeline' => $timeline,
             ],
         ]);
+    }
+
+    private function normalizeInvestorRow(object $investor): void
+    {
+        $canonicalCode = Ta3meedInvestorName::code($investor->code ?: $investor->name);
+        $canonicalName = Ta3meedInvestorName::displayName($investor->name, $canonicalCode);
+
+        if ($investor->code === $canonicalCode && $investor->name === $canonicalName) {
+            return;
+        }
+
+        $update = ['code' => $canonicalCode, 'name' => $canonicalName];
+        if (Schema::hasColumn('investment_investors', 'updated_at')) {
+            $update['updated_at'] = now();
+        }
+        DB::table('investment_investors')->where('id', $investor->id)->update($update);
+        $investor->code = $canonicalCode;
+        $investor->name = $canonicalName;
     }
 
     private function timeline($receiptEntries, $manualEntries)
