@@ -40,12 +40,6 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install Python icon dependency
-        run: python3 -m pip install --user Pillow
-
-      - name: Generate Ahmed app icon
-        run: python3 scripts/generate_app_icon.py
-
       - name: Generate Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
