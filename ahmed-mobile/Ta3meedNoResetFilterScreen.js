@@ -49,14 +49,24 @@ function isReceivedOpportunity(item) {
 function partialReceivedForInvestor(items, selectedInvestor = 'all') {
   return (items || []).reduce((total, item) => {
     if (isReceivedOpportunity(item)) return total;
-    const allocations = item.allocations || [];
-    const selectedAllocations = selectedInvestor && selectedInvestor !== 'all'
-      ? allocations.filter((allocation) => investorKey(allocation) === selectedInvestor)
-      : allocations;
-    if (selectedInvestor && selectedInvestor !== 'all' && selectedAllocations.length === 0) return total;
-    if (selectedAllocations.length > 0) {
-      return total + selectedAllocations.reduce((sum, allocation) => sum + n(allocation.received_amount), 0);
-    }
+    const directAllocations = item.allocations || [];
+    const selectedDirectAllocations = selectedInvestor && selectedInvestor !== 'all'
+      ? directAllocations.filter((allocation) => investorKey(allocation) === selectedInvestor)
+      : directAllocations;
+    if (selectedInvestor && selectedInvestor !== 'all' && selectedDirectAllocations.length === 0) return total;
+
+    const receiptAllocationsTotal = (item.receipts || []).reduce((receiptSum, receipt) => {
+      const receiptAllocations = receipt.allocations || [];
+      const selectedReceiptAllocations = selectedInvestor && selectedInvestor !== 'all'
+        ? receiptAllocations.filter((allocation) => investorKey(allocation) === selectedInvestor)
+        : receiptAllocations;
+      return receiptSum + selectedReceiptAllocations.reduce((sum, allocation) => sum + n(allocation.received_amount), 0);
+    }, 0);
+
+    const directAllocationsTotal = selectedDirectAllocations.reduce((sum, allocation) => sum + n(allocation.received_amount), 0);
+    if (receiptAllocationsTotal > 0 || directAllocationsTotal > 0) return total + Math.max(receiptAllocationsTotal, directAllocationsTotal);
+
+    if (selectedInvestor && selectedInvestor !== 'all') return total;
     const receiptTotal = (item.receipts || []).reduce((sum, receipt) => sum + n(receipt.amount), 0);
     return total + Math.max(n(item.received_amount), receiptTotal);
   }, 0);
@@ -266,11 +276,13 @@ export default function Ta3meedNoResetFilterScreen(props) {
   try {
     screen = <Ta3meedCompactFiltersScreen key={screenKey} {...props} onOpenMore={openMore} />;
   } finally {
-    renderingTa3meed = false;
-    React.createElement = originalCreateElement;
-    if (runtime && originalJsx) runtime.jsx = originalJsx;
-    if (runtime && originalJsxs) runtime.jsxs = originalJsxs;
-    if (runtime && originalJsxDEV) runtime.jsxDEV = originalJsxDEV;
+    setTimeout(() => {
+      renderingTa3meed = false;
+      React.createElement = originalCreateElement;
+      if (runtime && originalJsx) runtime.jsx = originalJsx;
+      if (runtime && originalJsxs) runtime.jsxs = originalJsxs;
+      if (runtime && originalJsxDEV) runtime.jsxDEV = originalJsxDEV;
+    }, 0);
   }
 
   return (
