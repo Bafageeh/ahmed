@@ -33,6 +33,20 @@ class Ta3meedInvestorAccountController extends Controller
         $platform = DB::table('investment_platforms')->where('code', 'ta3meed')->first();
         if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
+        $receivedByOpportunity = collect();
+        if (Schema::hasTable('ta3meed_receipt_allocations')) {
+            $receiptAllocationQuery = DB::table('ta3meed_receipt_allocations')
+                ->join('investment_opportunities', 'ta3meed_receipt_allocations.opportunity_id', '=', 'investment_opportunities.id')
+                ->where('ta3meed_receipt_allocations.investor_id', $investor->id)
+                ->where('investment_opportunities.platform_id', $platform->id);
+            $this->scopeUser($receiptAllocationQuery, 'ta3meed_receipt_allocations', $userId);
+
+            $receivedByOpportunity = $receiptAllocationQuery
+                ->selectRaw('ta3meed_receipt_allocations.opportunity_id, sum(ta3meed_receipt_allocations.received_amount) as received_amount')
+                ->groupBy('ta3meed_receipt_allocations.opportunity_id')
+                ->pluck('received_amount', 'opportunity_id');
+        }
+
         $opportunityQuery = DB::table('investment_opportunity_allocations')
             ->join('investment_opportunities', 'investment_opportunity_allocations.opportunity_id', '=', 'investment_opportunities.id')
             ->where('investment_opportunities.platform_id', $platform->id)
@@ -59,14 +73,18 @@ class Ta3meedInvestorAccountController extends Controller
             ->orderByDesc('investment_opportunities.maturity_date')
             ->orderByDesc('investment_opportunities.id')
             ->get()
-            ->map(function ($row) {
+            ->map(function ($row) use ($receivedByOpportunity) {
                 $investedAmount = (float) $row->invested_amount;
-                $receivedTotalAmount = (float) $row->received_amount;
+                $allocationReceivedAmount = (float) $row->received_amount;
+                $receiptReceivedAmount = (float) ($receivedByOpportunity[$row->opportunity_id] ?? 0);
+                $receivedTotalAmount = max($allocationReceivedAmount, $receiptReceivedAmount);
                 $expectedProfitAmount = (float) $row->expected_profit_amount;
                 $expectedTotal = $investedAmount + $expectedProfitAmount;
 
                 $row->expected_total = round($expectedTotal, 2);
                 $row->received_total_amount = round($receivedTotalAmount, 2);
+                $row->partial_receipt_received_amount = round($receiptReceivedAmount, 2);
+                $row->allocation_received_amount = round($allocationReceivedAmount, 2);
                 $row->principal_received_amount = round(min($investedAmount, max(0, $receivedTotalAmount)), 2);
                 $row->ta3meed_remaining_amount = max(0, round($investedAmount - $row->principal_received_amount, 2));
                 $row->remaining_amount = max(0, round($expectedTotal - $receivedTotalAmount, 2));
@@ -91,9 +109,6 @@ class Ta3meedInvestorAccountController extends Controller
                 $shouldShowActualRate = $isEnded && $investedAmount > 0 && $actualProfit > 0;
 
                 if (! $isEnded) {
-                    // شاشة حساب المستثمر تعتمد activeInvested - activeReceived.
-                    // لذلك في الفرص غير المنتهية نجعل received_amount يمثل المستلم من أصل رأس المال فقط،
-                    // وهي نفس معادلة بطاقة استثمار تعميد في شاشة تعميد عند فلترة المستثمر.
                     $row->received_amount = $row->principal_received_amount;
                     $row->remaining_amount = $row->ta3meed_remaining_amount;
                 }
