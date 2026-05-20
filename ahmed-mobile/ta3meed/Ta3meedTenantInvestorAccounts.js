@@ -18,36 +18,20 @@ function uniqueInvestors(investors) {
   return Array.from(map.values());
 }
 
-function safeNumber(value) {
-  return Number(value || 0);
-}
-function statusValues(row) {
-  return [row?.opportunity_status, row?.allocation_status, row?.status].map((status) => String(status || '').trim().toLowerCase()).filter(Boolean);
-}
-function hasStatus(row, statuses) {
-  return statusValues(row).some((status) => statuses.includes(status));
-}
-function isEnded(row) {
-  return hasStatus(row, endedStatuses);
-}
-function isCancelled(row) {
-  return hasStatus(row, cancelledStatuses);
-}
-function isInactive(row) {
-  return isCancelled(row) || isEnded(row);
-}
+function safeNumber(value) { return Number(value || 0); }
+function statusValues(row) { return [row?.opportunity_status, row?.allocation_status, row?.status].map((status) => String(status || '').trim().toLowerCase()).filter(Boolean); }
+function hasStatus(row, statuses) { return statusValues(row).some((status) => statuses.includes(status)); }
+function isEnded(row) { return hasStatus(row, endedStatuses); }
+function isCancelled(row) { return hasStatus(row, cancelledStatuses); }
+function isInactive(row) { return isCancelled(row) || isEnded(row); }
 function principalReceivedOf(row) {
   const invested = safeNumber(row?.invested_amount);
-  if (row?.principal_received_amount !== undefined && row?.principal_received_amount !== null) {
-    return Math.min(invested, Math.max(0, safeNumber(row.principal_received_amount)));
-  }
+  if (row?.principal_received_amount !== undefined && row?.principal_received_amount !== null) return Math.min(invested, Math.max(0, safeNumber(row.principal_received_amount)));
   return Math.min(invested, Math.max(0, safeNumber(row?.received_total_amount ?? row?.received_amount)));
 }
 function remainingCapitalOf(row) {
   if (isInactive(row)) return 0;
-  if (row?.ta3meed_remaining_amount !== undefined && row?.ta3meed_remaining_amount !== null) {
-    return Math.max(0, safeNumber(row.ta3meed_remaining_amount));
-  }
+  if (row?.ta3meed_remaining_amount !== undefined && row?.ta3meed_remaining_amount !== null) return Math.max(0, safeNumber(row.ta3meed_remaining_amount));
   return Math.max(0, safeNumber(row?.invested_amount) - principalReceivedOf(row));
 }
 
@@ -72,7 +56,6 @@ function normalize(raw, investor) {
     opportunitiesCount: safeNumber(summary.opportunities_count !== undefined ? summary.opportunities_count : opportunities.length),
     entries: Array.isArray(raw?.entries) && raw.entries.length ? raw.entries : (Array.isArray(raw?.manual_entries) ? raw.manual_entries : []),
     timeline: Array.isArray(raw?.timeline) ? raw.timeline : [],
-    opportunities,
   };
 }
 
@@ -115,7 +98,7 @@ function InvestorDetails({ investor, screen, setScreen, onBack }) {
 
   useEffect(() => { load(); }, [investor.code]);
 
-  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} /> : null}{screen === 'movements' ? <SimpleList title={`#S-113 الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}{screen === 'opportunities' ? <OpportunityList investor={investor} rows={account?.opportunities || []} /> : null}</View>;
+  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} /> : null}{screen === 'movements' ? <SimpleList title={`#S-113 الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}</View>;
 }
 
 function Home({ investor, account, message, setScreen }) {
@@ -134,7 +117,7 @@ function Home({ investor, account, message, setScreen }) {
     ['ربح تعميد المنتهي', n(account?.endedProfit), '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
     ['عدد الفرص', n(account?.opportunitiesCount), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'عدد فرص المستثمر في تعميد', false, true],
   ];
-  return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map((card) => <Card key={card[0]} data={card} />)}</View>{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /><Nav title="#S-114 تفصيل فرص المستثمر" text="مبلغ كل فرصة، المستلم، المتبقي، والربح الفعلي." onPress={() => setScreen('opportunities')} /></>;
+  return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map((card) => <Card key={card[0]} data={card} />)}</View>{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /></>;
 }
 
 function Card({ data }) {
@@ -186,8 +169,4 @@ function TypeButton({ label, active, onPress, danger }) {
 
 function SimpleList({ title, rows }) {
   return <><Text style={styles.investorScreenTitle}>{title}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((row, index) => <View key={row.id || index} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{money(row.amount || row.received_amount || 0, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>{row.date || row.entry_date || row.receipt_date || '-'}</Text>{row.description || row.notes ? <Text style={styles.investorPaymentMeta}>{row.description || row.notes}</Text> : null}</View>)}</>;
-}
-
-function OpportunityList({ investor, rows }) {
-  return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((row, index) => <View key={`${row.opportunity_id || index}-${row.allocation_id || index}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{row.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(row.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المستلم من أصل رأس المال: {money(principalReceivedOf(row), 2)}</Text><Text style={styles.investorPaymentMeta}>رأس المال المتبقي: {money(remainingCapitalOf(row), 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه الفعلي: {money(row.ended_profit_amount ?? Math.max(0, n(row.received_total_amount ?? row.received_amount) - n(row.invested_amount)), 2)}</Text></View>)}</>;
 }
