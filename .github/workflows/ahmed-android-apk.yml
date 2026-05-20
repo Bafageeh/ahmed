@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: npm
           cache-dependency-path: ahmed-mobile/package-lock.json
 
@@ -38,6 +38,48 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --legacy-peer-deps
+
+      - name: Normalize Expo PNG assets
+        run: |
+          python3 - <<'PY'
+          import os, struct, zlib
+          os.makedirs('assets', exist_ok=True)
+
+          def chunk(kind, data):
+              return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
+
+          def write_png(path, size=1024, bg=(30, 16, 78, 255)):
+              w = h = size
+              rows = []
+              cx = cy = size // 2
+              radius = int(size * 0.28)
+              for y in range(h):
+                  row = bytearray([0])
+                  for x in range(w):
+                      px = bg
+                      dx = x - cx
+                      dy = y - cy
+                      if dx * dx + dy * dy <= radius * radius:
+                          px = (255, 255, 255, 255)
+                      if abs(x - cx) < int(size * 0.055) and abs(y - cy) < int(size * 0.20):
+                          px = bg
+                      if abs(y - cy) < int(size * 0.055) and abs(x - cx) < int(size * 0.20):
+                          px = bg
+                      row.extend(px)
+                  rows.append(bytes(row))
+              raw = b''.join(rows)
+              png = b'\x89PNG\r\n\x1a\n'
+              png += chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0))
+              png += chunk(b'IDAT', zlib.compress(raw, 9))
+              png += chunk(b'IEND', b'')
+              with open(path, 'wb') as f:
+                  f.write(png)
+
+          write_png('assets/icon.png')
+          write_png('assets/splash-icon.png')
+          write_png('assets/adaptive-icon.png')
+          PY
+          file assets/icon.png assets/splash-icon.png assets/adaptive-icon.png
 
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --clean --non-interactive
