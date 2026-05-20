@@ -140,6 +140,8 @@ function FutureMonthlyIncomeScreen({ goTo }) {
   const [incomeName, setIncomeName] = useState('');
   const [incomeAmount, setIncomeAmount] = useState('');
   const [monthlyIncomes, setMonthlyIncomes] = useState([]);
+  const [moneyMoonMonthlyIncome, setMoneyMoonMonthlyIncome] = useState(0);
+  const [ta3meedMonthlyIncome, setTa3meedMonthlyIncome] = useState(0);
   const [menuId, setMenuId] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
@@ -151,7 +153,43 @@ function FutureMonthlyIncomeScreen({ goTo }) {
     } catch {}
   };
 
-  useEffect(() => { loadIncomes(); }, []);
+  const loadMoneyMoonIncome = async () => {
+    try {
+      const response = await fetch(`${API_URL}/moneymoon/investments`, { headers: { Accept: 'application/json' } });
+      const json = await response.json();
+      const rows = Array.isArray(json.data) ? json.data : [];
+      const activeTotal = rows
+        .filter((item) => item.status !== 'received' && item.status !== 'completed')
+        .reduce((sum, item) => sum + Number(item.principal_amount || 0), 0);
+      setMoneyMoonMonthlyIncome((activeTotal * 0.12) / 12);
+    } catch {
+      setMoneyMoonMonthlyIncome(0);
+    }
+  };
+
+  const loadTa3meedIncome = async () => {
+    try {
+      const response = await fetch(`${API_URL}/ta3meed/investments`, { headers: { Accept: 'application/json' } });
+      const json = await response.json();
+      const rows = Array.isArray(json.data) ? json.data : [];
+      const activeTotal = rows
+        .filter((item) => item.status !== 'received' && item.status !== 'completed')
+        .reduce((sum, item) => {
+          const allocations = Array.isArray(item.allocations) ? item.allocations : [];
+          const ahmedAllocation = allocations.reduce((allocationSum, allocation) => {
+            const key = String(allocation.investor_code || allocation.investor_name || '').trim().toLowerCase();
+            const isAhmed = key === 'ahmed' || key === 'أحمد' || key === 'احمد';
+            return isAhmed ? allocationSum + Number(allocation.invested_amount || 0) : allocationSum;
+          }, 0);
+          return sum + ahmedAllocation;
+        }, 0);
+      setTa3meedMonthlyIncome((activeTotal * 0.12) / 12);
+    } catch {
+      setTa3meedMonthlyIncome(0);
+    }
+  };
+
+  useEffect(() => { loadIncomes(); loadMoneyMoonIncome(); loadTa3meedIncome(); }, []);
 
   const resetForm = () => { setIncomeName(''); setIncomeAmount(''); setEditingId(null); };
   const openAdd = () => { resetForm(); setOpen(true); setMenuId(null); };
@@ -174,15 +212,28 @@ function FutureMonthlyIncomeScreen({ goTo }) {
     } catch {}
   };
 
-  const total = monthlyIncomes.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const manualTotal = monthlyIncomes.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const total = manualTotal + Number(moneyMoonMonthlyIncome || 0) + Number(ta3meedMonthlyIncome || 0);
   const onlyNumbers = (value) => setIncomeAmount(String(value || '').replace(/[^0-9.]/g, ''));
 
   return <View style={styles.fullScreenHost}>
     <ScreenWrap>
       <TopBar title="#S-121 دخل شهري مستقبلي" onBack={() => goTo('accounts')} right={<TouchableOpacity style={styles.topAddButton} onPress={openAdd}><Text style={styles.topAddText}>+</Text></TouchableOpacity>} />
-      <Header badge="حساباتي" title="#S-121 دخل شهري مستقبلي" subtitle="مصادر الدخل الشهري المتوقع." icon="reports" />
-      <View style={styles.incomeTotalCard}><Text style={styles.incomeTotalLabel}>إجمالي الدخل الشهري المستقبلي</Text><Text style={styles.incomeTotalValue}>{total.toLocaleString('en-US')} ر.س</Text></View>
-      <View style={styles.incomeList}>{monthlyIncomes.length === 0 ? <Text style={styles.emptyIncomeText}>لا توجد حسابات دخل مضافة بعد.</Text> : monthlyIncomes.map((item) => <View key={item.id} style={styles.incomeRow}><View style={styles.incomeRowIcon}><UiIcon name="reports" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>{item.name}</Text><Text style={styles.incomeRowAmount}>{Number(item.amount || 0).toLocaleString('en-US')} ر.س</Text></View><View style={styles.incomeMenuHost}><TouchableOpacity style={styles.incomeDotsButton} onPress={() => setMenuId(menuId === item.id ? null : item.id)}><Text style={styles.incomeDotsText}>⋯</Text></TouchableOpacity>{menuId === item.id ? <View style={styles.incomeDropdownMenu}><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => startEditIncome(item)}><Text style={styles.incomeDropdownText}>تعديل</Text></TouchableOpacity><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => deleteIncome(item.id)}><Text style={[styles.incomeDropdownText, styles.incomeDropdownDeleteText]}>حذف</Text></TouchableOpacity><TouchableOpacity style={[styles.incomeDropdownItem, styles.incomeDropdownLast]} onPress={() => setMenuId(null)}><Text style={styles.incomeDropdownText}>إغلاق</Text></TouchableOpacity></View> : null}</View></View>)}</View>
+      <Header badge="حساباتي" title="#S-121 دخل شهري مستقبلي" subtitle="شاشة لحساب الدخل الشهري المتوقع مستقبلًا." icon="reports" />
+      <View style={styles.incomeTotalCard}><Text style={styles.incomeTotalLabel}>إجمالي الدخل الشهري المستقبلي</Text><Text style={styles.incomeTotalValue}>{Number(total || 0).toLocaleString('en-US')} ر.س</Text></View>
+      <View style={styles.incomeList}>
+        <View style={[styles.incomeRow, styles.fixedIncomeRow]}>
+          <View style={styles.fixedIncomeBadge}><Text style={styles.fixedIncomeBadgeText}>ثابت</Text></View>
+          <View style={styles.incomeRowIcon}><UiIcon name="moneymoon" size={22} color={ICON_COLOR_DARK} /></View>
+          <View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>موني مون</Text><Text style={styles.incomeRowAmount}>{Number(moneyMoonMonthlyIncome || 0).toLocaleString('en-US')} ر.س</Text><Text style={styles.fixedIncomeFormula}>المبلغ النشط في موني مون × 0.12 ÷ 12</Text></View>
+        </View>
+        <View style={[styles.incomeRow, styles.fixedIncomeRowTa3meed]}>
+          <View style={styles.fixedIncomeBadgeTa3meed}><Text style={styles.fixedIncomeBadgeTextTa3meed}>ثابت</Text></View>
+          <View style={styles.incomeRowIcon}><UiIcon name="ta3meed" size={22} color={ICON_COLOR_DARK} /></View>
+          <View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>قيمة استثمار تعميد</Text><Text style={styles.incomeRowAmount}>{Number(ta3meedMonthlyIncome || 0).toLocaleString('en-US')} ر.س</Text><Text style={styles.fixedIncomeFormulaTa3meed}>استثمار تعميد للمستثمر أحمد × 0.12 ÷ 12</Text></View>
+        </View>
+        {monthlyIncomes.length === 0 ? <Text style={styles.emptyIncomeText}>لا توجد حسابات دخل مضافة بعد.</Text> : monthlyIncomes.map((item) => <View key={item.id} style={styles.incomeRow}><View style={styles.incomeRowIcon}><UiIcon name="reports" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>{item.name}</Text><Text style={styles.incomeRowAmount}>{Number(item.amount || 0).toLocaleString('en-US')} ر.س</Text></View><View style={styles.incomeMenuHost}><TouchableOpacity style={styles.incomeDotsButton} onPress={() => setMenuId(menuId === item.id ? null : item.id)}><Text style={styles.incomeDotsText}>⋯</Text></TouchableOpacity>{menuId === item.id ? <View style={styles.incomeDropdownMenu}><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => startEditIncome(item)}><Text style={styles.incomeDropdownText}>تعديل</Text></TouchableOpacity><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => deleteIncome(item.id)}><Text style={[styles.incomeDropdownText, styles.incomeDropdownDeleteText]}>حذف</Text></TouchableOpacity><TouchableOpacity style={[styles.incomeDropdownItem, styles.incomeDropdownLast]} onPress={() => setMenuId(null)}><Text style={styles.incomeDropdownText}>إغلاق</Text></TouchableOpacity></View> : null}</View></View>)}
+      </View>
     </ScreenWrap>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><View style={styles.modalBackdrop}><View style={styles.incomeModalCard}><View style={styles.modalHeaderRow}><TouchableOpacity style={styles.closeButton} onPress={() => { setOpen(false); resetForm(); }}><Text style={styles.closeText}>×</Text></TouchableOpacity><Text style={styles.modalTitle}>{editingId ? 'تعديل دخل شهري' : 'إضافة دخل شهري'}</Text></View><Text style={styles.inputLabel}>اسم الدخل</Text><TextInput value={incomeName} onChangeText={setIncomeName} placeholder="مثال: راتب، إيجار، أرباح" placeholderTextColor="#94a3b8" style={styles.modalInput} textAlign="right" /><Text style={styles.inputLabel}>المبلغ</Text><TextInput value={incomeAmount} onChangeText={onlyNumbers} placeholder="0" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.modalInput} textAlign="right" /><TouchableOpacity style={styles.modalSaveButton} onPress={saveIncome}><Text style={styles.modalSaveText}>{editingId ? 'حفظ التعديل' : 'حفظ'}</Text></TouchableOpacity></View></View></Modal>
   </View>;
@@ -254,6 +305,14 @@ const styles = StyleSheet.create({
   incomeRowText: { flex: 1, alignItems: 'flex-end' },
   incomeRowTitle: { color: '#0f172a', fontWeight: '900', fontSize: 17, textAlign: 'right' },
   incomeRowAmount: { marginTop: 4, color: '#0f766e', fontWeight: '900', fontSize: 15, textAlign: 'right' },
+  fixedIncomeRow: { backgroundColor: '#fff7ed', borderColor: '#fed7aa' },
+  fixedIncomeBadge: { backgroundColor: '#ffedd5', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#fdba74' },
+  fixedIncomeBadgeText: { color: '#c2410c', fontWeight: '900', fontSize: 11 },
+  fixedIncomeFormula: { marginTop: 4, color: '#9a3412', fontWeight: '800', fontSize: 11, textAlign: 'right' },
+  fixedIncomeRowTa3meed: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
+  fixedIncomeBadgeTa3meed: { backgroundColor: '#e0e7ff', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: '#a5b4fc' },
+  fixedIncomeBadgeTextTa3meed: { color: '#3730a3', fontWeight: '900', fontSize: 11 },
+  fixedIncomeFormulaTa3meed: { marginTop: 4, color: '#3730a3', fontWeight: '800', fontSize: 11, textAlign: 'right' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 18 },
   incomeModalCard: { backgroundColor: '#fff', borderRadius: 26, padding: 16, borderWidth: 1, borderColor: '#e2e8f0' },
   modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
