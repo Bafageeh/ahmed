@@ -13,6 +13,7 @@ import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const FINANCE_SUMMARY_URL = 'https://finance.pm.sa/api/v1/integrations/ahmed/summary';
 
 const tabs = [
   { key: 'wealth', label: 'ثروتي', icon: 'wealth' },
@@ -23,7 +24,7 @@ const tabs = [
 ];
 
 const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon'];
-const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'stats'];
+const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'financeImports', 'stats'];
 
 const platforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد والتصنيفات والمستثمرين.' },
@@ -71,6 +72,7 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'stats') return <StatsScreen onBack={() => openTab('reports')} />;
     if (activeTab === 'futureMonthlyIncome') return <FutureMonthlyIncomeScreen goTo={openTab} />;
     if (activeTab === 'actualMonthlyIncome') return <ActualMonthlyIncomeScreen goTo={openTab} />;
+    if (activeTab === 'financeImports') return <FinanceImportsScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
     if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} openInvestment={openInvestment} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
@@ -105,11 +107,11 @@ function TopBar({ title, onBack, right }) {
 
 function AccountsScreen({ goTo }) {
   return <ScreenWrap>
-    <Header badge="حساباتي" title="#S-120 حساباتي" subtitle="مركز الحسابات والدخل والخزنة الآمنة." icon="wealth" />
+    <Header badge="حساباتي" title="#S-120 حساباتي" subtitle="مركز الحسابات والدخل والقيم المستوردة من Finance." icon="wealth" />
     <View style={styles.grid}>
       <Quick title="دخل شهري مستقبلي" text="إدارة مصادر الدخل المتوقعة" icon="reports" onPress={() => goTo('futureMonthlyIncome')} />
       <Quick title="دخل شهري حقيقي" text="الدخل الفعلي المحقق" icon="wealth" onPress={() => goTo('actualMonthlyIncome')} />
-      <Quick title="الخزنة الآمنة" text="الحسابات والبطاقات وبيانات الدخول" icon="settings" onPress={() => goTo('secureVault')} />
+      <Quick title="قيم Finance المستوردة" text="جميع القيم المقروءة مباشرة من مشروع Finance" icon="stats" onPress={() => goTo('financeImports')} />
       <Quick title="ثروتي" text="العودة إلى ملخص الثروة" icon="wealth" onPress={() => goTo('wealth')} />
     </View>
   </ScreenWrap>;
@@ -120,7 +122,7 @@ function ReportsScreen({ goTo, openInvestments }) {
     <Header badge="مركز التقارير" title="#S-130 تقارير أحمد" subtitle="اختصارات التقارير والإحصائيات." icon="reports" />
     <View style={styles.grid}>
       <Quick title="احصائيات" text="إحصائيات عامة" icon="stats" onPress={() => goTo('stats')} />
-      <Quick title="حساباتي" text="الدخل والخزنة" icon="wealth" onPress={() => goTo('accounts')} />
+      <Quick title="حساباتي" text="الدخل والقيم المستوردة" icon="wealth" onPress={() => goTo('accounts')} />
       <Quick title="استثماراتي" text="منصات الاستثمار" icon="investments" onPress={openInvestments} />
       <Quick title="مزيد" text="الإعدادات والاختصارات" icon="more" onPress={() => goTo('more')} />
     </View>
@@ -133,6 +135,57 @@ function StatsScreen({ onBack }) {
 
 function InvestmentsScreen({ openPlatform }) {
   return <ScreenWrap><Header badge="استثماراتي" title="#S-140 منصات الاستثمار" subtitle="منصات الاستثمار فقط." icon="investments" /><View style={styles.grid}>{platforms.map((p) => { const isActive = activeInvestmentKeys.includes(p.key); return <TouchableOpacity key={p.key} disabled={!isActive} onPress={() => openPlatform(p.key)} style={[styles.card, !isActive && styles.disabledCard]}><View style={styles.iconBox}><UiIcon name={p.icon} size={29} /></View><Text style={styles.cardTitle}>{p.name}</Text><Text style={styles.cardText}>{p.text}</Text><Text style={[styles.openText, !isActive && styles.soonText]}>{isActive ? 'فتح الشاشة' : 'قريبًا'}</Text></TouchableOpacity>; })}</View></ScreenWrap>;
+}
+
+function FinanceImportsScreen({ onBack }) {
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const loadSummary = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await fetch(FINANCE_SUMMARY_URL, { headers: { Accept: 'application/json' } });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message || 'finance fetch failed');
+      setSummary(json.data || json);
+    } catch (fetchError) {
+      setError('تعذر جلب بيانات Finance.');
+      setSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { loadSummary(); }, []);
+
+  const data = summary || {};
+  const sections = buildFinanceSections(data);
+  const syncedAt = data.synced_at || data.syncedAt || data.updated_at || data.generated_at || '';
+
+  return <ScreenWrap>
+    <TopBar title="#S-123 قيم Finance" onBack={onBack} right={<TouchableOpacity style={styles.refreshButton} onPress={loadSummary}><Text style={styles.refreshText}>تحديث</Text></TouchableOpacity>} />
+    <Header badge="Finance" title="#S-123 القيم المستوردة" subtitle="جميع القيم المقروءة مباشرة من مشروع Finance بدون إدخال يدوي." icon="stats" />
+    <View style={styles.financeSourceCard}>
+      <Text style={styles.financeSourceTitle}>المصدر</Text>
+      <Text style={styles.financeSourceText}>Finance • admin@pm.sa</Text>
+      {syncedAt ? <Text style={styles.financeSourceMuted}>آخر مزامنة: {formatFinanceValue('synced_at', syncedAt)}</Text> : null}
+    </View>
+    {loading ? <Text style={styles.emptyIncomeText}>جاري تحميل قيم Finance...</Text> : null}
+    {!!error ? <Text style={styles.financeErrorText}>{error}</Text> : null}
+    {!loading && !error && sections.length === 0 ? <Text style={styles.emptyIncomeText}>لا توجد قيم مستوردة من Finance حاليًا.</Text> : null}
+    {!loading && !error ? sections.map((section) => <View key={section.key} style={styles.financeSectionCard}>
+      <Text style={styles.financeSectionTitle}>{financeSectionLabel(section.key)}</Text>
+      {section.items.map((item) => <View key={item.path} style={styles.financeValueRow}>
+        <View style={styles.financeValueTextBlock}>
+          <Text style={styles.financeValueLabel}>{financeLabel(item.path)}</Text>
+          <Text style={styles.financeValuePath}>{item.path}</Text>
+        </View>
+        <Text style={styles.financeValueAmount}>{formatFinanceValue(item.path, item.value)}</Text>
+      </View>)}
+    </View>) : null}
+  </ScreenWrap>;
 }
 
 function FutureMonthlyIncomeScreen({ goTo }) {
@@ -259,6 +312,68 @@ function MenuRow({ title, text, icon, onPress, last, danger }) {
   return <TouchableOpacity onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast, danger && styles.menuRowDanger]}><View style={[styles.menuIcon, danger && styles.menuIconDanger]}><UiIcon name={icon} size={24} color={danger ? '#b91c1c' : ICON_COLOR_DARK} /></View><View style={styles.menuTextBlock}><Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>{title}</Text><Text style={[styles.menuText, danger && styles.menuTextDanger]}>{text}</Text></View><UiIcon name="back" size={22} color={danger ? '#b91c1c' : ICON_COLOR_SOFT} /></TouchableOpacity>;
 }
 
+function buildFinanceSections(data) {
+  const root = data && typeof data === 'object' ? data : {};
+  return Object.keys(root)
+    .filter((key) => key !== 'synced_at' && key !== 'syncedAt' && key !== 'updated_at' && key !== 'generated_at')
+    .map((key) => ({ key, items: flattenFinanceValues(root[key], key) }))
+    .filter((section) => section.items.length > 0);
+}
+
+function flattenFinanceValues(value, prefix) {
+  if (value === null || value === undefined) return [{ path: prefix, value }];
+  if (Array.isArray(value)) {
+    if (!value.length) return [{ path: prefix, value: '[]' }];
+    return value.flatMap((item, index) => flattenFinanceValues(item, `${prefix}[${index + 1}]`));
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (!keys.length) return [{ path: prefix, value: '{}' }];
+    return keys.flatMap((key) => flattenFinanceValues(value[key], `${prefix}.${key}`));
+  }
+  return [{ path: prefix, value }];
+}
+
+function financeSectionLabel(key) {
+  const labels = { income: 'الدخل', portfolio: 'المحفظة', counts: 'الأعداد', alerts: 'التنبيهات', account: 'الحساب', meta: 'معلومات المزامنة' };
+  return labels[key] || key;
+}
+
+function financeLabel(path) {
+  const labels = {
+    'income.monthly_installments_total': 'إجمالي الأقساط الشهرية',
+    'income.ahmed_monthly_profit': 'ربح أحمد الشهري',
+    'income.remaining_installments_total': 'إجمالي الأقساط المتبقية',
+    'portfolio.remaining_principal_total': 'رأس المال المتبقي',
+    'portfolio.ahmed_total_profit': 'إجمالي ربح أحمد',
+    'portfolio.active_monthly_installments': 'القسط الشهري النشط',
+    'counts.active_clients': 'العملاء النشطون',
+    'counts.overdue_clients': 'العملاء المتأخرون',
+    'counts.legal_clients': 'عملاء القضايا',
+  };
+  return labels[path] || arabizeFinanceKey(path);
+}
+
+function arabizeFinanceKey(path) {
+  const last = String(path || '').split('.').pop().replace(/\[\d+\]/g, '');
+  return last.replace(/_/g, ' ');
+}
+
+function formatFinanceValue(path, value) {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'boolean') return value ? 'نعم' : 'لا';
+  if (typeof value === 'number') {
+    const moneyLike = /amount|total|profit|principal|installment|balance|income|payment|capital|monthly/i.test(path);
+    return moneyLike ? `${value.toLocaleString('en-US')} ر.س` : value.toLocaleString('en-US');
+  }
+  if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) {
+    const numberValue = Number(value);
+    const moneyLike = /amount|total|profit|principal|installment|balance|income|payment|capital|monthly/i.test(path);
+    return moneyLike ? `${numberValue.toLocaleString('en-US')} ر.س` : numberValue.toLocaleString('en-US');
+  }
+  return String(value);
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f4f7fb' },
   fullScreenHost: { flex: 1, backgroundColor: '#f4f7fb' },
@@ -268,6 +383,8 @@ const styles = StyleSheet.create({
   page: { padding: 18, paddingBottom: 34 },
   simpleTopBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 10 },
   simpleBackButton: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
+  refreshButton: { minWidth: 72, height: 52, borderRadius: 18, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderColor: '#99f6e4' },
+  refreshText: { color: '#fff', fontWeight: '900', fontSize: 14 },
   topAddButton: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#99f6e4' },
   topAddText: { color: '#fff', fontSize: 32, fontWeight: '900', marginTop: -3 },
   simpleTopTitle: { color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'center' },
@@ -287,6 +404,18 @@ const styles = StyleSheet.create({
   cardText: { marginTop: 6, color: '#64748b', lineHeight: 20, fontWeight: '700', textAlign: 'right' },
   openText: { marginTop: 'auto', color: ICON_COLOR_DARK, fontWeight: '900', textAlign: 'right' },
   soonText: { color: '#94a3b8' },
+  financeSourceCard: { marginTop: 14, backgroundColor: '#ecfeff', borderRadius: 22, borderWidth: 1, borderColor: '#a5f3fc', padding: 14, alignItems: 'flex-end' },
+  financeSourceTitle: { color: '#0e7490', fontWeight: '900', fontSize: 17, textAlign: 'right' },
+  financeSourceText: { marginTop: 4, color: '#0f172a', fontWeight: '900', textAlign: 'right' },
+  financeSourceMuted: { marginTop: 4, color: '#475569', fontWeight: '800', textAlign: 'right' },
+  financeErrorText: { marginTop: 14, color: '#b91c1c', fontWeight: '900', textAlign: 'center', backgroundColor: '#fff1f2', borderRadius: 18, padding: 16, overflow: 'hidden' },
+  financeSectionCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 24, borderWidth: 1, borderColor: '#e2e8f0', padding: 14 },
+  financeSectionTitle: { color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'right', marginBottom: 10 },
+  financeValueRow: { backgroundColor: '#f8fafc', borderRadius: 16, borderWidth: 1, borderColor: '#edf2f7', padding: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  financeValueTextBlock: { flex: 1, alignItems: 'flex-end' },
+  financeValueLabel: { color: '#0f172a', fontWeight: '900', fontSize: 15, textAlign: 'right' },
+  financeValuePath: { marginTop: 3, color: '#94a3b8', fontWeight: '800', fontSize: 11, textAlign: 'right' },
+  financeValueAmount: { color: '#0f766e', fontWeight: '900', fontSize: 15, maxWidth: '45%', textAlign: 'left' },
   incomeTotalCard: { marginTop: 16, backgroundColor: '#ecfdf5', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#99f6e4', alignItems: 'flex-end' },
   incomeTotalLabel: { color: '#0f766e', fontWeight: '900', fontSize: 14, textAlign: 'right' },
   incomeTotalValue: { marginTop: 6, color: '#0f172a', fontWeight: '900', fontSize: 28, textAlign: 'right' },
