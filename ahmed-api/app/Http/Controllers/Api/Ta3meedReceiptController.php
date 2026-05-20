@@ -295,9 +295,11 @@ class Ta3meedReceiptController extends Controller
     {
         $english = strtoupper($normalized);
         $patterns = [
-            '/(?:للفرصه|للفرصة|الفرصه|الفرصة)\s*(?:رقم)?\s*(?:INV\s*[-–—]?\s*)?([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
-            '/(?:رقم)\s*(?:INV\s*[-–—]?\s*)?([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
-            '/\bINV\s*[-–—]?\s*([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)\b/u',
+            '/(?:للفرصه|للفرصة|الفرصه|الفرصة)\s*(?:رقم)?\s*(INV\s*[-–—]?\s*[A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
+            '/(?:رقم)\s*(INV\s*[-–—]?\s*[A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
+            '/\b(INV\s*[-–—]?\s*[A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)\b/u',
+            '/(?:للفرصه|للفرصة|الفرصه|الفرصة)\s*(?:رقم)?\s*([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
+            '/(?:رقم)\s*([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)/u',
             '/\b([A-Z]{2,}[A-Z0-9-]*[0-9][A-Z0-9-]*)\b/u',
         ];
 
@@ -313,8 +315,10 @@ class Ta3meedReceiptController extends Controller
     private function cleanOpportunityReference(string $reference): string
     {
         $reference = strtoupper(trim($reference));
+        $reference = preg_replace('/\s+/', '', $reference) ?: $reference;
+        $reference = str_replace(['–', '—'], '-', $reference);
         $reference = preg_replace('/[^A-Z0-9-]/', '', $reference) ?: $reference;
-        $reference = preg_replace('/^INV-?/', '', $reference) ?: $reference;
+        $reference = preg_replace('/^INV(?=[A-Z0-9])/', 'INV-', $reference) ?: $reference;
         return $reference;
     }
 
