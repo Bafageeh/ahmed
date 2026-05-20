@@ -41,14 +41,13 @@ class Ta3meedReceiptController extends Controller
         $platform = DB::table('investment_platforms')->where('code', 'ta3meed')->first();
         if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
-        $investment = DB::table('investment_opportunities')
-            ->where('platform_id', $platform->id)
-            ->where('reference_number', $parsed['reference_number'])
-            ->first();
+        $investment = $this->findInvestmentByReference((int) $platform->id, $parsed['reference_number']);
 
         if (! $investment) {
             return response()->json(['message' => 'لم يتم العثور على فرصة تعميد بهذا الرقم', 'data' => $parsed], 404);
         }
+
+        $parsed['reference_number'] = $investment->reference_number;
 
         if ($this->hasFullReceipt((int) $investment->id)) {
             return response()->json([
@@ -66,7 +65,7 @@ class Ta3meedReceiptController extends Controller
             'amount' => $parsed['amount'],
             'receipt_type' => $parsed['receipt_type'],
             'receipt_date' => $data['receipt_date'] ?? now()->toDateString(),
-            'reference_number' => $parsed['reference_number'],
+            'reference_number' => $investment->reference_number,
             'source_message' => $data['message'],
             'notes' => $data['notes'] ?? $parsed['label'],
             'force_complete' => $parsed['is_final'],
@@ -320,6 +319,20 @@ class Ta3meedReceiptController extends Controller
         $reference = preg_replace('/[^A-Z0-9-]/', '', $reference) ?: $reference;
         $reference = preg_replace('/^INV(?=[A-Z0-9])/', 'INV-', $reference) ?: $reference;
         return $reference;
+    }
+
+    private function findInvestmentByReference(int $platformId, string $reference)
+    {
+        $normalizedReference = $this->cleanOpportunityReference($reference);
+        $withoutDash = str_replace('-', '', $normalizedReference);
+
+        return DB::table('investment_opportunities')
+            ->where('platform_id', $platformId)
+            ->where(function ($query) use ($normalizedReference, $withoutDash) {
+                $query->whereRaw('LOWER(reference_number) = ?', [strtolower($normalizedReference)])
+                    ->orWhereRaw('LOWER(REPLACE(reference_number, "-", "")) = ?', [strtolower($withoutDash)]);
+            })
+            ->first();
     }
 
     private function record($investment, array $data): array
