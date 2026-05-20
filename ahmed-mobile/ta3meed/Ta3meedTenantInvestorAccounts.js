@@ -5,6 +5,8 @@ import { money, n } from './ta3meedUtils';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const todayText = () => new Date().toISOString().slice(0, 10);
+const endedStatuses = ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done', 'مستلم', 'مستلمة', 'تم الاستلام', 'منتهي', 'منتهية'];
+const cancelledStatuses = ['cancelled', 'canceled', 'void', 'ملغي', 'ملغية', 'ملغاة'];
 
 function uniqueInvestors(investors) {
   const map = new Map();
@@ -19,22 +21,50 @@ function uniqueInvestors(investors) {
 function safeNumber(value) {
   return Number(value || 0);
 }
+function statusValues(row) {
+  return [row?.opportunity_status, row?.allocation_status, row?.status].map((status) => String(status || '').trim().toLowerCase()).filter(Boolean);
+}
+function hasStatus(row, statuses) {
+  return statusValues(row).some((status) => statuses.includes(status));
+}
+function isEnded(row) {
+  return hasStatus(row, endedStatuses);
+}
+function isCancelled(row) {
+  return hasStatus(row, cancelledStatuses);
+}
+function isInactive(row) {
+  return isCancelled(row) || isEnded(row);
+}
+function principalReceivedOf(row) {
+  const invested = safeNumber(row?.invested_amount);
+  if (row?.principal_received_amount !== undefined && row?.principal_received_amount !== null) {
+    return Math.min(invested, Math.max(0, safeNumber(row.principal_received_amount)));
+  }
+  return Math.min(invested, Math.max(0, safeNumber(row?.received_total_amount ?? row?.received_amount)));
+}
+function remainingCapitalOf(row) {
+  if (isInactive(row)) return 0;
+  if (row?.ta3meed_remaining_amount !== undefined && row?.ta3meed_remaining_amount !== null) {
+    return Math.max(0, safeNumber(row.ta3meed_remaining_amount));
+  }
+  return Math.max(0, safeNumber(row?.invested_amount) - principalReceivedOf(row));
+}
 
 function normalize(raw, investor) {
   const summary = raw?.summary || {};
   const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
-  const active = opportunities.filter((row) => !['received', 'completed', 'closed', 'finished', 'ended'].includes(String(row.opportunity_status || row.allocation_status || '').toLowerCase()) && safeNumber(row.remaining_amount) > 0);
+  const active = opportunities.filter((row) => !isInactive(row));
   const activeInvested = active.reduce((sum, row) => sum + safeNumber(row.invested_amount), 0);
-  const activeReceived = active.reduce((sum, row) => sum + safeNumber(row.received_amount), 0);
+  const ta3meed = active.reduce((sum, row) => sum + remainingCapitalOf(row), 0);
+  const activeReceived = Math.max(0, activeInvested - ta3meed);
   const endedProfit = summary.ended_profit !== undefined ? safeNumber(summary.ended_profit) : opportunities.reduce((sum, row) => {
-    const status = String(row.opportunity_status || row.allocation_status || '').toLowerCase();
-    const ended = ['received', 'completed', 'closed', 'finished', 'ended'].includes(status) || safeNumber(row.remaining_amount) <= 0;
-    return ended ? sum + Math.max(0, safeNumber(row.received_amount) - safeNumber(row.invested_amount)) : sum;
+    return isEnded(row) ? sum + Math.max(0, safeNumber(row.received_total_amount ?? row.received_amount) - safeNumber(row.invested_amount)) : sum;
   }, 0);
   return {
     investor,
     balance: safeNumber(raw?.balance !== undefined ? raw.balance : summary.manual_balance),
-    ta3meed: Math.max(0, activeInvested - activeReceived),
+    ta3meed,
     activeInvested,
     activeReceived,
     endedProfit,
@@ -94,11 +124,11 @@ function Home({ investor, account, message, setScreen }) {
   const cash = balance - ta3meed;
   const capital = balance + n(account?.endedProfit);
   const cards = [
-    ['مستثمر تعميد', ta3meed, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'الاستثمار النشط - النصيب المستلم', true],
+    ['مستثمر تعميد', ta3meed, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'مجموع رأس مال المستثمر المتبقي في فرص تعميد غير المنتهية', true],
     ['الرصيد اليدوي', balance, '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'مجموع الإضافات - مجموع السحوبات'],
     ['الكاش', cash, cash < 0 ? '#fff1f2' : '#fffbeb', cash < 0 ? '#fecdd3' : '#fde68a', cash < 0 ? '#be123c' : '#b45309', cash < 0 ? '#881337' : '#78350f', 'الرصيد اليدوي - مستثمر تعميد'],
-    ['إجمالي المستثمر', n(account?.activeInvested), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'مجموع مبالغ الفرص النشطة'],
-    ['نصيبه المستلم', n(account?.activeReceived), '#f5f3ff', '#ddd6fe', '#6d28d9', '#4c1d95', 'مجموع المستلم من الفرص النشطة'],
+    ['إجمالي المستثمر', n(account?.activeInvested), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'مجموع رأس مال المستثمر في الفرص غير المنتهية'],
+    ['نصيبه المستلم', n(account?.activeReceived), '#f5f3ff', '#ddd6fe', '#6d28d9', '#4c1d95', 'المستلم من أصل رأس المال فقط'],
     ['رأس المال', capital, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'الرصيد اليدوي + ربح تعميد المنتهي'],
     ['ربح متوقع', n(account?.expectedProfit), '#fffbeb', '#fde68a', '#b45309', '#78350f', 'مجموع الربح المتوقع لحصة المستثمر'],
     ['ربح تعميد المنتهي', n(account?.endedProfit), '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
@@ -109,7 +139,7 @@ function Home({ investor, account, message, setScreen }) {
 
 function Card({ data }) {
   const [title, value, bg, border, titleColor, valueColor, note, wide, count] = data;
-  return <View style={{ flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: wide ? 128 : 108, borderRadius: 24, overflow: 'hidden', backgroundColor: bg, borderWidth: 1, borderColor: border }}><View style={{ width: '100%', paddingVertical: wide ? 12 : 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: border, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: titleColor, fontWeight: '900', fontSize: 13, textAlign: 'center' }}>{title}</Text></View><View style={{ flex: 1, width: '100%', paddingHorizontal: 14, paddingVertical: wide ? 16 : 13, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: valueColor, fontWeight: '900', fontSize: wide ? 27 : 20, textAlign: 'center', writingDirection: 'rtl' }}>{count ? value : `${money(value, 2)} ر.س`}</Text>{note ? <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 11, marginTop: 7, textAlign: 'center', lineHeight: 17, writingDirection: 'rtl' }}>{note}</Text> : null}</View></View>;
+  return <View style={{ flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: wide ? 128 : 108, borderRadius: 24, overflow: 'hidden', backgroundColor: bg, borderWidth: 1, borderColor: border }}><View style={{ width: '100%', paddingVertical: wide ? 12 : 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: border, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: titleColor, fontWeight: '900', fontSize: 13, textAlign: 'center' }}>{title}</Text></View><View style={{ flex: 1, width: '100%', paddingHorizontal: 14, paddingVertical: wide ? 16 : 13, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: valueColor, fontWeight: '900', fontSize: wide ? 27 : 20, textAlign: 'center', writingDirection: 'rtl' }}>{count ? value : `${money(value, 2)} ر.س`}</Text>{note ? <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 10, marginTop: 7, textAlign: 'center', lineHeight: 16, writingDirection: 'rtl' }}>{note}</Text> : null}</View></View>;
 }
 
 function Nav({ title, text, onPress }) {
@@ -159,5 +189,5 @@ function SimpleList({ title, rows }) {
 }
 
 function OpportunityList({ investor, rows }) {
-  return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((row, index) => <View key={`${row.opportunity_id || index}-${row.allocation_id || index}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{row.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(row.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(row.received_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(row.remaining_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه الفعلي: {money(row.ended_profit_amount ?? Math.max(0, n(row.received_amount) - n(row.invested_amount)), 2)}</Text></View>)}</>;
+  return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((row, index) => <View key={`${row.opportunity_id || index}-${row.allocation_id || index}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{row.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(row.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المستلم من أصل رأس المال: {money(principalReceivedOf(row), 2)}</Text><Text style={styles.investorPaymentMeta}>رأس المال المتبقي: {money(remainingCapitalOf(row), 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه الفعلي: {money(row.ended_profit_amount ?? Math.max(0, n(row.received_total_amount ?? row.received_amount) - n(row.invested_amount)), 2)}</Text></View>)}</>;
 }
