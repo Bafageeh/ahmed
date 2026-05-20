@@ -12,6 +12,15 @@ function isEndedOpportunity(item) {
   return ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done'].includes(status);
 }
 
+function isPartialOpportunity(item) {
+  return String(item?.status || '').trim().toLowerCase() === 'partial_received';
+}
+
+function itemHasInvestor(item, selectedInvestor) {
+  if (!selectedInvestor || selectedInvestor === 'all') return true;
+  return (item.allocations || []).some((allocation) => investorKey(allocation) === selectedInvestor);
+}
+
 function partialReceivedAmount(items, selectedInvestor = 'all') {
   return (items || []).reduce((total, item) => {
     if (isEndedOpportunity(item)) return total;
@@ -51,6 +60,14 @@ if (!React.__ta3meedPartialReceivedMemoPatched) {
   React.useMemo = function patchedUseMemo(factory, deps) {
     return originalUseMemo.call(this, () => {
       const value = factory();
+
+      if (Array.isArray(value) && Array.isArray(deps?.[0]) && deps?.[1] === 'active') {
+        const currentIds = new Set(value.map((item) => String(item?.id)));
+        const selectedInvestor = typeof deps?.[3] === 'string' ? deps[3] : 'all';
+        const extraItems = deps[0].filter((item) => isPartialOpportunity(item) && !currentIds.has(String(item?.id)) && itemHasInvestor(item, selectedInvestor));
+        if (extraItems.length) return [...value, ...extraItems];
+      }
+
       const looksLikeTa3meedTotals = value && typeof value === 'object' && !Array.isArray(value)
         && Object.prototype.hasOwnProperty.call(value, 'invested')
         && Object.prototype.hasOwnProperty.call(value, 'profit')
@@ -60,11 +77,13 @@ if (!React.__ta3meedPartialReceivedMemoPatched) {
 
       if (!looksLikeTa3meedTotals) return value;
 
+      const filteredItems = Array.isArray(deps?.[0]) ? deps[0] : [];
       const allItems = Array.isArray(deps?.[1]) ? deps[1] : [];
       const selectedInvestor = typeof deps?.[2] === 'string' ? deps[2] : 'all';
 
       return {
         ...value,
+        active: filteredItems.filter((item) => !isEndedOpportunity(item)).length,
         partial: money(partialReceivedAmount(allItems, selectedInvestor), 2),
       };
     }, deps);
