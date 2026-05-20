@@ -44,20 +44,27 @@ function hasStatus(o, statuses) {
 }
 function isEndedOrReceived(o) {
   if (hasStatus(o, cancelledStatuses)) return false;
-  return hasStatus(o, endedOrReceivedStatuses) || (n(o?.received_amount) > 0 && n(o?.remaining_amount) <= 0);
+  return hasStatus(o, endedOrReceivedStatuses) || (n(o?.received_total_amount ?? o?.received_amount) > 0 && n(o?.remaining_amount) <= 0);
 }
 function isInactive(o) {
   return hasStatus(o, cancelledStatuses) || isEndedOrReceived(o);
 }
 function investorEndedProfitOf(o) {
-  return Math.max(0, n(o?.received_amount) - n(o?.invested_amount));
+  return Math.max(0, n(o?.received_total_amount ?? o?.received_amount) - n(o?.invested_amount));
 }
 function normalizeAccount(raw, investor) {
   const summary = raw?.summary || {};
   const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
   const active = opportunities.filter((o) => !isInactive(o));
-  const activeInvested = active.reduce((sum, o) => sum + n(o.invested_amount), 0);
-  const activeReceived = active.reduce((sum, o) => sum + n(o.received_amount), 0);
+  const activeInvested = summary.active_invested !== undefined
+    ? n(summary.active_invested)
+    : active.reduce((sum, o) => sum + n(o.invested_amount), 0);
+  const activeReceived = summary.active_principal_received !== undefined
+    ? n(summary.active_principal_received)
+    : active.reduce((sum, o) => sum + n(o.principal_received_amount ?? o.received_amount), 0);
+  const ta3meed = summary.ta3meed_active_remaining !== undefined
+    ? n(summary.ta3meed_active_remaining)
+    : Math.max(0, activeInvested - activeReceived);
   const endedProfit = summary.ended_profit !== undefined
     ? n(summary.ended_profit)
     : opportunities.filter(isEndedOrReceived).reduce((sum, o) => sum + investorEndedProfitOf(o), 0);
@@ -67,7 +74,7 @@ function normalizeAccount(raw, investor) {
     balance: raw?.balance !== undefined ? n(raw.balance) : n(summary.manual_balance),
     activeInvested,
     activeReceived,
-    ta3meed: Math.max(0, activeInvested - activeReceived),
+    ta3meed,
     endedProfit,
     expectedProfit: n(summary.expected_profit),
     netBalance: summary.net_balance !== undefined ? n(summary.net_balance) : null,
@@ -120,11 +127,11 @@ function Home({ investor, account, message, setScreen }) {
   const cash = balance - ta3meed;
   const capital = balance + n(account?.endedProfit);
   const cards = [
-    ['مستثمر تعميد', ta3meed, 'main', 'الاستثمار النشط - النصيب المستلم', true],
+    ['مستثمر تعميد', ta3meed, 'main', 'نفس معادلة استثمار تعميد في شاشة تعميد', true],
     ['الرصيد اليدوي', balance, 'blue', 'مجموع الإضافات - مجموع السحوبات'],
     ['الكاش', cash, cash < 0 ? 'red' : 'amber', 'الرصيد اليدوي - مستثمر تعميد'],
     ['إجمالي المستثمر', n(account?.activeInvested), 'slate', 'مجموع مبالغ الفرص النشطة'],
-    ['نصيبه المستلم', n(account?.activeReceived), 'violet', 'مجموع المستلم من الفرص النشطة'],
+    ['نصيبه المستلم', n(account?.activeReceived), 'violet', 'المستلم من أصل رأس المال فقط'],
     ['رأس المال', capital, 'main', 'الرصيد اليدوي + ربح تعميد المنتهي'],
     ['ربح متوقع', n(account?.expectedProfit), 'amber', 'مجموع الربح المتوقع لحصة المستثمر'],
     ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
@@ -185,4 +192,4 @@ function ManageEntries({ investor, account, reload }) {
 function TypeButton({ label, active, onPress, danger }) { return <TouchableOpacity style={[styles.investorEntryTypeButton, active && styles.investorEntryTypeButtonActive, active && danger && styles.investorEntryTypeButtonDanger]} onPress={onPress}><Text style={[styles.investorEntryTypeText, active && styles.investorEntryTypeTextActive]}>{label}</Text></TouchableOpacity>; }
 
 function SimpleList({ title, rows }) { return <><Text style={styles.investorScreenTitle}>{title}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((r, i) => <View key={r.id || i} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{money(r.amount || r.received_amount || 0, 2)} ر.س</Text><Text style={styles.investorPaymentMeta}>{r.date || r.entry_date || r.receipt_date || '-'}</Text>{r.description || r.notes ? <Text style={styles.investorPaymentMeta}>{r.description || r.notes}</Text> : null}</View>)}</>; }
-function OpportunityList({ investor, rows }) { return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((o, i) => <View key={`${o.opportunity_id || i}-${o.allocation_id || i}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{o.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(o.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(o.received_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(o.remaining_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه الفعلي: {money(o.ended_profit_amount ?? Math.max(0, n(o.received_amount) - n(o.invested_amount)), 2)}</Text></View>)}</>; }
+function OpportunityList({ investor, rows }) { return <><Text style={styles.investorScreenTitle}>#S-114 فرص تعميد - {investor.name}</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد فرص تعميد مرتبطة بهذا المستثمر.</Text> : rows.map((o, i) => <View key={`${o.opportunity_id || i}-${o.allocation_id || i}`} style={styles.investorPaymentCard}><Text style={styles.investorPaymentTitle}>{o.reference_number || 'فرصة تعميد'}</Text><Text style={styles.investorPaymentMeta}>مبلغ المستثمر: {money(o.invested_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>نصيبه المستلم: {money(o.principal_received_amount ?? o.received_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>المتبقي لهذه الفرصة: {money(o.ta3meed_remaining_amount ?? o.remaining_amount, 2)}</Text><Text style={styles.investorPaymentMeta}>ربحه الفعلي: {money(o.ended_profit_amount ?? Math.max(0, n(o.received_total_amount ?? o.received_amount) - n(o.invested_amount)), 2)}</Text></View>)}</>; }
