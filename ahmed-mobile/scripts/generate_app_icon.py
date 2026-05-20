@@ -1,28 +1,103 @@
 from pathlib import Path
-from base64 import b64decode
-from PIL import Image
-import io
+from PIL import Image, ImageDraw, ImageFont
+import os
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'
 ASSETS.mkdir(parents=True, exist_ok=True)
 
-# Exact Ahmed icon design approved in the branding preview.
-ICON_BASE64 = """
-iVBORw0KGgoAAAANSUhEUgAABAAAAAQACAMAAABIw9uxAAABgFBMVEVsWZydimVeSjweFFqDabTe4OBzTcM0KzdiTks2HIOCXMiNbeHzWLeaiIinYWxT7+PvKnzqgxXUzJ3QdFF+yo3AWElg6JnGRg7HXyZobF2iWfyO10dXNtLp3X3tbTGhFJXhMGHd5Y3NpUm7Zh3umhzscFGKSepKghLNKNGPQ3Ojv3uzf29XZ0NqMkMS2p+XCw+GPhL3Y19+ygtTQr+XRpfbWr8LOvNKNky6GeL3Jwi20icTLgxuJfLdUUGZ+ZIacW7HKpOHwz6QhG2xCTYiIjr179t+xn21nNJ1jrWQRKJ7f5l6h7KJYDvTxJn/8vWVmL5vQlk3LFZNK3yvbM+jpjqcnMVQIEY9HRsyFE5pNkL21tuwluDHs8VrMFqNMECONkZzZDNeInTPpi1dEjLDqy1qHzG5qM2IY25oOF5/ii0iAkqoeNmaXhmfOi/8z9LUmw6LvJoSGPgqzbYu9/IjMk6K2rI/9vx78t0XT6bW19aJE6peTvGg0iBS79kWCDXU3S2qN3Wr7d4k7w3PocqIkY4Kn82NlUiP4WtXaKcf9pGSW0jITVBIl0NEUp8cZeMY5FhUVr//ff///89OK7QAAeJSURBVHja7J2JcqMwEEXR5s5mEzBn8v//0zPbmUkoWjfnvWyHJGndYHmeVXt3mCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC8KzzvsPnRwzRN+6U5HD2M9Tye9nUmmrnrK+0evlW++A9j90A8l9SXcAOAfnoAvNTn13ABgH98Acg0+zFdAOCfWgAyx1nT/1zAe97ABoC8fAF4qS+v4QIAc5gLQOa6SvvnAAAAu0wB4Ntvv/Xb/7u+6v//9c8ABAMeAYzsW8DMuV1AdblgghQKoyf0C5hTvASp3HFgBUJPbBeyf8vDwBcAxLwBalCHuQDzq3QJ8y4sUAOQgVgCV1lZqBHyf5vCgR8m+6wA3OLNAKpLHGQCcViwAHE4FIC4/uuEf7rMG3/MnAH7eJ0AB5lIg5gCMNZuNP8qBQAXgQUbPdc4GoDSjOZsRIhHQEqXxAcVgNOGMEf0nGAoA9exW7qZg8mugJme/1gFFxH2Jd6z7JdUywEKAXG4FEAD1gRwm5c/yfAfLygDkNiSiAJAQV8Z3WkYxJ3AjH9I6VSVtAbIAKFfdW9DBbX3pqoQLAAAP8AOABbEGtgPzTmMQHgJkx95dEIA1O7pCCqK42iYwHE4NoHdOJBBuxwQJnAKYXHn1EuRmANJn9iKHEk9BtwI0PtwKQf51AqCLv/YN6vf+AZioAKE0SvwEixHBNY+AwgkZL2QPQ3w4nh9XQC75SNrL59eQit7sfngT8sw78+v6s8CMoI57kv3d/r+AD9jGNIqArg8kBvdz/QwAD0tHs2O7CwwxI4gQgd7QyUfExGjZuD77qB2A+vh8AQFt2ASikD1MA6z2M2zInXBPG3k9dIOL6+uW7EqfGRZfWpi+rRpw5NP07qFky/4O85WYbNM+2XSMeABrx++uHW7UOJ9sASDm+73GxjCIH4b6O8dTv+QHYQTYRsM3a+37YZ1wmCg6E4bpfnkgmkJ3vj3I0UK8xOTwAKHt/T0wk/5zXbH0gM+jQxVWzsK/xeAA4e392c8EMAbp2+A/8z//h8AeKEgPDugmb5KeXi97B+L8VkpaSOHVMrGGHd1APD2fsgt4oL7Mmzzv4ltBMA3V7/zXcPjlZWV0UQWLkyjnSoBrMMioPrbz3mTFzQA2Pbe+a0e2dOB30IAcRABYW4IAHiHPuBcJ0AVBnZ/LwB48fe+igInhYVtPPx/ewEQARHzBSCe+RoA8LfWAgD1rW3w9wLtM6+PQ8vKHwFm3F3SMf/fSQB4x49oV/TXucAH0BmATPwGwJePj3e+D/egZUCmg86brp+AxAA8/KGgLCWEQOgZUCYAGb9xt4P/HUeAFT3xSO8/1cOAFjD35dFQZgCQ3w+u9H9gT4cAOXw/yCVeg5AHLrA74A+HMD59PTODlUdDgxRUqgJ4yFyDQFe20koMRFA+tkwDIDxj39bEw8J5Pg7YnrH+y4Awz38dUyAD2Aaf3z46K03fF74B2HQk/9MA0EnU0VJAW8A7P78GtYCoPAZmSgAa/8m4ubGCHixFQEPc9J+rx/A2G/i/9rF/xsh/n9sAKj4T8oG72XGDNb5v4gH8Hr4D/5RAcCP/xgAAIDu6U/6AAChp7/+8h0fcL4v/cvnv0cI0GHwXDd5eL6H6gJw9F81fy+3Uf+TlvX5ePIF4Oi5Dg8+RUyAbP+b8c9rO//v3vP/9mNTe/N31gCYxzA4/6wA8HfO3j9oq8q1VQ9gKn8fCqTyw7AuALuvudAJYP4vfLxG1f03+6fr+Xt3b7OxsWDsW2ivpaXsAC53NQBQ3VY9gNGwdg/vx7vygE4Y7Hx5Ufn33g2AAAAPF3x/6v1cCMArsQj/0f4+b/xgJ5b+f6v/8KxBf6wDcDV/RTt/wwG1Pa9+U3uP8gRwN3575KXkPD4n30vAIDxT3/tfI5kXZsdDePV8/pfAwC8vYf88v0mB7dSAE4aX13v8b8CAKi+LWfWMt0cBRDHLQAYcA8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4oz0A90Q2gPMAAAAASUVORK5CYII=
-"""
+DARK = (30, 16, 78, 255)
+BLUE = (37, 99, 235, 255)
+GREEN = (52, 211, 153, 255)
+GOLD = (245, 158, 11, 255)
+WHITE = (255, 255, 255, 255)
+SOFT = (218, 230, 255, 255)
 
-raw = b64decode("".join(ICON_BASE64.split()))
-base_icon = Image.open(io.BytesIO(raw)).convert('RGBA').resize((1024, 1024), Image.LANCZOS)
 
-icon_path = ASSETS / 'icon.png'
-adaptive_path = ASSETS / 'adaptive-icon.png'
-splash_path = ASSETS / 'splash-icon.png'
+def font(size, bold=True):
+    paths = [
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+        '/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf' if bold else '/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf',
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            return ImageFont.truetype(path, size)
+    return ImageFont.load_default()
 
-base_icon.save(icon_path)
-base_icon.save(adaptive_path)
-base_icon.resize((512, 512), Image.LANCZOS).save(splash_path)
 
-print(f'Generated {icon_path}')
-print(f'Generated {adaptive_path}')
-print(f'Generated {splash_path}')
+def rounded(draw, box, radius, fill, outline=None, width=1):
+    draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
+
+
+def make_icon(size):
+    img = Image.new('RGBA', (size, size), DARK)
+    draw = ImageDraw.Draw(img)
+
+    for y in range(size):
+        t = y / max(1, size - 1)
+        r = int(22 * (1 - t) + 13 * t)
+        g = int(12 * (1 - t) + 47 * t)
+        b = int(67 * (1 - t) + 95 * t)
+        draw.line([(0, y), (size, y)], fill=(r, g, b, 255))
+
+    for cx, cy, rad, col in [
+        (int(size * 0.18), int(size * 0.18), int(size * 0.33), (62, 211, 255, 35)),
+        (int(size * 0.82), int(size * 0.75), int(size * 0.36), (245, 158, 11, 28)),
+        (int(size * 0.50), int(size * 0.55), int(size * 0.50), (124, 58, 237, 32)),
+    ]:
+        layer = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        layer_draw = ImageDraw.Draw(layer)
+        layer_draw.ellipse((cx - rad, cy - rad, cx + rad, cy + rad), fill=col)
+        img = Image.alpha_composite(img, layer)
+        draw = ImageDraw.Draw(img)
+
+    pad = int(size * 0.12)
+    card = (pad, int(size * 0.18), size - pad, int(size * 0.78))
+    shadow = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_draw.rounded_rectangle(
+        (card[0] + int(size * 0.018), card[1] + int(size * 0.025), card[2] + int(size * 0.018), card[3] + int(size * 0.025)),
+        radius=int(size * 0.09),
+        fill=(0, 0, 0, 90),
+    )
+    img = Image.alpha_composite(img, shadow)
+    draw = ImageDraw.Draw(img)
+
+    rounded(draw, card, int(size * 0.09), fill=(255, 255, 255, 232), outline=(255, 255, 255, 120), width=max(1, int(size * 0.006)))
+    inner = (card[0] + int(size * 0.06), card[1] + int(size * 0.08), card[2] - int(size * 0.06), card[3] - int(size * 0.08))
+    rounded(draw, inner, int(size * 0.065), fill=DARK)
+
+    a_font = font(int(size * 0.38), True)
+    a_box = draw.textbbox((0, 0), 'A', font=a_font)
+    draw.text((size // 2 - (a_box[2] - a_box[0]) // 2, int(size * 0.25) - a_box[1]), 'A', font=a_font, fill=WHITE)
+
+    label_font = font(int(size * 0.075), True)
+    label = 'AHMED'
+    label_box = draw.textbbox((0, 0), label, font=label_font)
+    draw.text((size // 2 - (label_box[2] - label_box[0]) // 2, int(size * 0.67)), label, font=label_font, fill=SOFT)
+
+    base = int(size * 0.60)
+    start = int(size * 0.29)
+    bar_w = int(size * 0.055)
+    for i, (height, color) in enumerate([(int(size * 0.12), BLUE), (int(size * 0.19), GREEN), (int(size * 0.27), GOLD)]):
+        x = start + i * int(size * 0.10)
+        rounded(draw, (x, base - height, x + bar_w, base), int(size * 0.02), fill=color)
+
+    draw.line([(int(size * 0.56), int(size * 0.57)), (int(size * 0.76), int(size * 0.49))], fill=GREEN, width=int(size * 0.025))
+    draw.ellipse((int(size * 0.73), int(size * 0.46), int(size * 0.79), int(size * 0.52)), fill=GREEN)
+    return img
+
+
+icon = make_icon(1024)
+splash = make_icon(512)
+
+icon.save(ASSETS / 'icon.png')
+icon.save(ASSETS / 'adaptive-icon.png')
+splash.save(ASSETS / 'splash-icon.png')
+
+# Verify that all generated PNG files are readable before Expo prebuild.
+for name in ['icon.png', 'adaptive-icon.png', 'splash-icon.png']:
+    path = ASSETS / name
+    with Image.open(path) as image:
+        image.verify()
+    print(f'Generated valid PNG: {path}')
