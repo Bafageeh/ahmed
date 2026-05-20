@@ -104,17 +104,18 @@ function InvestorDetails({ investor, screen, setScreen, onBack }) {
 function Home({ investor, account, message, setScreen }) {
   const balance = n(account?.balance);
   const ta3meed = n(account?.ta3meed);
-  const cash = balance - ta3meed;
-  const capital = balance + n(account?.endedProfit);
+  const endedProfit = n(account?.endedProfit);
+  const cash = balance + endedProfit - ta3meed;
+  const capital = balance + endedProfit;
   const cards = [
     ['مستثمر تعميد', ta3meed, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'مجموع رأس مال المستثمر المتبقي في فرص تعميد غير المنتهية', true],
     ['الرصيد اليدوي', balance, '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'مجموع الإضافات - مجموع السحوبات'],
-    ['الكاش', cash, cash < 0 ? '#fff1f2' : '#fffbeb', cash < 0 ? '#fecdd3' : '#fde68a', cash < 0 ? '#be123c' : '#b45309', cash < 0 ? '#881337' : '#78350f', 'الرصيد اليدوي - مستثمر تعميد'],
+    ['الكاش', cash, cash < 0 ? '#fff1f2' : '#fffbeb', cash < 0 ? '#fecdd3' : '#fde68a', cash < 0 ? '#be123c' : '#b45309', cash < 0 ? '#881337' : '#78350f', 'الرصيد اليدوي + ربح تعميد المنتهي - مستثمر تعميد'],
     ['إجمالي المستثمر', n(account?.activeInvested), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'مجموع رأس مال المستثمر في الفرص غير المنتهية'],
     ['نصيبه المستلم', n(account?.activeReceived), '#f5f3ff', '#ddd6fe', '#6d28d9', '#4c1d95', 'المستلم من أصل رأس المال فقط'],
     ['رأس المال', capital, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'الرصيد اليدوي + ربح تعميد المنتهي'],
     ['ربح متوقع', n(account?.expectedProfit), '#fffbeb', '#fde68a', '#b45309', '#78350f', 'مجموع الربح المتوقع لحصة المستثمر'],
-    ['ربح تعميد المنتهي', n(account?.endedProfit), '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
+    ['ربح تعميد المنتهي', endedProfit, '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
     ['عدد الفرص', n(account?.opportunitiesCount), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'عدد فرص المستثمر في تعميد', false, true],
   ];
   return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map((card) => <Card key={card[0]} data={card} />)}</View>{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /></>;
