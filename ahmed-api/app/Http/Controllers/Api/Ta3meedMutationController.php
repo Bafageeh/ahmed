@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Ta3meedInvestorName;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -198,21 +199,45 @@ class Ta3meedMutationController extends Controller
 
     private function investorId(string $name, int $userId): int
     {
-        $code = strtolower(trim(str_replace(' ', '_', $name)));
-        $query = DB::table('investment_investors')->where('code', $code);
+        $code = Ta3meedInvestorName::code($name);
+        $displayName = Ta3meedInvestorName::displayName($name, $code);
+        $query = DB::table('investment_investors')->where(function ($q) use ($code, $name) {
+            $q->where('code', $code)->orWhere('name', $name);
+        });
         $this->scopeUser($query, 'investment_investors', $userId);
-        $id = $query->value('id');
-        if ($id) return (int) $id;
-        $insert = ['code' => $code, 'name' => $name, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()];
+        $existing = $query->first();
+        if ($existing) {
+            $update = ['code' => $code, 'name' => $displayName, 'is_active' => true];
+            if (Schema::hasColumn('investment_investors', 'updated_at')) $update['updated_at'] = now();
+            DB::table('investment_investors')->where('id', $existing->id)->update($update);
+            return (int) $existing->id;
+        }
+        $insert = ['code' => $code, 'name' => $displayName, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()];
         $this->attachUser($insert, 'investment_investors', $userId);
         return DB::table('investment_investors')->insertGetId($insert);
     }
 
     private function investorByCode(string $code, int $userId)
     {
-        $query = DB::table('investment_investors')->where(function ($q) use ($code) { $q->where('code', $code)->orWhere('name', $code); });
+        $canonicalCode = Ta3meedInvestorName::code($code);
+        $query = DB::table('investment_investors')->where(function ($q) use ($code, $canonicalCode) {
+            $q->where('code', $canonicalCode)->orWhere('code', $code)->orWhere('name', $code);
+        });
         $this->scopeUser($query, 'investment_investors', $userId);
-        return $query->first();
+        $investor = $query->first();
+
+        if ($investor) {
+            $displayName = Ta3meedInvestorName::displayName($investor->name, $canonicalCode);
+            if ($investor->code !== $canonicalCode || $investor->name !== $displayName) {
+                $update = ['code' => $canonicalCode, 'name' => $displayName];
+                if (Schema::hasColumn('investment_investors', 'updated_at')) $update['updated_at'] = now();
+                DB::table('investment_investors')->where('id', $investor->id)->update($update);
+                $investor->code = $canonicalCode;
+                $investor->name = $displayName;
+            }
+        }
+
+        return $investor;
     }
 
     private function readInvestorAccount($investor, int $userId): array
