@@ -8,6 +8,9 @@ const CATEGORIES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
 
 const today = () => new Date().toISOString().slice(0, 10);
 const n = (value) => Number(value || 0);
+const money = (value, digits = 0) => `${n(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })} ر.س`;
+let latestTa3meedItems = [];
+let currentInvestorFilter = 'all';
 
 function maturityDateText(item) {
   return String(item?.maturity_date || item?.due_date || '').slice(0, 10);
@@ -35,6 +38,41 @@ function sortTa3meedByMaturity(items) {
   });
 }
 
+function investorKey(allocation) {
+  return String(allocation?.investor_code || allocation?.investor_name || '').trim();
+}
+
+function isReceivedOpportunity(item) {
+  return ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done'].includes(String(item?.status || '').trim().toLowerCase());
+}
+
+function partialReceivedForInvestor(items, selectedInvestor = 'all') {
+  return (items || []).reduce((total, item) => {
+    if (isReceivedOpportunity(item)) return total;
+    const allocations = item.allocations || [];
+    const selectedAllocations = selectedInvestor && selectedInvestor !== 'all'
+      ? allocations.filter((allocation) => investorKey(allocation) === selectedInvestor)
+      : allocations;
+    if (selectedInvestor && selectedInvestor !== 'all' && selectedAllocations.length === 0) return total;
+    if (selectedAllocations.length > 0) {
+      return total + selectedAllocations.reduce((sum, allocation) => sum + n(allocation.received_amount), 0);
+    }
+    const receiptTotal = (item.receipts || []).reduce((sum, receipt) => sum + n(receipt.amount), 0);
+    return total + Math.max(n(item.received_amount), receiptTotal);
+  }, 0);
+}
+
+function metricChildrenWithPartialAmount(children) {
+  const childArray = Array.isArray(children) ? children : [children];
+  const titleIndex = childArray.findIndex((child) => child?.props?.children === 'مستلم جزئيًا');
+  if (titleIndex < 0 || !childArray[titleIndex + 1]) return null;
+  const nextChildren = [...childArray];
+  nextChildren[titleIndex + 1] = React.cloneElement(nextChildren[titleIndex + 1], {
+    children: money(partialReceivedForInvestor(latestTa3meedItems, currentInvestorFilter), 2),
+  });
+  return Array.isArray(children) ? nextChildren : nextChildren[0];
+}
+
 function patchTa3meedInvestmentFetchSorting() {
   if (globalThis.__ta3meedMaturitySortFetchPatched || typeof globalThis.fetch !== 'function') return;
 
@@ -52,7 +90,10 @@ function patchTa3meedInvestmentFetchSorting() {
       const text = await originalText();
       try {
         const json = text ? JSON.parse(text) : {};
-        if (Array.isArray(json.data)) json.data = sortTa3meedByMaturity(json.data);
+        if (Array.isArray(json.data)) {
+          json.data = sortTa3meedByMaturity(json.data);
+          latestTa3meedItems = json.data;
+        }
         return JSON.stringify(json);
       } catch {
         return text;
@@ -105,6 +146,7 @@ React.useState = function patchedTa3meedUseState(initialState) {
   const hookIndex = stateHookIndex;
   stateHookIndex += 1;
   const stateTuple = originalUseState.call(this, initialState);
+  if (renderingTa3meed && hookIndex === 6) currentInvestorFilter = stateTuple[0] || 'all';
   if (renderingTa3meed && hookIndex === 10) currentSetPicker = stateTuple[1];
   return stateTuple;
 };
@@ -185,6 +227,8 @@ export default function Ta3meedNoResetFilterScreen(props) {
   } catch {}
 
   const wrapElement = (type, elementProps, createOriginal, extraArgs = []) => {
+    const patchedMetricChildren = renderingTa3meed && type === View ? metricChildrenWithPartialAmount(elementProps?.children ?? extraArgs) : null;
+    if (patchedMetricChildren) return createOriginal(type, { ...elementProps, children: patchedMetricChildren }, ...[]);
     if (false && renderingTa3meed && typeof type === 'function' && elementProps?.label === 'المستثمر') {
       return createOriginal(type, { ...elementProps, onPress: openInvestorPicker }, ...extraArgs);
     }
