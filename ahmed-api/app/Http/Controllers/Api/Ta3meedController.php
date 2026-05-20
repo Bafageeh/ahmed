@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Ta3meedInvestorName;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -13,44 +14,32 @@ class Ta3meedController extends Controller
     {
         $userId = $this->userId($request);
         $platform = $this->platform();
+        if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
-        if (! $platform) {
-            return response()->json(['message' => 'Ta3meed platform not found'], 404);
-        }
-
-        $query = DB::table('investment_opportunities')
-            ->where('platform_id', $platform->id);
+        $query = DB::table('investment_opportunities')->where('platform_id', $platform->id);
         $this->scopeUser($query, 'investment_opportunities', $userId);
 
-        $items = $query
-            ->orderByDesc('maturity_date')
-            ->orderByDesc('id')
-            ->get()
-            ->map(function ($item) use ($userId) {
-                $allocationQuery = DB::table('investment_opportunity_allocations')
-                    ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
-                    ->where('investment_opportunity_allocations.opportunity_id', $item->id);
-                $this->scopeUser($allocationQuery, 'investment_opportunity_allocations', $userId);
+        $items = $query->orderByDesc('maturity_date')->orderByDesc('id')->get()->map(function ($item) use ($userId) {
+            $allocationQuery = DB::table('investment_opportunity_allocations')
+                ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
+                ->where('investment_opportunity_allocations.opportunity_id', $item->id);
+            $this->scopeUser($allocationQuery, 'investment_opportunity_allocations', $userId);
 
-                $item->allocations = $allocationQuery
-                    ->select([
-                        'investment_opportunity_allocations.id',
-                        'investment_investors.name as investor_name',
-                        'investment_investors.code as investor_code',
-                        'investment_opportunity_allocations.invested_amount',
-                        'investment_opportunity_allocations.expected_profit_amount',
-                        'investment_opportunity_allocations.actual_profit_amount',
-                        'investment_opportunity_allocations.received_amount',
-                        'investment_opportunity_allocations.status',
-                    ])
-                    ->orderBy('investment_investors.id')
-                    ->get();
+            $item->allocations = $allocationQuery->select([
+                'investment_opportunity_allocations.id',
+                'investment_investors.name as investor_name',
+                'investment_investors.code as investor_code',
+                'investment_opportunity_allocations.invested_amount',
+                'investment_opportunity_allocations.expected_profit_amount',
+                'investment_opportunity_allocations.actual_profit_amount',
+                'investment_opportunity_allocations.received_amount',
+                'investment_opportunity_allocations.status',
+            ])->orderBy('investment_investors.id')->get();
 
-                $item->receipts = $this->receipts($item->id, $userId);
-                $this->appendActualAnnualRate($item);
-
-                return $item;
-            });
+            $item->receipts = $this->receipts($item->id, $userId);
+            $this->appendActualAnnualRate($item);
+            return $item;
+        });
 
         return response()->json(['data' => $items]);
     }
@@ -76,10 +65,7 @@ class Ta3meedController extends Controller
         ]);
 
         $platform = $this->platform();
-
-        if (! $platform) {
-            return response()->json(['message' => 'Ta3meed platform not found'], 404);
-        }
+        if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
         $accountId = $this->accountId($platform->id, $userId);
         $totalAmount = round((float) $data['total_amount'], 2);
@@ -111,14 +97,13 @@ class Ta3meedController extends Controller
             'updated_at' => now(),
         ];
         $this->attachUser($insert, 'investment_opportunities', $userId);
-
         $id = DB::table('investment_opportunities')->insertGetId($insert);
 
         foreach (($data['allocations'] ?? []) as $allocation) {
-            $investorId = $this->investorId($allocation['investor'], $userId);
             $amount = round((float) $allocation['amount'], 2);
+            if ($amount <= 0) continue;
+            $investorId = $this->investorId($allocation['investor'], $userId);
             $allocationProfit = $totalAmount > 0 ? round($profit * ($amount / $totalAmount), 2) : 0;
-
             $allocationInsert = [
                 'opportunity_id' => $id,
                 'investor_id' => $investorId,
@@ -141,13 +126,11 @@ class Ta3meedController extends Controller
     {
         $userId = $this->userId($request);
         $platform = $this->platform();
-
-        if (! $platform) {
-            return response()->json(['message' => 'Ta3meed platform not found'], 404);
-        }
+        if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
         $base = DB::table('investment_opportunities')->where('platform_id', $platform->id);
         $this->scopeUser($base, 'investment_opportunities', $userId);
+        $totalReceived = 0;
 
         if (Schema::hasTable('ta3meed_receipts')) {
             $receiptQuery = DB::table('ta3meed_receipts')
@@ -155,8 +138,6 @@ class Ta3meedController extends Controller
                 ->where('investment_opportunities.platform_id', $platform->id);
             $this->scopeUser($receiptQuery, 'ta3meed_receipts', $userId);
             $totalReceived = round((float) $receiptQuery->sum('ta3meed_receipts.amount'), 2);
-        } else {
-            $totalReceived = 0;
         }
 
         $investors = collect();
@@ -166,61 +147,48 @@ class Ta3meedController extends Controller
                 ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')
                 ->where('investment_opportunities.platform_id', $platform->id);
             $this->scopeUser($investorQuery, 'investment_opportunity_allocations', $userId);
-
             $investors = $investorQuery
-                ->selectRaw('investment_investors.name, sum(investment_opportunity_allocations.invested_amount) as invested, sum(investment_opportunity_allocations.expected_profit_amount) as profit, sum(investment_opportunity_allocations.received_amount) as received')
-                ->groupBy('investment_investors.name')
-                ->orderBy('investment_investors.name')
+                ->selectRaw('investment_investors.name, investment_investors.code, sum(investment_opportunity_allocations.invested_amount) as invested, sum(investment_opportunity_allocations.expected_profit_amount) as profit, sum(investment_opportunity_allocations.received_amount) as received')
+                ->groupBy('investment_investors.name', 'investment_investors.code')
+                ->orderBy('investment_investors.code')
                 ->get();
         } catch (\Throwable $e) {
             $investors = collect();
         }
 
-        return response()->json([
-            'data' => [
-                'active_count' => (clone $base)->where('status', 'active')->count(),
-                'partial_received_count' => (clone $base)->where('status', 'partial_received')->count(),
-                'received_count' => (clone $base)->where('status', 'received')->count(),
-                'total_invested' => round((float) (clone $base)->where('status', 'active')->sum('principal_amount'), 2),
-                'total_expected_profit' => round((float) (clone $base)->where('status', 'active')->sum('expected_profit_amount'), 2),
-                'total_received' => $totalReceived,
-                'investors' => $investors,
-            ],
-        ]);
+        return response()->json(['data' => [
+            'active_count' => (clone $base)->where('status', 'active')->count(),
+            'partial_received_count' => (clone $base)->where('status', 'partial_received')->count(),
+            'received_count' => (clone $base)->where('status', 'received')->count(),
+            'total_invested' => round((float) (clone $base)->where('status', 'active')->sum('principal_amount'), 2),
+            'total_expected_profit' => round((float) (clone $base)->where('status', 'active')->sum('expected_profit_amount'), 2),
+            'total_received' => $totalReceived,
+            'investors' => $investors,
+        ]]);
     }
 
     private function receipts(int $opportunityId, int $userId)
     {
-        if (! Schema::hasTable('ta3meed_receipts')) {
-            return collect();
-        }
-
+        if (! Schema::hasTable('ta3meed_receipts')) return collect();
         $query = DB::table('ta3meed_receipts')->where('opportunity_id', $opportunityId);
         $this->scopeUser($query, 'ta3meed_receipts', $userId);
 
-        return $query
-            ->orderByDesc('receipt_date')
-            ->orderByDesc('id')
-            ->get()
-            ->map(function ($receipt) use ($userId) {
-                if (Schema::hasTable('ta3meed_receipt_allocations')) {
-                    $allocationsQuery = DB::table('ta3meed_receipt_allocations')
-                        ->leftJoin('investment_investors', 'ta3meed_receipt_allocations.investor_id', '=', 'investment_investors.id')
-                        ->where('ta3meed_receipt_allocations.receipt_id', $receipt->id);
-                    $this->scopeUser($allocationsQuery, 'ta3meed_receipt_allocations', $userId);
-                    $receipt->allocations = $allocationsQuery
-                        ->select([
-                            'investment_investors.name as investor_name',
-                            'ta3meed_receipt_allocations.share_percent',
-                            'ta3meed_receipt_allocations.received_amount',
-                        ])
-                        ->get();
-                } else {
-                    $receipt->allocations = [];
-                }
-
-                return $receipt;
-            });
+        return $query->orderByDesc('receipt_date')->orderByDesc('id')->get()->map(function ($receipt) use ($userId) {
+            if (Schema::hasTable('ta3meed_receipt_allocations')) {
+                $allocationsQuery = DB::table('ta3meed_receipt_allocations')
+                    ->leftJoin('investment_investors', 'ta3meed_receipt_allocations.investor_id', '=', 'investment_investors.id')
+                    ->where('ta3meed_receipt_allocations.receipt_id', $receipt->id);
+                $this->scopeUser($allocationsQuery, 'ta3meed_receipt_allocations', $userId);
+                $receipt->allocations = $allocationsQuery->select([
+                    'investment_investors.name as investor_name',
+                    'ta3meed_receipt_allocations.share_percent',
+                    'ta3meed_receipt_allocations.received_amount',
+                ])->get();
+            } else {
+                $receipt->allocations = [];
+            }
+            return $receipt;
+        });
     }
 
     private function appendActualAnnualRate(object $item): void
@@ -229,10 +197,7 @@ class Ta3meedController extends Controller
         $expectedProfit = (float) $item->expected_profit_amount;
         $expectedTotal = $principal + $expectedProfit;
         $registeredAnnualRate = (float) $item->expected_rate;
-
-        if ($registeredAnnualRate <= 0 && $principal > 0 && $expectedProfit > 0) {
-            $registeredAnnualRate = ($expectedProfit / $principal) * 100;
-        }
+        if ($registeredAnnualRate <= 0 && $principal > 0 && $expectedProfit > 0) $registeredAnnualRate = ($expectedProfit / $principal) * 100;
 
         $receivedFromReceipts = collect($item->receipts ?? [])->sum('amount');
         $receivedFromAllocations = collect($item->allocations ?? [])->sum('received_amount');
@@ -241,11 +206,7 @@ class Ta3meedController extends Controller
         $closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
         $isEnded = in_array($status, $closedStatuses, true);
         $actualProfit = max(0, $receivedAmount - $principal);
-        $showActualAnnualRate = $isEnded
-            && $principal > 0
-            && $actualProfit > 0
-            && $expectedTotal > 0
-            && $receivedAmount < $expectedTotal;
+        $showActualAnnualRate = $isEnded && $principal > 0 && $actualProfit > 0 && $expectedTotal > 0 && $receivedAmount < $expectedTotal;
 
         $item->registered_annual_profit_rate = round($registeredAnnualRate, 6);
         $item->received_amount = round($receivedAmount, 2);
@@ -256,9 +217,7 @@ class Ta3meedController extends Controller
         $item->show_actual_annual_profit_rate = $showActualAnnualRate;
 
         $metadata = json_decode((string) $item->metadata, true);
-        if (! is_array($metadata)) {
-            $metadata = [];
-        }
+        if (! is_array($metadata)) $metadata = [];
         $metadata['annual_rate_badge'] = $item->annual_rate_badge;
         $metadata['actual_annual_rate_badge'] = $item->actual_annual_rate_badge;
         $metadata['registered_annual_profit_rate'] = $item->registered_annual_profit_rate;
@@ -276,10 +235,7 @@ class Ta3meedController extends Controller
         $query = DB::table('investment_accounts')->where('platform_id', $platformId);
         $this->scopeUser($query, 'investment_accounts', $userId);
         $id = $query->value('id');
-
-        if ($id) {
-            return (int) $id;
-        }
+        if ($id) return (int) $id;
 
         $insert = [
             'platform_id' => $platformId,
@@ -292,54 +248,44 @@ class Ta3meedController extends Controller
             'updated_at' => now(),
         ];
         $this->attachUser($insert, 'investment_accounts', $userId);
-
         return DB::table('investment_accounts')->insertGetId($insert);
     }
 
     private function investorId(string $name, int $userId): int
     {
-        $code = strtolower(trim(str_replace(' ', '_', $name)));
-        $query = DB::table('investment_investors')->where('code', $code);
+        $code = Ta3meedInvestorName::code($name);
+        $displayName = Ta3meedInvestorName::displayName($name, $code);
+        $query = DB::table('investment_investors')->where(function ($q) use ($code, $name) {
+            $q->where('code', $code)->orWhere('name', $name);
+        });
         $this->scopeUser($query, 'investment_investors', $userId);
-        $id = $query->value('id');
-
-        if ($id) {
-            return (int) $id;
+        $existing = $query->first();
+        if ($existing) {
+            $update = ['code' => $code, 'name' => $displayName, 'is_active' => true];
+            if (Schema::hasColumn('investment_investors', 'updated_at')) $update['updated_at'] = now();
+            DB::table('investment_investors')->where('id', $existing->id)->update($update);
+            return (int) $existing->id;
         }
 
-        $insert = [
-            'code' => $code,
-            'name' => $name,
-            'is_active' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
+        $insert = ['code' => $code, 'name' => $displayName, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()];
         $this->attachUser($insert, 'investment_investors', $userId);
-
         return DB::table('investment_investors')->insertGetId($insert);
     }
 
     private function userId(Request $request): int
     {
         $id = (int) $request->header('X-Ahmed-User-Id', 0);
-        if ($id > 0 && Schema::hasTable('users') && DB::table('users')->where('id', $id)->exists()) {
-            return $id;
-        }
-
+        if ($id > 0 && Schema::hasTable('users') && DB::table('users')->where('id', $id)->exists()) return $id;
         return Schema::hasTable('users') ? (int) (DB::table('users')->orderBy('id')->value('id') ?: 1) : 1;
     }
 
     private function scopeUser($query, string $table, int $userId): void
     {
-        if (Schema::hasColumn($table, 'user_id')) {
-            $query->where($table . '.user_id', $userId);
-        }
+        if (Schema::hasColumn($table, 'user_id')) $query->where($table . '.user_id', $userId);
     }
 
     private function attachUser(array &$data, string $table, int $userId): void
     {
-        if (Schema::hasColumn($table, 'user_id')) {
-            $data['user_id'] = $userId;
-        }
+        if (Schema::hasColumn($table, 'user_id')) $data['user_id'] = $userId;
     }
 }
