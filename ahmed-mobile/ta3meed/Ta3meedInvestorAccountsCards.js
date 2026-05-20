@@ -119,17 +119,18 @@ function InvestorDetails({ investor, screen, setScreen, onBack }) {
 function Home({ investor, account, message, setScreen }) {
   const balance = n(account?.balance);
   const ta3meed = n(account?.ta3meed);
-  const cash = balance - ta3meed;
-  const capital = balance + n(account?.endedProfit);
+  const endedProfit = n(account?.endedProfit);
+  const cash = balance + endedProfit - ta3meed;
+  const capital = balance + endedProfit;
   const cards = [
     ['مستثمر تعميد', ta3meed, 'main', 'مجموع رأس مال المستثمر المتبقي في فرص تعميد غير المنتهية', true],
     ['الرصيد اليدوي', balance, 'blue', 'مجموع الإضافات - مجموع السحوبات'],
-    ['الكاش', cash, cash < 0 ? 'red' : 'amber', 'الرصيد اليدوي - مستثمر تعميد'],
+    ['الكاش', cash, cash < 0 ? 'red' : 'amber', 'الرصيد اليدوي + ربح تعميد المنتهي - مستثمر تعميد'],
     ['إجمالي المستثمر', n(account?.activeInvested), 'slate', 'مجموع رأس مال المستثمر في الفرص غير المنتهية'],
     ['نصيبه المستلم', n(account?.activeReceived), 'violet', 'المستلم من أصل رأس المال فقط'],
     ['رأس المال', capital, 'main', 'الرصيد اليدوي + ربح تعميد المنتهي'],
     ['ربح متوقع', n(account?.expectedProfit), 'amber', 'مجموع الربح المتوقع لحصة المستثمر'],
-    ['ربح تعميد المنتهي', n(account?.endedProfit), 'blue', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
+    ['ربح تعميد المنتهي', endedProfit, 'blue', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
     ['عدد الفرص', n(account?.opportunitiesCount), 'slate', 'عدد فرص المستثمر في تعميد', false, true],
   ];
   return <><Text style={styles.investorScreenTitle}>#S-111 شاشة {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map(([title, value, color, note, wide, count]) => <Card key={title} title={title} value={value} color={color} note={note} wide={wide} count={count} />)}</View>{account?.netBalance !== null && account?.netBalance !== undefined ? <Text style={[styles.investorPaymentMeta, { textAlign: 'center', marginTop: 12 }]}>صافي الحساب مع الاستلامات: {money(account.netBalance, 2)} ر.س</Text> : null}{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="#S-112 إدارة حركات أرصدة المستثمر" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="#S-113 الحركات المالية لكل مستثمر" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /></>;
