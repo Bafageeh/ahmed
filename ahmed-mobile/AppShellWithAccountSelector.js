@@ -1,5 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
@@ -180,29 +191,39 @@ export default function AppShellWithAccountSelector() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <View style={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.badge}>Ahmed Secure</Text>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.subtitle}>أدخل اسم المستخدم والرقم السري أول مرة. بعد ذلك يتم فتح التطبيق بالبصمة على هذا الجهاز.</Text>
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoider}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+      >
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.card}>
+            <Text style={styles.badge}>Ahmed Secure</Text>
+            <Text style={styles.title}>{title}</Text>
+            <Text style={styles.subtitle}>أدخل اسم المستخدم والرقم السري أول مرة. بعد ذلك يتم فتح التطبيق بالبصمة على هذا الجهاز.</Text>
 
-          {savedSession && bioReady ? (
-            <TouchableOpacity disabled={loading} onPress={unlockWithBiometric} style={styles.biometricButton}>
-              <Text style={styles.biometricText}>الدخول بالبصمة</Text>
+            {savedSession && bioReady ? (
+              <TouchableOpacity disabled={loading} onPress={unlockWithBiometric} style={styles.biometricButton}>
+                <Text style={styles.biometricText}>الدخول بالبصمة</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            <TextInput value={username} onChangeText={setUsername} placeholder="اسم المستخدم" placeholderTextColor="#94a3b8" autoCapitalize="none" style={styles.input} returnKeyType="next" />
+            <TextInput value={password} onChangeText={setPassword} placeholder="الرقم السري" placeholderTextColor="#94a3b8" secureTextEntry style={styles.input} returnKeyType="done" onSubmitEditing={login} />
+
+            <TouchableOpacity disabled={loading} onPress={login} style={[styles.loginButton, loading && styles.disabled]}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginText}>دخول</Text>}
             </TouchableOpacity>
-          ) : null}
 
-          <TextInput value={username} onChangeText={setUsername} placeholder="اسم المستخدم" placeholderTextColor="#94a3b8" autoCapitalize="none" style={styles.input} />
-          <TextInput value={password} onChangeText={setPassword} placeholder="الرقم السري" placeholderTextColor="#94a3b8" secureTextEntry style={styles.input} />
-
-          <TouchableOpacity disabled={loading} onPress={login} style={[styles.loginButton, loading && styles.disabled]}>
-            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.loginText}>دخول</Text>}
-          </TouchableOpacity>
-
-          {!!message && <Text style={styles.message}>{message}</Text>}
-          {savedSession && !bioReady ? <Text style={styles.hint}>البصمة غير مفعلة أو غير متاحة على هذا الجهاز، لذلك استخدم اليوزر والرقم السري.</Text> : null}
-        </View>
-      </View>
+            {!!message && <Text style={styles.message}>{message}</Text>}
+            {savedSession && !bioReady ? <Text style={styles.hint}>البصمة غير مفعلة أو غير متاحة على هذا الجهاز، لذلك استخدم اليوزر والرقم السري.</Text> : null}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -211,7 +232,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   loadingRoot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f7fb' },
   loadingText: { marginTop: 10, color: '#64748b', fontWeight: '800' },
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
+  keyboardAvoider: { flex: 1 },
+  container: { flexGrow: 1, justifyContent: 'center', padding: 20, paddingBottom: 42 },
   card: { backgroundColor: '#fff', borderRadius: 30, borderWidth: 1, borderColor: '#e2e8f0', padding: 22, alignItems: 'stretch' },
   badge: { alignSelf: 'flex-start', backgroundColor: '#ecfdf5', color: '#0f766e', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontWeight: '900' },
   title: { marginTop: 16, color: '#0f172a', fontSize: 31, fontWeight: '900', textAlign: 'right' },
