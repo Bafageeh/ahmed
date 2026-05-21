@@ -98,23 +98,17 @@ export default function AppShellWithAccountSelector() {
     }
   }, [booting, savedSession, bioReady]);
 
-  const verifySavedSession = async (stored) => {
+  const openSavedSession = async (stored) => {
+    if (!stored?.sessionKey || !stored?.user?.id) {
+      setMessage('لا توجد جلسة محفوظة. أدخل اليوزر والرقم السري أول مرة.');
+      return;
+    }
     setLoading(true);
     setMessage('');
     try {
-      const response = await fetch(`${API_URL}/ahmed/session`, {
-        headers: { Accept: 'application/json', Authorization: `Bearer ${stored.sessionKey}`, 'X-Ahmed-Token': stored.sessionKey },
-      });
-      const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.message || 'انتهت الجلسة، سجل الدخول مرة أخرى.');
-      const nextSession = { user: json.data || stored.user, sessionKey: stored.sessionKey };
-      setCurrentAhmedSession(nextSession);
-      setSession(nextSession);
-    } catch (error) {
-      await removeSession();
-      clearCurrentAhmedSession();
-      setSavedSession(null);
-      setMessage(error.message || 'تعذر التحقق من الجلسة.');
+      setCurrentAhmedSession(stored);
+      setSavedSession(stored);
+      setSession(stored);
     } finally {
       setLoading(false);
     }
@@ -125,7 +119,7 @@ export default function AppShellWithAccountSelector() {
     setMessage('');
     const ok = await verifyBiometric();
     if (!ok) return setMessage('لم يتم اعتماد البصمة. يمكنك الدخول باليوزر والرقم السري.');
-    await verifySavedSession(savedSession);
+    await openSavedSession(savedSession);
   };
 
   const login = async () => {
