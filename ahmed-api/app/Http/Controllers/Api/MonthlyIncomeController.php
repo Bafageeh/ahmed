@@ -31,22 +31,18 @@ class MonthlyIncomeController extends Controller
             ->get();
 
         if ($screen === 'future') {
-            $comAmount = $this->fetchComMonthlyPersonNet();
-
-            if ($comAmount > 0) {
-                $items->prepend((object) [
-                    'id' => 'fixed-com-monthly-person-net',
-                    'screen' => 'future',
-                    'name' => 'صافي الشخص الشهري',
-                    'amount' => $comAmount,
-                    'readonly' => true,
-                    'display_source' => 'com',
-                    'external_app_key' => 'com',
-                    'source_key' => 'com_monthly_person_net',
-                    'created_at' => null,
-                    'updated_at' => now()->toDateTimeString(),
-                ]);
-            }
+            $items->prepend((object) [
+                'id' => 'fixed-com-monthly-person-net',
+                'screen' => 'future',
+                'name' => 'صافي الشخص الشهري',
+                'amount' => $this->fetchComMonthlyPersonNet(),
+                'readonly' => true,
+                'display_source' => 'com',
+                'external_app_key' => 'com',
+                'source_key' => 'com_monthly_person_net',
+                'created_at' => null,
+                'updated_at' => now()->toDateTimeString(),
+            ]);
         }
 
         return response()->json(['data' => $items->values()]);
@@ -108,11 +104,7 @@ class MonthlyIncomeController extends Controller
                 }
 
                 $payload = $response->json('data') ?? $response->json() ?? [];
-                $amount = $this->pickNumber($payload, $this->comMonthlyPersonNetPaths);
-
-                if ($amount > 0) {
-                    return $amount;
-                }
+                return $this->pickNumber($payload, $this->comMonthlyPersonNetPaths);
             } catch (\Throwable $exception) {
                 continue;
             }
