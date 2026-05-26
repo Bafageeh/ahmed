@@ -36,7 +36,7 @@ class MonthlyIncomeController extends Controller
             $items->prepend((object) [
                 'id' => 'fixed-com-monthly-person-net',
                 'screen' => 'future',
-                'name' => 'صافي الشخص الشهري',
+                'name' => 'صافي الشخص الشهري من COM',
                 'amount' => $this->fetchComMonthlyPersonNet(),
                 'readonly' => true,
                 'display_source' => 'com',
@@ -99,7 +99,7 @@ class MonthlyIncomeController extends Controller
     {
         $summaryAmount = $this->fetchComSummaryMonthlyPersonNet();
 
-        if ($summaryAmount !== null) {
+        if ($summaryAmount !== null && abs($summaryAmount) > 0.0001) {
             return $summaryAmount;
         }
 
@@ -148,23 +148,11 @@ class MonthlyIncomeController extends Controller
             }
 
             $domainRenewalAnnual = collect($hostings)->sum(fn ($hosting) => $this->pickFirstNumber($hosting, [
-                'domain_renewal_cost_sar',
-                'domain_renewal_cost',
-                'domain_cost_sar',
-                'domain_cost',
-                'renewal_cost_sar',
-                'domain_renewal_price',
-                'domain_price',
+                'domain_renewal_cost_sar', 'domain_renewal_cost', 'domain_cost_sar', 'domain_cost', 'renewal_cost_sar', 'domain_renewal_price', 'domain_price',
             ]));
 
             $hostingIncomeAnnual = collect($hostings)->sum(fn ($hosting) => $this->pickFirstNumber($hosting, [
-                'hosting_cost_sar',
-                'hosting_cost',
-                'hosting_renewal_cost_sar',
-                'hosting_renewal_cost',
-                'hosting_price',
-                'host_cost_sar',
-                'host_cost',
+                'hosting_cost_sar', 'hosting_cost', 'hosting_renewal_cost_sar', 'hosting_renewal_cost', 'hosting_price', 'host_cost_sar', 'host_cost',
             ]));
 
             $manualExpensesAnnual = collect($expenses)->sum(fn ($expense) => $this->annualExpenseAmount($expense));
@@ -222,13 +210,6 @@ class MonthlyIncomeController extends Controller
             return (float) $value;
         }
 
-        $clean = preg_replace('/[^0-9.\-]/', '', str_replace(',', '', (string) $value));
-
-        if ($clean === '' || $clean === '-' || $clean === '.') {
-            return 0.0;
-        }
-
-        $number = (float) $clean;
-        return is_finite($number) ? $number : 0.0;
+        return (float) str_replace(',', '', (string) $value);
     }
 }
