@@ -50,7 +50,6 @@ jobs:
             sed -i 's/org.gradle.toolchains.foojay-resolver-convention") version "0.5.0"/org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"/g' "$FILE"
             sed -i 's/org.gradle.toolchains.foojay-resolver-convention") version("0.5.0")/org.gradle.toolchains.foojay-resolver-convention") version("1.0.0")/g' "$FILE"
             sed -i 's/org.gradle.toolchains.foojay-resolver-convention").version("0.5.0")/org.gradle.toolchains.foojay-resolver-convention").version("1.0.0")/g' "$FILE"
-            grep -n "foojay-resolver-convention" "$FILE" || true
           fi
 
       - name: Write environment
@@ -61,87 +60,35 @@ jobs:
         working-directory: ahmed-mobile
         run: |
           python3 - <<'PY'
-          import math
-          import os
-          import struct
-          import zlib
-
+          import os, struct, zlib
           SIZE = 1024
           BG = (30, 16, 78, 255)
           CYAN = (48, 220, 230, 255)
-          CYAN_DARK = (20, 135, 150, 255)
           WHITE = (255, 255, 255, 255)
-          TRANSPARENT = (0, 0, 0, 0)
-
+          CLEAR = (0, 0, 0, 0)
           def chunk(kind, data):
               return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
-
-          def dist_to_segment(px, py, ax, ay, bx, by):
-              dx = bx - ax
-              dy = by - ay
-              if dx == 0 and dy == 0:
-                  return math.hypot(px - ax, py - ay)
-              t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
-              cx = ax + t * dx
-              cy = ay + t * dy
-              return math.hypot(px - cx, py - cy)
-
-          def in_rounded_square(x, y, left, top, right, bottom, radius):
-              cx = min(max(x, left + radius), right - radius)
-              cy = min(max(y, top + radius), bottom - radius)
-              return (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2
-
-          def build_icon(path, transparent_background=False):
+          def write_png(path, transparent=False):
               rows = []
               for y in range(SIZE):
                   row = bytearray([0])
                   for x in range(SIZE):
-                      color = TRANSPARENT if transparent_background else BG
-
-                      # Main soft rounded tile
-                      if in_rounded_square(x, y, 150, 150, 874, 874, 170):
-                          color = BG
-
-                      # Subtle cyan corner/outline shape
-                      if in_rounded_square(x, y, 214, 214, 810, 810, 120) and not in_rounded_square(x, y, 266, 266, 758, 758, 82):
-                          color = CYAN_DARK
-
-                      # Ahmed stylized A strokes
-                      d_left = dist_to_segment(x, y, 350, 735, 512, 302)
-                      d_right = dist_to_segment(x, y, 674, 735, 512, 302)
-                      if d_left < 42 or d_right < 42:
-                          color = CYAN
-
-                      # Letter crossbar
-                      if 420 <= x <= 604 and 540 <= y <= 620:
-                          color = WHITE
-
-                      # Inner shine
-                      if dist_to_segment(x, y, 390, 710, 512, 382) < 15 or dist_to_segment(x, y, 634, 710, 512, 382) < 15:
-                          color = WHITE
-
-                      # Small financial dot
-                      if (x - 512) ** 2 + (y - 780) ** 2 <= 42 ** 2:
-                          color = WHITE
-                      if (x - 512) ** 2 + (y - 780) ** 2 <= 24 ** 2:
-                          color = CYAN
-
-                      row.extend(color)
+                      c = CLEAR if transparent else BG
+                      if (x - 512) ** 2 + (y - 512) ** 2 < 360 ** 2: c = BG
+                      if 310 <= x <= 390 and 350 <= y <= 760: c = CYAN
+                      if 630 <= x <= 710 and 350 <= y <= 760: c = CYAN
+                      if 390 <= x <= 630 and 350 <= y <= 430: c = CYAN
+                      if 405 <= x <= 615 and 505 <= y <= 585: c = WHITE
+                      row.extend(c)
                   rows.append(bytes(row))
-
               raw = b''.join(rows)
-              png = b'\x89PNG\r\n\x1a\n'
-              png += chunk(b'IHDR', struct.pack('>IIBBBBB', SIZE, SIZE, 8, 6, 0, 0, 0))
-              png += chunk(b'IDAT', zlib.compress(raw, 9))
-              png += chunk(b'IEND', b'')
-              with open(path, 'wb') as f:
-                  f.write(png)
-              print(path, os.path.getsize(path), 'bytes')
-
+              png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', SIZE, SIZE, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
+              with open(path, 'wb') as f: f.write(png)
+              print(path, os.path.getsize(path))
           os.makedirs('assets', exist_ok=True)
-          build_icon('assets/icon.png')
-          build_icon('assets/adaptive-icon.png', transparent_background=True)
-          build_icon('assets/splash-icon.png', transparent_background=True)
+          write_png('assets/icon.png')
+          write_png('assets/adaptive-icon.png', True)
+          write_png('assets/splash-icon.png', True)
           PY
           file assets/icon.png assets/adaptive-icon.png assets/splash-icon.png
 
@@ -153,7 +100,12 @@ jobs:
           python3 scripts/patch-basic-income-compact.py || true
           python3 scripts/patch-income-linked-sync-ui.py || true
           python3 scripts/patch-ahmed-icons.py || true
+          python3 scripts/patch-com-monthly-person-net-income.py
           python3 scripts/patch-ta3meed-receipts-ui.py
+
+      - name: Verify S-121 COM income patch
+        run: |
+          grep -R "COM: com_monthly_person_net" -n ahmed-mobile/AppShell.js || (echo "COM monthly person net patch was not applied" && exit 1)
 
       - name: Verify Ta3meed receipts UI patch
         run: |
