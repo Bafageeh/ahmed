@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Http;
 
 class MonthlyIncomeController extends Controller
 {
+    private string $comBaseUrl = 'https://com.pm.sa/api';
+
     private array $comSummaryUrls = [
         'https://com.pm.sa/api/v1/integrations/ahmed/summary',
         'https://com.pm.sa/api/integrations/ahmed/summary',
@@ -95,6 +97,17 @@ class MonthlyIncomeController extends Controller
 
     private function fetchComMonthlyPersonNet(): float
     {
+        $summaryAmount = $this->fetchComSummaryMonthlyPersonNet();
+
+        if ($summaryAmount !== null) {
+            return $summaryAmount;
+        }
+
+        return $this->calculateComMonthlyPersonNetFromCurrentApis();
+    }
+
+    private function fetchComSummaryMonthlyPersonNet(): ?float
+    {
         foreach ($this->comSummaryUrls as $url) {
             try {
                 $response = Http::timeout(12)->acceptJson()->get($url);
@@ -110,7 +123,66 @@ class MonthlyIncomeController extends Controller
             }
         }
 
-        return 0.0;
+        return null;
+    }
+
+    private function calculateComMonthlyPersonNetFromCurrentApis(): float
+    {
+        try {
+            $hostingsResponse = Http::timeout(15)->acceptJson()->get($this->comBaseUrl . '/hostings');
+            $expensesResponse = Http::timeout(15)->acceptJson()->get($this->comBaseUrl . '/expenses');
+
+            if (! $hostingsResponse->successful() || ! $expensesResponse->successful()) {
+                return 0.0;
+            }
+
+            $hostings = $hostingsResponse->json('data') ?? [];
+            $expenses = $expensesResponse->json('data') ?? [];
+
+            if (! is_array($hostings)) {
+                $hostings = [];
+            }
+
+            if (! is_array($expenses)) {
+                $expenses = [];
+            }
+
+            $domainRenewalAnnual = collect($hostings)->sum(fn ($hosting) => $this->pickFirstNumber($hosting, [
+                'domain_renewal_cost_sar',
+                'domain_renewal_cost',
+                'domain_cost_sar',
+                'domain_cost',
+                'renewal_cost_sar',
+                'domain_renewal_price',
+                'domain_price',
+            ]));
+
+            $hostingIncomeAnnual = collect($hostings)->sum(fn ($hosting) => $this->pickFirstNumber($hosting, [
+                'hosting_cost_sar',
+                'hosting_cost',
+                'hosting_renewal_cost_sar',
+                'hosting_renewal_cost',
+                'hosting_price',
+                'host_cost_sar',
+                'host_cost',
+            ]));
+
+            $manualExpensesAnnual = collect($expenses)->sum(fn ($expense) => $this->annualExpenseAmount($expense));
+            $annualExpenses = $manualExpensesAnnual + $domainRenewalAnnual;
+            $annualNet = $hostingIncomeAnnual - $annualExpenses;
+
+            return round($annualNet / 24, 2);
+        } catch (\Throwable $exception) {
+            return 0.0;
+        }
+    }
+
+    private function annualExpenseAmount(mixed $expense): float
+    {
+        $amount = $this->numberValue(data_get($expense, 'amount_sar'));
+        $cycle = strtolower((string) (data_get($expense, 'billing_cycle') ?? 'yearly'));
+
+        return in_array($cycle, ['monthly', 'شهري'], true) ? $amount * 12 : $amount;
     }
 
     private function pickNumber(array $payload, array $paths): float
@@ -119,11 +191,44 @@ class MonthlyIncomeController extends Controller
             $value = data_get($payload, $path);
 
             if ($value !== null && $value !== '') {
-                $number = (float) $value;
-                return is_finite($number) ? $number : 0.0;
+                return $this->numberValue($value);
             }
         }
 
         return 0.0;
+    }
+
+    private function pickFirstNumber(mixed $source, array $keys): float
+    {
+        foreach ($keys as $key) {
+            $value = data_get($source, $key);
+            $number = $this->numberValue($value);
+
+            if ($number !== 0.0) {
+                return $number;
+            }
+        }
+
+        return 0.0;
+    }
+
+    private function numberValue(mixed $value): float
+    {
+        if ($value === null || $value === '') {
+            return 0.0;
+        }
+
+        if (is_numeric($value)) {
+            return (float) $value;
+        }
+
+        $clean = preg_replace('/[^0-9.\-]/', '', str_replace(',', '', (string) $value));
+
+        if ($clean === '' || $clean === '-' || $clean === '.') {
+            return 0.0;
+        }
+
+        $number = (float) $clean;
+        return is_finite($number) ? $number : 0.0;
     }
 }
