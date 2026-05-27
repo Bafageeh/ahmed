@@ -48,6 +48,9 @@ python3 scripts/patch-ta3meed-company-on-cards.py
 log "Applying Ta3meed company search patch"
 python3 scripts/patch-ta3meed-company-search.py
 
+log "Applying COM S-121 fixed card patch"
+python3 scripts/patch-com-monthly-person-net-income.py
+
 log "Verifying Ta3meed normalized screen"
 if grep -n "resetButtonText" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" | grep -q "hasFilters"; then
   echo "ERROR: Ta3meed reset filter button still exists." >&2
@@ -68,6 +71,11 @@ grep -n "companyCardLine" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/nul
 
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" >/dev/null || {
   echo "ERROR: AppShell does not point to Ta3meedNoResetFilterScreen.js" >&2
+  exit 1
+}
+
+grep -n "COM: com_monthly_person_net" "$MOBILE_DIR/AppShell.js" >/dev/null || {
+  echo "ERROR: COM S-121 fixed card patch is missing." >&2
   exit 1
 }
 
