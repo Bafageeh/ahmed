@@ -35,24 +35,20 @@ fi
 
 log "Applying Ta3meed local normalization patch"
 python3 scripts/fix-ta3meed-screen-normalization.py
-
 log "Applying Ta3meed edit modal layout patch"
 python3 scripts/patch-ta3meed-edit-modal-layout.py
-
 log "Applying Ta3meed extra fields patch"
 python3 scripts/patch-ta3meed-extra-fields.py
-
 log "Applying Ta3meed company card patch"
 python3 scripts/patch-ta3meed-company-on-cards.py
-
 log "Applying Ta3meed company search patch"
 python3 scripts/patch-ta3meed-company-search.py
-
 log "Applying COM S-121 fixed card patch"
 python3 scripts/patch-com-monthly-person-net-income.py
-
 log "Applying secure vault bank/site patch"
 python3 scripts/patch-secure-vault-bank-site-lite.py
+log "Applying secure vault floating form patch"
+python3 scripts/patch-secure-vault-floating-form.py
 
 log "Verifying Ta3meed normalized screen"
 if grep -n "resetButtonText" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" | grep -q "hasFilters"; then
@@ -71,19 +67,20 @@ grep -n "companyCardLine" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/nul
   echo "ERROR: Ta3meed company card display is missing." >&2
   exit 1
 }
-
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" >/dev/null || {
   echo "ERROR: AppShell does not point to Ta3meedNoResetFilterScreen.js" >&2
   exit 1
 }
-
 grep -n "COM: com_monthly_person_net" "$MOBILE_DIR/AppShell.js" >/dev/null || {
   echo "ERROR: COM S-121 fixed card patch is missing." >&2
   exit 1
 }
-
 grep -n "الموقع" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
   echo "ERROR: Secure vault site patch is missing." >&2
+  exit 1
+}
+grep -n "modalOverlay" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
+  echo "ERROR: Secure vault floating form patch is missing." >&2
   exit 1
 }
 
