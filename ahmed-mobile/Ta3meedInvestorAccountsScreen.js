@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -81,12 +82,14 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
           <Text style={screenStyles.screenId}>#S-110</Text>
           <Text style={screenStyles.headerTitle}>حسابات المستثمرين</Text>
         </View>
-        <TouchableOpacity style={screenStyles.refreshButton} onPress={load} activeOpacity={0.85}>
-          <Text style={screenStyles.refreshText}>تحديث</Text>
-        </TouchableOpacity>
+        <View style={screenStyles.headerSpacer} />
       </View>
 
-      <ScrollView contentContainerStyle={screenStyles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={screenStyles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor="#0f766e" />}
+      >
         <View style={screenStyles.heroCard}>
           <Text style={screenStyles.heroKicker}>#S-110 · شاشة مستقلة</Text>
           <Text style={screenStyles.heroTitle}>إدارة أرصدة مستثمري تعميد</Text>
@@ -109,8 +112,7 @@ const screenStyles = StyleSheet.create({
   titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   screenId: { color: '#0f766e', fontSize: 12, fontWeight: '900', textAlign: 'center', marginBottom: 2 },
   headerTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
-  refreshButton: { minWidth: 70, height: 48, borderRadius: 17, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  refreshText: { color: '#ffffff', fontWeight: '900', fontSize: 13 },
+  headerSpacer: { width: 70, height: 48 },
   content: { paddingHorizontal: 18, paddingBottom: 36 },
   heroCard: { marginTop: 8, backgroundColor: '#0f766e', borderRadius: 28, padding: 22, alignItems: 'flex-end' },
   heroKicker: { color: '#ccfbf1', fontSize: 13, fontWeight: '900', textAlign: 'right' },
