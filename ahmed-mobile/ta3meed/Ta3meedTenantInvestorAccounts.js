@@ -61,10 +61,10 @@ function normalize(raw, investor) {
 
 function buildSummary(account) {
   const ta3meed = n(account?.ta3meed);
-  const balance = n(account?.balance);
+  const manual = n(account?.balance);
   const endedProfit = n(account?.endedProfit);
-  const cash = balance + endedProfit - ta3meed;
-  return { ta3meed, cash, total: ta3meed + cash };
+  const cash = manual + endedProfit - ta3meed;
+  return { ta3meed, manual, cash, total: ta3meed + cash };
 }
 
 function fmt(value) {
@@ -102,7 +102,7 @@ export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onE
         const account = normalize(json.data, item);
         return [item.code, buildSummary(account)];
       } catch {
-        return [item.code, { ta3meed: 0, cash: 0, total: 0 }];
+        return [item.code, { ta3meed: 0, manual: 0, cash: 0, total: 0 }];
       }
     })).then((rows) => {
       if (alive) setAccountSummaries(Object.fromEntries(rows));
@@ -114,11 +114,12 @@ export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onE
   if (selected) return <InvestorDetails investor={selected} screen={screen} setScreen={setScreen} onBack={() => setSelected(null)} />;
 
   const sortedAccounts = [...accounts].map((item) => {
-    const summary = accountSummaries[item.code] || { ta3meed: 0, cash: 0, total: 0 };
+    const summary = accountSummaries[item.code] || { ta3meed: 0, manual: 0, cash: 0, total: 0 };
     const ta3meed = n(summary.ta3meed);
+    const manual = n(summary.manual);
     const cash = n(summary.cash);
     const total = n(summary.total);
-    return { ...item, ta3meed, cash, total, inactive: ta3meed === 0 && cash === 0 };
+    return { ...item, ta3meed, manual, cash, total, inactive: ta3meed === 0 && cash === 0 };
   }).sort((a, b) => {
     if (a.inactive !== b.inactive) return a.inactive ? 1 : -1;
     if (b.total !== a.total) return b.total - a.total;
@@ -126,7 +127,7 @@ export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onE
     return String(a.name).localeCompare(String(b.name), 'ar');
   });
 
-  return <View style={styles.investorScreen}><Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text><Text style={styles.investorScreenSubtitle}>{accounts.length ? 'اختر المستثمر لفتح شاشة خاصة به.' : 'لا يوجد مستثمرون لهذا الحساب بعد. أضف فرصة تعميد وبداخلها مستثمرو هذا الحساب فقط.'}</Text>{sortedAccounts.map((item) => <TouchableOpacity key={item.code} style={[styles.investorAccountButton, item.inactive && { backgroundColor: '#f1f5f9', borderColor: '#d1d5db', opacity: 0.7 }]} onPress={() => { setSelected(item); setScreen('home'); }}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={[styles.investorAccountButtonText, item.inactive && { color: '#6b7280' }]}>شاشة {item.name}</Text><Text style={{ marginTop: 5, color: item.inactive ? '#6b7280' : '#0f766e', fontWeight: '900', textAlign: 'right' }}>تعميد: {fmt(item.ta3meed)}</Text><Text style={{ color: item.inactive ? '#6b7280' : '#b45309', fontWeight: '900', textAlign: 'right' }}>الكاش: {fmt(item.cash)}</Text><Text style={{ marginTop: 5, color: item.inactive ? '#6b7280' : '#ffffff', backgroundColor: item.inactive ? '#e5e7eb' : '#2563eb', borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden', fontWeight: '900', textAlign: 'right' }}>الرصيد الكلي: {fmt(item.total)}</Text>{item.inactive ? <Text style={{ marginTop: 5, color: '#6b7280', backgroundColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden', fontWeight: '900' }}>غير مفعل · أرصدة صفرية</Text> : null}</View><Text style={[styles.investorAccountButtonIcon, item.inactive && { color: '#6b7280' }]}>›</Text></TouchableOpacity>)}</View>;
+  return <View style={styles.investorScreen}><Text style={styles.investorScreenTitle}>حسابات المستثمرين</Text><Text style={styles.investorScreenSubtitle}>{accounts.length ? 'اختر المستثمر لفتح شاشة خاصة به.' : 'لا يوجد مستثمرون لهذا الحساب بعد. أضف فرصة تعميد وبداخلها مستثمرو هذا الحساب فقط.'}</Text>{sortedAccounts.map((item) => <TouchableOpacity key={item.code} style={[styles.investorAccountButton, item.inactive && { backgroundColor: '#f1f5f9', borderColor: '#d1d5db', opacity: 0.7 }]} onPress={() => { setSelected(item); setScreen('home'); }}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={[styles.investorAccountButtonText, item.inactive && { color: '#6b7280' }]}>شاشة {item.name}</Text><Text style={{ marginTop: 5, color: item.inactive ? '#6b7280' : '#0f766e', fontWeight: '900', textAlign: 'right' }}>تعميد: {fmt(item.ta3meed)}</Text><Text style={{ color: item.inactive ? '#6b7280' : '#1d4ed8', fontWeight: '900', textAlign: 'right' }}>الرصيد اليدوي: {fmt(item.manual)}</Text><Text style={{ color: item.inactive ? '#6b7280' : '#b45309', fontWeight: '900', textAlign: 'right' }}>الكاش: {fmt(item.cash)}</Text><Text style={{ marginTop: 5, color: item.inactive ? '#6b7280' : '#ffffff', backgroundColor: item.inactive ? '#e5e7eb' : '#2563eb', borderRadius: 10, paddingHorizontal: 9, paddingVertical: 4, overflow: 'hidden', fontWeight: '900', textAlign: 'right' }}>الرصيد الكلي: {fmt(item.total)}</Text>{item.inactive ? <Text style={{ marginTop: 5, color: '#6b7280', backgroundColor: '#e5e7eb', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden', fontWeight: '900' }}>غير مفعل · أرصدة صفرية</Text> : null}</View><Text style={[styles.investorAccountButtonIcon, item.inactive && { color: '#6b7280' }]}>›</Text></TouchableOpacity>)}</View>;
 }
 
 function InvestorDetails({ investor, screen, setScreen, onBack }) {
