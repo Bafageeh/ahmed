@@ -119,7 +119,7 @@ export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onE
     const manual = n(summary.manual);
     const cash = n(summary.cash);
     const total = n(summary.total);
-    return { ...item, ta3meed, manual, cash, total, inactive: ta3meed === 0 && cash === 0 };
+    return { ...item, ta3meed, manual, cash, total, inactive: ta3meed === 0 && manual === 0 };
   }).sort((a, b) => {
     if (a.inactive !== b.inactive) return a.inactive ? 1 : -1;
     if (b.total !== a.total) return b.total - a.total;
