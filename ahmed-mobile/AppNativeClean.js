@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -130,6 +130,7 @@ function Ta3meedScreen({ onBack }) {
   const [receiptMessage, setReceiptMessage] = useState('');
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [receiptSaving, setReceiptSaving] = useState(false);
+  const scrollRef = useRef(null);
 
   const load = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -235,15 +236,28 @@ function Ta3meedScreen({ onBack }) {
     load(true);
   };
 
+  const openSearch = () => {
+    setSearchOpen((value) => {
+      const nextValue = !value;
+      if (nextValue) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        });
+      }
+      return nextValue;
+    });
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.ta3Header}>
-        <TouchableOpacity style={styles.headerButton} onPress={() => setSearchOpen((value) => !value)} activeOpacity={0.85}><Text style={styles.headerButtonText}>🔍</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.headerButton} onPress={openSearch} activeOpacity={0.85}><Text style={styles.headerButtonText}>🔍</Text></TouchableOpacity>
         <Text style={styles.ta3Title}>تعميد</Text>
         <TouchableOpacity style={styles.receiptHeaderButton} onPress={() => setReceiptOpen(true)} activeOpacity={0.85}><Text style={styles.receiptHeaderText}>سداد</Text></TouchableOpacity>
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.ta3Content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
