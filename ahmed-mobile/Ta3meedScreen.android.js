@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { BottomTabs } from './ta3meed/Ta3meedBottomTabs';
 import { FilterSegment, filters } from './ta3meed/Ta3meedFilters';
@@ -34,6 +34,7 @@ export default function Ta3meedScreen({ onBack }) {
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [receivingId, setReceivingId] = useState(null);
+  const scrollRef = useRef(null);
 
   const investors = useMemo(() => investorOptionsFrom(items), [items]);
 
@@ -115,17 +116,30 @@ export default function Ta3meedScreen({ onBack }) {
     setMessage('');
   };
 
+  const handleSearchPress = () => {
+    setTab('investments');
+    setSearchVisible((visible) => {
+      const nextVisible = !visible;
+      if (nextVisible) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        });
+      }
+      return nextVisible;
+    });
+  };
+
   const showInfo = (text) => setMessage(text);
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
           <Ta3meedHeader
             onBack={onBack}
             onAdd={() => setTab('finishedImport')}
             onFilter={cycleFilter}
-            onSearch={() => setSearchVisible((value) => !value)}
+            onSearch={handleSearchPress}
             onToggleInvestors={openInvestorAccounts}
           />
 
