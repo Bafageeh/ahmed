@@ -372,6 +372,8 @@ class Ta3meedReceiptController extends Controller
                 }
             }
 
+            $receiptUserId = $investment->user_id ?? null;
+
             $receiptId = DB::table('ta3meed_receipts')->insertGetId([
                 'opportunity_id' => $investment->id,
                 'amount' => $amount,
@@ -380,6 +382,7 @@ class Ta3meedReceiptController extends Controller
                 'reference_number' => $reference,
                 'source_message' => $sourceMessage,
                 'notes' => $data['notes'] ?? null,
+                'user_id' => $receiptUserId,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
@@ -401,6 +404,7 @@ class Ta3meedReceiptController extends Controller
                     'investor_id' => $allocation->investor_id,
                     'share_percent' => round($share * 100, 6),
                     'received_amount' => $allocatedAmount,
+                    'user_id' => $receiptUserId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
