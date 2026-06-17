@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Modal, SafeAreaView, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { styles } from './ta3meedStyles';
 import { money, n } from './ta3meedUtils';
 
@@ -42,9 +42,7 @@ function normalize(raw, investor) {
   const activeInvested = active.reduce((sum, row) => sum + safeNumber(row.invested_amount), 0);
   const ta3meed = active.reduce((sum, row) => sum + remainingCapitalOf(row), 0);
   const activeReceived = Math.max(0, activeInvested - ta3meed);
-  const endedProfit = summary.ended_profit !== undefined ? safeNumber(summary.ended_profit) : opportunities.reduce((sum, row) => {
-    return isEnded(row) ? sum + Math.max(0, safeNumber(row.received_total_amount ?? row.received_amount) - safeNumber(row.invested_amount)) : sum;
-  }, 0);
+  const endedProfit = summary.ended_profit !== undefined ? safeNumber(summary.ended_profit) : opportunities.reduce((sum, row) => isEnded(row) ? sum + Math.max(0, safeNumber(row.received_total_amount ?? row.received_amount) - safeNumber(row.invested_amount)) : sum, 0);
   return {
     investor,
     balance: safeNumber(raw?.balance !== undefined ? raw.balance : summary.manual_balance),
@@ -89,23 +87,17 @@ export function Ta3meedInvestorAccounts({ investors, backRequestVersion = 0, onE
   useEffect(() => {
     let alive = true;
     const accountCodes = accounts.map((item) => item.code).join('|');
-    if (!accountCodes) {
-      setAccountSummaries({});
-      return () => { alive = false; };
-    }
+    if (!accountCodes) { setAccountSummaries({}); return () => { alive = false; }; }
     Promise.all(accounts.map(async (item) => {
       try {
         const response = await fetch(`${API_URL}/ta3meed/investors/${item.code}/account`, { headers: { Accept: 'application/json' } });
         const json = await response.json();
         if (!response.ok) throw new Error('failed');
-        const account = normalize(json.data, item);
-        return [item.code, buildSummary(account)];
+        return [item.code, buildSummary(normalize(json.data, item))];
       } catch {
         return [item.code, { ta3meed: 0, manual: 0, cash: 0, total: 0 }];
       }
-    })).then((rows) => {
-      if (alive) setAccountSummaries(Object.fromEntries(rows));
-    });
+    })).then((rows) => { if (alive) setAccountSummaries(Object.fromEntries(rows)); });
     return () => { alive = false; };
   }, [accounts.map((item) => item.code).join('|')]);
 
@@ -145,7 +137,7 @@ function InvestorDetails({ investor, screen, setScreen, onBack }) {
     }
   };
   useEffect(() => { load(); }, [investor.code]);
-  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} /> : null}{screen === 'movements' ? <SimpleList title={`#S-113 الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}</View>;
+  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} onBack={() => setScreen('home')} /> : null}{screen === 'movements' ? <SimpleList title={`#S-113 الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}</View>;
 }
 
 function Home({ investor, account, message, setScreen }) {
@@ -177,7 +169,7 @@ function Nav({ title, text, onPress }) {
   return <TouchableOpacity style={styles.investorAccountButton} onPress={onPress}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={styles.investorAccountButtonText}>{title}</Text><Text style={styles.investorScreenSubtitle}>{text}</Text></View><Text style={styles.investorAccountButtonIcon}>›</Text></TouchableOpacity>;
 }
 
-function ManageEntries({ investor, account, reload }) {
+function ManageEntries({ investor, account, reload, onBack }) {
   const [amount, setAmount] = useState('');
   const [entryDate, setEntryDate] = useState(todayText());
   const [notes, setNotes] = useState('');
@@ -212,7 +204,11 @@ function ManageEntries({ investor, account, reload }) {
       await reload();
     } catch { setLocalMessage('تعذر حذف الحركة'); }
   };
-  return <View style={{ minHeight: 520, paddingBottom: 130, overflow: 'visible' }}><Text style={styles.investorScreenTitle}>#S-112 إدارة حركات أرصدة {investor.name}</Text>{!!localMessage && <Text style={styles.message}>{localMessage}</Text>}<Text style={[styles.panelTitle, { marginBottom: 6 }]}>الحركات</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((row, index) => <View key={row.id || index} style={[styles.investorPaymentCard, { marginTop: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18 }]}><Text style={[styles.investorPaymentTitle, n(row.amount) < 0 && styles.investorWithdrawText, { fontSize: 20 }]}>{money(row.amount || 0, 2)} ر.س</Text><Text style={[styles.investorPaymentMeta, { marginTop: 4 }]}>{row.entry_date || '-'}</Text>{row.notes ? <Text style={[styles.investorPaymentMeta, { marginTop: 2 }]}>{row.notes}</Text> : null}<View style={[styles.balanceEntryActions, { gap: 8, marginTop: 8 }]}><TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 66, paddingHorizontal: 10, paddingVertical: 6 }]} onPress={() => startEdit(row)}><Text style={[styles.balanceEntryActionIcon, styles.balanceEntryEditIcon, { fontSize: 13 }]}>تعديل</Text></TouchableOpacity><TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 58, paddingHorizontal: 10, paddingVertical: 6 }]} onPress={() => remove(row)}><Text style={[styles.balanceEntryActionIcon, styles.balanceEntryDeleteIcon, { fontSize: 13 }]}>حذف</Text></TouchableOpacity></View></View>)}<TouchableOpacity onPress={openAdd} activeOpacity={0.86} style={{ position: 'absolute', left: 0, bottom: -76, width: 62, height: 62, borderRadius: 31, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', shadowColor: '#0f172a', shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 12, zIndex: 999 }}><Text style={{ color: '#ffffff', fontSize: 32, fontWeight: '900', lineHeight: 34 }}>+</Text></TouchableOpacity><Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}><View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.38)', justifyContent: 'center', padding: 18 }}><View style={[styles.investorPaymentCard, { marginTop: 0, maxHeight: '88%' }]}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}><TouchableOpacity onPress={closeModal} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#0f172a', fontSize: 24, fontWeight: '900', marginTop: -2 }}>×</Text></TouchableOpacity><Text style={styles.investorPaymentTitle}>{editingId ? 'تعديل حركة' : 'إضافة حركة'}</Text></View><View style={styles.investorEntryTypeRow}><TypeButton label="إضافة" active={entryType === 'deposit'} onPress={() => setEntryType('deposit')} /><TypeButton label="سحب" active={entryType === 'withdrawal'} onPress={() => setEntryType('withdrawal')} danger /></View><TextInput value={amount} onChangeText={setAmount} placeholder="المبلغ" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.investorPaymentInput} /><TextInput value={entryDate} onChangeText={setEntryDate} placeholder="تاريخ الحركة YYYY-MM-DD" placeholderTextColor="#94a3b8" style={styles.investorPaymentInput} /><TextInput value={notes} onChangeText={setNotes} placeholder="ملاحظات" placeholderTextColor="#94a3b8" style={[styles.investorPaymentInput, styles.investorNotesInput]} multiline textAlignVertical="top" /><TouchableOpacity style={[styles.investorPaymentButton, entryType === 'withdrawal' && styles.investorWithdrawButton]} onPress={save}><Text style={styles.investorPaymentButtonText}>{editingId ? 'حفظ التعديل' : 'حفظ الحركة'}</Text></TouchableOpacity>{editingId ? <TouchableOpacity style={styles.investorCancelEditButton} onPress={closeModal}><Text style={styles.investorCancelEditText}>إلغاء التعديل</Text></TouchableOpacity> : null}</View></View></Modal></View>;
+  return <Modal visible animationType="slide" onRequestClose={onBack}><SafeAreaView style={{ flex: 1, backgroundColor: '#f4f7fb' }}><View style={{ paddingHorizontal: 18, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><TouchableOpacity onPress={onBack} style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#312e81', fontSize: 28, fontWeight: '900' }}>‹</Text></TouchableOpacity><View style={{ flex: 1, alignItems: 'center' }}><Text style={{ color: '#0f766e', fontSize: 12, fontWeight: '900' }}>#S-112</Text><Text style={{ color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'center' }}>حركات أرصدة {investor.name}</Text></View><View style={{ width: 52 }} /></View><ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 120 }} showsVerticalScrollIndicator={false}>{!!localMessage && <Text style={styles.message}>{localMessage}</Text>}<Text style={[styles.panelTitle, { marginTop: 2, marginBottom: 8 }]}>الحركات</Text>{rows.length === 0 ? <Text style={styles.investorScreenSubtitle}>لا توجد بيانات.</Text> : rows.map((row, index) => <View key={row.id || index} style={[styles.investorPaymentCard, { marginTop: 8, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 18 }]}><Text style={[styles.investorPaymentTitle, n(row.amount) < 0 && styles.investorWithdrawText, { fontSize: 20 }]}>{money(row.amount || 0, 2)} ر.س</Text><Text style={[styles.investorPaymentMeta, { marginTop: 4 }]}>{row.entry_date || '-'}</Text>{row.notes ? <Text style={[styles.investorPaymentMeta, { marginTop: 2 }]}>{row.notes}</Text> : null}<View style={[styles.balanceEntryActions, { gap: 8, marginTop: 8 }]}><TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 66, paddingHorizontal: 10, paddingVertical: 6 }]} onPress={() => startEdit(row)}><Text style={[styles.balanceEntryActionIcon, styles.balanceEntryEditIcon, { fontSize: 13 }]}>تعديل</Text></TouchableOpacity><TouchableOpacity style={[styles.balanceEntryActionButton, { minWidth: 58, paddingHorizontal: 10, paddingVertical: 6 }]} onPress={() => remove(row)}><Text style={[styles.balanceEntryActionIcon, styles.balanceEntryDeleteIcon, { fontSize: 13 }]}>حذف</Text></TouchableOpacity></View></View>)}</ScrollView><TouchableOpacity onPress={openAdd} activeOpacity={0.86} style={{ position: 'absolute', left: 22, bottom: 24, width: 64, height: 64, borderRadius: 32, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', shadowColor: '#0f172a', shadowOpacity: 0.25, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 16, zIndex: 9999 }}><Text style={{ color: '#ffffff', fontSize: 34, fontWeight: '900', lineHeight: 36 }}>+</Text></TouchableOpacity><EntryModal visible={modalVisible} editingId={editingId} entryType={entryType} setEntryType={setEntryType} amount={amount} setAmount={setAmount} entryDate={entryDate} setEntryDate={setEntryDate} notes={notes} setNotes={setNotes} closeModal={closeModal} save={save} /></SafeAreaView></Modal>;
+}
+
+function EntryModal({ visible, editingId, entryType, setEntryType, amount, setAmount, entryDate, setEntryDate, notes, setNotes, closeModal, save }) {
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={closeModal}><View style={{ flex: 1, backgroundColor: 'rgba(15,23,42,0.38)', justifyContent: 'center', padding: 18 }}><View style={[styles.investorPaymentCard, { marginTop: 0, maxHeight: '88%' }]}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}><TouchableOpacity onPress={closeModal} style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#0f172a', fontSize: 24, fontWeight: '900', marginTop: -2 }}>×</Text></TouchableOpacity><Text style={styles.investorPaymentTitle}>{editingId ? 'تعديل حركة' : 'إضافة حركة'}</Text></View><View style={styles.investorEntryTypeRow}><TypeButton label="إضافة" active={entryType === 'deposit'} onPress={() => setEntryType('deposit')} /><TypeButton label="سحب" active={entryType === 'withdrawal'} onPress={() => setEntryType('withdrawal')} danger /></View><TextInput value={amount} onChangeText={setAmount} placeholder="المبلغ" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.investorPaymentInput} /><TextInput value={entryDate} onChangeText={setEntryDate} placeholder="تاريخ الحركة YYYY-MM-DD" placeholderTextColor="#94a3b8" style={styles.investorPaymentInput} /><TextInput value={notes} onChangeText={setNotes} placeholder="ملاحظات" placeholderTextColor="#94a3b8" style={[styles.investorPaymentInput, styles.investorNotesInput]} multiline textAlignVertical="top" /><TouchableOpacity style={[styles.investorPaymentButton, entryType === 'withdrawal' && styles.investorWithdrawButton]} onPress={save}><Text style={styles.investorPaymentButtonText}>{editingId ? 'حفظ التعديل' : 'حفظ الحركة'}</Text></TouchableOpacity>{editingId ? <TouchableOpacity style={styles.investorCancelEditButton} onPress={closeModal}><Text style={styles.investorCancelEditText}>إلغاء التعديل</Text></TouchableOpacity> : null}</View></View></Modal>;
 }
 
 function TypeButton({ label, active, onPress, danger }) {
