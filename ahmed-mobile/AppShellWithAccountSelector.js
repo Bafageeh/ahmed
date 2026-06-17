@@ -73,6 +73,21 @@ async function verifyBiometric() {
   return Boolean(result.success);
 }
 
+async function validateStoredSession(stored) {
+  if (!stored?.sessionKey || !stored?.user?.id) return null;
+  const response = await fetch(`${API_URL}/ahmed/session`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      Authorization: `Bearer ${stored.sessionKey}`,
+      'X-Ahmed-Token': stored.sessionKey,
+    },
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || !json?.data?.id) return null;
+  return { ...stored, user: json.data };
+}
+
 export default function AppShellWithAccountSelector() {
   const [booting, setBooting] = useState(true);
   const [savedSession, setSavedSession] = useState(null);
@@ -117,9 +132,23 @@ export default function AppShellWithAccountSelector() {
     setLoading(true);
     setMessage('');
     try {
-      setCurrentAhmedSession(stored);
-      setSavedSession(stored);
-      setSession(stored);
+      const checkedSession = await validateStoredSession(stored);
+      if (!checkedSession) {
+        await removeSession();
+        clearCurrentAhmedSession();
+        setSavedSession(null);
+        setSession(null);
+        setPassword('');
+        setMessage('انتهت الجلسة المحفوظة أو لم تعد مرتبطة بمستخدم مسجل. سجل الدخول باليوزر والرقم السري أولاً ثم ستعمل البصمة لهذا المستخدم فقط.');
+        return;
+      }
+      await saveSession(checkedSession);
+      setCurrentAhmedSession(checkedSession);
+      setSavedSession(checkedSession);
+      setSession(checkedSession);
+    } catch (error) {
+      clearCurrentAhmedSession();
+      setMessage('تعذر التحقق من المستخدم المسجل. استخدم اليوزر والرقم السري.');
     } finally {
       setLoading(false);
     }
