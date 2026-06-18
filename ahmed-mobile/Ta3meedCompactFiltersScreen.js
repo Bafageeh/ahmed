@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -279,6 +279,8 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
   const [investorFilter, setInvestorFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const scrollRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [expandedId, setExpandedId] = useState(null);
   const [picker, setPicker] = useState(null);
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -344,6 +346,25 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
     setCategoryFilter('all');
     setStatusFilter('active');
     setQuery('');
+  };
+
+  const handleSearchPress = () => {
+    setShowSearch(true);
+
+    const scrollToSearch = () => {
+      scrollRef.current?.scrollTo({ y: 0, animated: false });
+    };
+
+    scrollToSearch();
+    requestAnimationFrame(() => {
+      scrollToSearch();
+      searchInputRef.current?.focus?.();
+    });
+    setTimeout(() => {
+      scrollToSearch();
+      searchInputRef.current?.focus?.();
+    }, 80);
+    setTimeout(scrollToSearch, 180);
   };
 
   const filteredItems = useMemo(() => {
@@ -657,7 +678,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>تعميد</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => setShowSearch((value) => !value)} activeOpacity={0.85}>
+          <TouchableOpacity style={styles.headerIcon} onPress={handleSearchPress} activeOpacity={0.85}>
             <UiIcon name="search" size={21} color={ICON_COLOR_DARK} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.payButton} onPress={() => setReceiptOpen(true)} activeOpacity={0.85}>
@@ -666,8 +687,8 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />} showsVerticalScrollIndicator={false}>
-        {showSearch ? <TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder="ابحث بالكود أو المستثمر أو التصنيف" placeholderTextColor="#94a3b8" textAlign="right" /> : null}
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {showSearch ? <TextInput ref={searchInputRef} style={styles.searchInput} value={query} onChangeText={setQuery} placeholder="ابحث بالكود أو المستثمر أو التصنيف" placeholderTextColor="#94a3b8" textAlign="right" /> : null}
 
         <View style={styles.compactFiltersCard}>
           <View style={styles.compactFilterGrid}>
