@@ -35,6 +35,7 @@ export default function Ta3meedScreen({ onBack }) {
   const [expandedId, setExpandedId] = useState(null);
   const [receivingId, setReceivingId] = useState(null);
   const scrollRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   const investors = useMemo(() => investorOptionsFrom(items), [items]);
 
@@ -116,17 +117,23 @@ export default function Ta3meedScreen({ onBack }) {
     setMessage('');
   };
 
+  const showSearchAtTop = () => {
+    const scrollToTop = () => scrollRef.current?.scrollTo({ y: 0, animated: false });
+    scrollToTop();
+    requestAnimationFrame(() => {
+      scrollToTop();
+      searchInputRef.current?.focus?.();
+    });
+    setTimeout(() => {
+      scrollToTop();
+      searchInputRef.current?.focus?.();
+    }, 80);
+  };
+
   const handleSearchPress = () => {
     setTab('investments');
-    setSearchVisible((visible) => {
-      const nextVisible = !visible;
-      if (nextVisible) {
-        requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({ y: 0, animated: true });
-        });
-      }
-      return nextVisible;
-    });
+    setSearchVisible(true);
+    showSearchAtTop();
   };
 
   const showInfo = (text) => setMessage(text);
@@ -146,9 +153,10 @@ export default function Ta3meedScreen({ onBack }) {
           {searchVisible ? (
             <View style={styles.searchBox}>
               <TextInput
+                ref={searchInputRef}
                 value={search}
                 onChangeText={setSearch}
-                placeholder="ابحث في تعميد"
+                placeholder="ابحث بالكود أو المستثمر أو التصنيف"
                 placeholderTextColor="#94a3b8"
                 style={styles.searchInput}
               />
