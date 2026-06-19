@@ -37,7 +37,7 @@ class AhmedSessionController extends Controller
 
         $sessionKey = Str::random(80);
         DB::table('users')->where('id', $user->id)->update([
-            'remember_token' => Hash::make($sessionKey),
+            'remember_token' => hash('sha256', $sessionKey),
             'updated_at' => now(),
         ]);
 
