@@ -822,8 +822,13 @@ function Metric({ title, value, wide }) {
   return <View style={[styles.metricCard, wide && styles.metricWide]}><Text style={styles.metricTitle}>{title}</Text><Text style={styles.metricValue} numberOfLines={1}>{value}</Text></View>;
 }
 
-function Mini({ label, value }) {
-  return <View style={styles.mini}><Text style={styles.miniLabel}>{label}</Text><Text style={styles.miniValue} numberOfLines={1}>{value}</Text></View>;
+function Mini({ label, value, emphasis }) {
+  return (
+    <View style={[styles.mini, emphasis && styles.miniPrimary]}>
+      <Text style={[styles.miniLabel, emphasis && styles.miniPrimaryLabel]}>{label}</Text>
+      <Text style={[styles.miniValue, emphasis && styles.miniPrimaryValue]} numberOfLines={1}>{value}</Text>
+    </View>
+  );
 }
 
 function RateBadge({ children, tone }) {
@@ -843,137 +848,282 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   const progress = expectedTotal > 0 ? Math.min(100, Math.max(0, (receivedTotal / expectedTotal) * 100)) : 0;
   const partialCount = receipts.filter((receipt) => receipt.receipt_type !== 'full').length;
   const fullCount = receipts.filter((receipt) => receipt.receipt_type === 'full').length;
-  const lastReceipt = receipts[0];
   const annualRate = registeredAnnualRate(item, meta);
   const realRate = actualAnnualRate(item, meta, receipts, allocations);
   const raisedMonths = raisedMonthsOf(item, meta);
-  const realInvestmentDays = realInvestmentDaysOf(item, meta, receipts);
-  const realInvestmentDuration = formatRealInvestmentDuration(realInvestmentDays);
-  const durationBadgeText = status.key === 'received' && realInvestmentDays
-    ? `المدة ${realInvestmentDuration}`
-    : (raisedMonths ? `الشهور ${raisedMonths}` : '');
   const companyName = String(meta.company_name || item.company_name || '').trim();
+  const withdrawalDate = investmentStartDateOf(item, meta) || '-';
 
-  
-  const ta3meedCardInvestorBadges = (item.allocations || []).length ? (
-    <View style={styles.investorBadgesBox}>
-      <View style={styles.investorBadgesHeader}>
-        <Text style={styles.investorBadgesCount}>{(item.allocations || []).length} مستثمر</Text>
-        <Text style={styles.investorBadgesTitle}>المستثمرين</Text>
-      </View>
-      <View style={styles.investorBadgesWrap}>
-        {(item.allocations || []).map((allocation, index) => {
-          const investorName = allocation.investor_name || allocation.investor_code || 'مستثمر';
-          const invested = n(allocation.invested_amount);
-          const received = n(allocation.received_amount);
-          const remainingShare = Math.max(0, invested - Math.min(invested, received));
-          return (
-            <View key={`ta3meed-investor-badge-${allocation.id || index}`} style={styles.investorBadge}>
-              <Text style={styles.investorBadgeName} numberOfLines={1}>{investorName}</Text>
-              <Text style={styles.investorBadgeAmount}>{money(remainingShare, 0)}</Text>
-            </View>
-          );
-        })}
-      </View>
+  const todayDate = new Date();
+  todayDate.setHours(0, 0, 0, 0);
+  const maturityDateValue = item.maturity_date ? new Date(`${String(item.maturity_date).slice(0, 10)}T00:00:00`) : null;
+  const remainingDaysValue = maturityDateValue && !Number.isNaN(maturityDateValue.getTime())
+    ? Math.ceil((maturityDateValue.getTime() - todayDate.getTime()) / 86400000)
+    : null;
+  const remainingDaysBadgeText = remainingDaysValue === null
+    ? ''
+    : remainingDaysValue >= 0
+      ? `متبقي ${remainingDaysValue} يوم`
+      : `متأخر ${Math.abs(remainingDaysValue)} يوم`;
+  const durationBadgeText = raisedMonths ? `الشهور ${raisedMonths}` : '';
+
+  const sortedReceipts = [...receipts].sort((a, b) => String(b.receipt_date || b.created_at || '').localeCompare(String(a.receipt_date || a.created_at || '')));
+
+  const SummaryKpi = ({ label, value, primary }) => (
+    <View style={[styles.summaryKpi, primary && styles.summaryKpiPrimary]}>
+      <Text style={[styles.summaryKpiLabel, primary && styles.summaryKpiPrimaryLabel]}>{label}</Text>
+      <Text style={[styles.summaryKpiValue, primary && styles.summaryKpiPrimaryValue]} numberOfLines={1}>{value}</Text>
     </View>
-  ) : null;
+  );
 
-return <View style={[styles.card, { borderColor: status.color }]}>
-<View style={styles.cardTop}><TouchableOpacity activeOpacity={0.84} onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }} style={styles.inlineEditButton}><UiIcon name="edit" size={20} color={ICON_COLOR_DARK} /></TouchableOpacity><View style={[styles.statusPill, { backgroundColor: status.bg }]}><Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text></View><View style={[styles.categoryPill, { backgroundColor: tone.bg }]}><Text style={[styles.categoryText, { color: tone.color }]}>{category === '-' ? '-' : category}</Text></View>{durationBadgeText ? <View style={[styles.categoryPill, { backgroundColor: '#ecfeff' }]}><Text style={[styles.categoryText, { color: '#0f766e' }]}>{durationBadgeText}</Text></View> : null}<View style={[styles.cardTitleBlock, styles.cardTitleLeft]}><Text style={[styles.cardCode, styles.cardCodeLeft]}>{item.reference_number || 'فرصة تعميد'}</Text><Text style={[styles.cardMeta, styles.cardMetaLeft]}>يستحق {item.maturity_date || '-'}</Text></View></View>{companyName ? <View style={styles.companyCardLine}><Text style={styles.companyCardLabel}>الشركة</Text><Text style={styles.companyCardValue} numberOfLines={1}>{companyName}</Text></View> : null}{ta3meedCardInvestorBadges}<View style={styles.rateBadgesRow}><RateBadge>سنوي مرفوع {pct(annualRate, 2)}</RateBadge>{realRate !== null ? <RateBadge tone="actual">سنوي حقيقي {pct(realRate, 2)}</RateBadge> : null}</View><View style={styles.durationBadgesRow}><Text style={styles.durationBadge}>المدة الفعلية {realInvestmentDuration}</Text></View><View style={styles.amounts}><Mini label="المبلغ" value={money(item.principal_amount)} /><Mini label="الربح" value={money(item.expected_profit_amount, 2)} /><Mini label="المستلم" value={money(receivedTotal, 2)} /></View><View style={styles.progressBox}><View style={styles.progressHeader}><Text style={styles.progressPercent}>{pct(progress)}</Text><Text style={styles.progressTitle}>نسبة الاستلام</Text></View><View style={styles.progressTrack}><View style={[styles.progressFill, { width: `${progress}%` }]} /></View><Text style={styles.progressMeta}>المتبقي {money(remaining, 2)} · الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · كلي ${fullCount}` : ''}</Text>{meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}</View><TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}><Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text></TouchableOpacity>{open ? <View style={styles.detailsBox}>{editingWithdrawalId === item.id ? (
-<View style={styles.withdrawalInlineEditRow}>
-  <TextInput
-    value={editingWithdrawalDate}
-    onChangeText={setEditingWithdrawalDate}
-    placeholder="YYYY-MM-DD"
-    placeholderTextColor="#94a3b8"
-    style={styles.withdrawalDateInput}
-  />
-  <TouchableOpacity onPress={() => saveWithdrawalDate(item)} disabled={savingWithdrawalId === item.id} style={styles.withdrawalSaveButton}>
-    <Text style={styles.withdrawalSaveText}>{savingWithdrawalId === item.id ? '...' : 'حفظ'}</Text>
-  </TouchableOpacity>
-  <TouchableOpacity onPress={cancelEditWithdrawalDate} style={styles.withdrawalCancelButton}>
-    <Text style={styles.withdrawalCancelText}>إلغاء</Text>
-  </TouchableOpacity>
-</View>
-) : (
-<View style={styles.withdrawalDateRow}>
-  <TouchableOpacity onPress={() => startEditWithdrawalDate(item)} style={styles.withdrawalSmallIconButton}>
-    <UiIcon name="edit" size={15} color="#0f766e" />
-  </TouchableOpacity>
-  <Text style={styles.detail}>تاريخ السحب: {meta.withdrawal_date || item.start_date || '-'}</Text>
-</View>
-)}
+  const renderReceipt = (receipt, index) => {
+    const isEditingDate = editingReceiptId === receipt.id;
+    const isFull = receipt.receipt_type === 'full';
 
-<Text style={styles.subTitle}>سجل الدفعات</Text>{receipts.length ? receipts.map((receipt) => {
-  const isEditingDate = editingReceiptId === receipt.id;
-  return (
-    <View key={receipt.id} style={[styles.receiptLine, receipt.receipt_type === 'full' && styles.fullReceiptLine]}>
-      <View style={styles.receiptIconActions}>
-        <TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={[styles.receiptIconButton, styles.receiptDeleteIconButton]}>
-          <UiIcon name="delete" size={17} color="#b91c1c" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => startEditReceiptDate(receipt)} style={[styles.receiptIconButton, styles.receiptEditIconButton]}>
-          <UiIcon name="edit" size={17} color="#2563eb" />
-        </TouchableOpacity>
+    return (
+      <View key={receipt.id || `${receipt.receipt_date}-${index}`} style={styles.receiptTimelineItem}>
+        <View style={[styles.receiptTimelineDot, isFull && styles.receiptTimelineDotFull]} />
+
+        <View style={[styles.receiptTimelineCard, isFull && styles.receiptTimelineCardFull]}>
+          <View style={styles.receiptOneLine}>
+            <View style={styles.receiptActions}>
+              <TouchableOpacity disabled={deletingReceiptId === receipt.id} onPress={() => onDeleteReceipt(receipt)} style={[styles.receiptActionButton, styles.receiptDeleteAction]}>
+                <UiIcon name="delete" size={14} color="#b91c1c" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => startEditReceiptDate(receipt)} style={[styles.receiptActionButton, styles.receiptEditAction]}>
+                <UiIcon name="edit" size={14} color="#2563eb" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.receiptInfoBlock}>
+              <Text style={styles.receiptDateText}>{receipt.receipt_date || '-'}</Text>
+              <Text style={styles.receiptTypeText}>{isFull ? 'كلي' : 'جزئي'}</Text>
+            </View>
+
+            <Text style={styles.receiptAmountText}>{money(receipt.amount, 2)}</Text>
+          </View>
+
+          {isEditingDate ? (
+            <View style={styles.receiptEditBox}>
+              <TextInput
+                value={editingReceiptDate}
+                onChangeText={setEditingReceiptDate}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#94a3b8"
+                style={styles.receiptEditInput}
+              />
+              <View style={styles.receiptEditActions}>
+                <TouchableOpacity onPress={() => saveReceiptDate(receipt, item)} disabled={savingReceiptDateId === receipt.id} style={[styles.receiptSaveButton, savingReceiptDateId === receipt.id && styles.disabled]}>
+                  <Text style={styles.receiptSaveText}>{savingReceiptDateId === receipt.id ? '...' : 'حفظ'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={cancelEditReceiptDate} style={styles.receiptCancelButton}>
+                  <Text style={styles.receiptCancelText}>إلغاء</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+        </View>
       </View>
+    );
+  };
 
-      {isEditingDate ? (
-        <View style={{ flex: 1, alignItems: 'flex-end', gap: 6 }}>
-          <TextInput
-            value={editingReceiptDate}
-            onChangeText={setEditingReceiptDate}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor="#94a3b8"
-            style={{ minWidth: 120, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, textAlign: 'right', color: '#0f172a', fontWeight: '900', fontSize: 12 }}
-          />
-          <View style={{ flexDirection: 'row-reverse', gap: 6 }}>
-            <TouchableOpacity onPress={() => saveReceiptDate(receipt, item)} disabled={savingReceiptDateId === receipt.id} style={{ backgroundColor: '#0f766e', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-              <Text style={{ color: '#0f172a', fontWeight: '900', fontSize: 11 }}>{savingReceiptDateId === receipt.id ? '...' : 'حفظ'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={cancelEditReceiptDate} style={{ backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-              <Text style={{ color: '#475569', fontWeight: '900', fontSize: 11 }}>إلغاء</Text>
-            </TouchableOpacity>
+  const renderInvestor = (allocation, index) => {
+    const investorName = allocation.investor_name || allocation.investor_code || 'مستثمر';
+    const invested = n(allocation.invested_amount);
+    const received = n(allocation.received_amount);
+    const expectedProfit = n(allocation.expected_profit_amount);
+    const investorExpectedTotal = invested + expectedProfit;
+    const ownershipPct = n(item.principal_amount) > 0 ? Math.min(100, Math.max(0, (invested / n(item.principal_amount)) * 100)) : 0;
+    const receivedSharePct = receivedTotal > 0 ? Math.min(100, Math.max(0, (received / receivedTotal) * 100)) : 0;
+    const remainingShare = Math.max(0, investorExpectedTotal - received);
+    const actualProfit = received - invested;
+    const color = INVESTOR_COLORS[index % INVESTOR_COLORS.length];
+
+    return (
+      <View key={`investor-${allocation.id || index}`} style={styles.investorCard}>
+        <View style={styles.investorHeaderLine}>
+          <View style={[styles.detailInvestorDot, { backgroundColor: color }]} />
+          <Text style={styles.investorCardName} numberOfLines={1}>{investorName}</Text>
+          <Text style={[styles.investorShareText, { color }]}>{pct(ownershipPct)}</Text>
+        </View>
+
+        <View style={styles.investorMiniGrid}>
+          <View style={styles.investorMiniBox}>
+            <Text style={styles.investorMiniLabel}>مستثمر</Text>
+            <Text style={styles.investorMiniValue}>{money(invested, 2)}</Text>
+          </View>
+          <View style={styles.investorMiniBox}>
+            <Text style={styles.investorMiniLabel}>مستلم</Text>
+            <Text style={styles.investorMiniValue}>{money(received, 2)}</Text>
+          </View>
+          <View style={styles.investorMiniBox}>
+            <Text style={styles.investorMiniLabel}>متبقي</Text>
+            <Text style={styles.investorMiniValue}>{money(remainingShare, 2)}</Text>
+          </View>
+          <View style={styles.investorMiniBox}>
+            <Text style={styles.investorMiniLabel}>ربح فعلي</Text>
+            <Text style={[styles.investorMiniValue, actualProfit < 0 && styles.negativeValue]}>{money(actualProfit, 2)}</Text>
           </View>
         </View>
-      ) : (
-        <View style={styles.receiptCompactInfo}>
-          <Text style={styles.receiptCompactText}>{receipt.receipt_date || '-'} · {receipt.receipt_type === 'full' ? 'سداد كلي' : 'سداد جزئي'}</Text>
-          <Text style={styles.receiptCompactAmount}>{money(receipt.amount, 2)}</Text>
+
+        <View style={styles.investorLineBlock}>
+          <View style={styles.investorLineHeader}>
+            <Text style={styles.investorLinePercent}>{pct(ownershipPct)}</Text>
+            <Text style={styles.investorLineTitle}>خط الملكية</Text>
+          </View>
+          <View style={styles.investorLineTrack}>
+            <View style={[styles.investorLineFill, { width: `${ownershipPct}%`, backgroundColor: color }]} />
+          </View>
         </View>
-      )}
-    </View>
-  );
-}) : <Text style={styles.muted}>لا توجد دفعات</Text>}<Text style={styles.subTitle}>المستثمرين</Text>
-<View style={styles.detailInvestorList}>
-{allocations.map((allocation, index) => {
-  const share = n(item.principal_amount) > 0 ? (n(allocation.invested_amount) / n(item.principal_amount)) * 100 : 0;
-  const expected = n(allocation.invested_amount) + n(allocation.expected_profit_amount);
-  const investorRemaining = Math.max(0, expected - n(allocation.received_amount));
-  const actualProfit = n(allocation.received_amount) - n(allocation.invested_amount);
-  const color = INVESTOR_COLORS[index % INVESTOR_COLORS.length];
+
+        <View style={styles.investorLineBlock}>
+          <View style={styles.investorLineHeader}>
+            <Text style={styles.investorLinePercent}>{pct(receivedSharePct)}</Text>
+            <Text style={styles.investorLineTitle}>خط المستلم</Text>
+          </View>
+          <View style={styles.investorLineTrack}>
+            <View style={[styles.investorLineFill, { width: `${receivedSharePct}%`, backgroundColor: '#0f766e' }]} />
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
-    <View key={allocation.id || `${allocation.investor_name}-${allocation.invested_amount}`} style={styles.detailInvestorGroup}>
-      <View style={styles.detailInvestorHeader}>
-        <View style={[styles.detailInvestorDot, { backgroundColor: color }]} />
-        <Text style={styles.detailInvestorName}>{allocation.investor_name}</Text>
-        <Text style={[styles.detailInvestorPercent, { color }]}>{pct(share)}</Text>
+    <View style={[styles.card, { borderColor: status.color }]}>
+      <View style={styles.opportunityHeader}>
+        <View style={styles.headerRightMeta}>
+          <View style={[styles.categoryTopPill, { backgroundColor: tone.color }]}>
+            <Text style={styles.categoryTopText}>{category === '-' ? '-' : category}</Text>
+          </View>
+        </View>
+
+        <View style={styles.opportunityTitleBlock}>
+          <Text style={styles.cardCode}>{item.reference_number || 'فرصة تعميد'}</Text>
+          <Text style={styles.cardMeta}>يستحق {item.maturity_date || '-'}</Text>
+        </View>
+
+        <TouchableOpacity
+          activeOpacity={0.84}
+          onPress={(event) => { event.stopPropagation?.(); onEdit?.(item); }}
+          style={styles.inlineEditButton}
+        >
+          <UiIcon name="edit" size={20} color={ICON_COLOR_DARK} />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.detailInvestorProgressTrack}>
-        <View style={[styles.detailInvestorProgressFill, { width: `${Math.min(100, Math.max(0, share))}%`, backgroundColor: color }]} />
+      <View style={styles.badgeStrip}>
+        <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+          <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+        </View>
+        {durationBadgeText ? (
+          <View style={[styles.categoryPill, { backgroundColor: '#ecfeff' }]}>
+            <Text style={[styles.categoryText, { color: '#0f766e' }]}>{durationBadgeText}</Text>
+          </View>
+        ) : null}
+        {remainingDaysBadgeText ? (
+          <View style={[styles.categoryPill, { backgroundColor: remainingDaysValue < 0 ? '#fef2f2' : '#eff6ff' }]}>
+            <Text style={[styles.categoryText, { color: remainingDaysValue < 0 ? '#dc2626' : '#2563eb' }]}>{remainingDaysBadgeText}</Text>
+          </View>
+        ) : null}
       </View>
 
-      <View style={styles.detailInvestorBadges}>
-        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>نسبة</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{pct(share)}</Text></View>
-        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>مستثمر</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(allocation.invested_amount, 2)}</Text></View>
-        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>مستلم</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(allocation.received_amount, 2)}</Text></View>
-        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>ربح فعلي</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(actualProfit, 2)}</Text></View>
-        <View style={styles.detailInvestorBadge}><Text style={styles.detailInvestorBadgeLabel}>متبقي</Text><Text style={[styles.detailInvestorBadgeValue, { color }]}>{money(investorRemaining, 2)}</Text></View>
+      <View style={styles.summaryDashboard}>
+        <View style={styles.amountHero}>
+          <Text style={styles.amountHeroLabel}>المبلغ</Text>
+          <Text style={styles.amountHeroValue} numberOfLines={1}>{money(item.principal_amount)}</Text>
+        </View>
+
+        <View style={styles.summaryKpiGrid}>
+          <SummaryKpi label="الربح" value={money(item.expected_profit_amount, 2)} />
+          <SummaryKpi label="المستلم" value={money(receivedTotal, 2)} />
+          <SummaryKpi label="المتبقي" value={money(remaining, 2)} />
+        </View>
+
+        <View style={styles.progressBox}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressPercent}>{pct(progress)}</Text>
+            <Text style={styles.progressTitle}>نسبة الاستلام</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress}%` }]} />
+          </View>
+          <Text style={styles.progressMeta}>الدفعات {receipts.length} · الجزئية {partialCount}{fullCount ? ` · الكلية ${fullCount}` : ''}</Text>
+          {meta.ta3meed_settlement_note ? <Text style={styles.settlementNote}>{meta.ta3meed_settlement_note}</Text> : null}
+        </View>
       </View>
+
+      {companyName ? (
+        <View style={styles.companyCardLine}>
+          <Text style={styles.companyCardLabel}>الشركة</Text>
+          <Text style={styles.companyCardValue} numberOfLines={1}>{companyName}</Text>
+        </View>
+      ) : null}
+
+      <TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}>
+        <Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text>
+      </TouchableOpacity>
+
+      {open ? (
+        <View style={styles.detailsBox}>
+          <View style={styles.withdrawalCard}>
+            <TouchableOpacity onPress={() => startEditWithdrawalDate(item)} style={styles.withdrawalIconButton}>
+              <UiIcon name="edit" size={15} color="#0f766e" />
+            </TouchableOpacity>
+
+            {editingWithdrawalId === item.id ? (
+              <View style={styles.withdrawalEditArea}>
+                <TextInput
+                  value={editingWithdrawalDate}
+                  onChangeText={setEditingWithdrawalDate}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor="#94a3b8"
+                  style={styles.withdrawalEditInput}
+                />
+                <View style={styles.withdrawalEditActions}>
+                  <TouchableOpacity onPress={() => saveWithdrawalDate(item)} disabled={savingWithdrawalId === item.id} style={[styles.withdrawalSaveButton, savingWithdrawalId === item.id && styles.disabled]}>
+                    <Text style={styles.withdrawalSaveText}>{savingWithdrawalId === item.id ? '...' : 'حفظ'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={cancelEditWithdrawalDate} style={styles.withdrawalCancelButton}>
+                    <Text style={styles.withdrawalCancelText}>إلغاء</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.withdrawalTextBlock}>
+                <Text style={styles.withdrawalLabel}>تاريخ السحب</Text>
+                <Text style={styles.withdrawalValue}>{withdrawalDate}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.detailSectionHeader}>
+            <Text style={styles.detailSectionCount}>{receipts.length} دفعة</Text>
+            <Text style={styles.detailSectionTitle}>سجل الدفعات</Text>
+          </View>
+
+          <View style={styles.receiptTimeline}>
+            {sortedReceipts.length ? sortedReceipts.map(renderReceipt) : (
+              <View style={styles.emptyTimeline}>
+                <Text style={styles.emptyTimelineText}>لا توجد دفعات</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.detailSectionHeader}>
+            <Text style={styles.detailSectionCount}>{allocations.length} مستثمر</Text>
+            <Text style={styles.detailSectionTitle}>المستثمرين</Text>
+          </View>
+
+          <View style={styles.investorPanel}>
+            {allocations.length ? allocations.map(renderInvestor) : (
+              <Text style={styles.emptyTimelineText}>لا يوجد مستثمرين</Text>
+            )}
+          </View>
+        </View>
+      ) : null}
     </View>
   );
-})}
-</View></View> : null}</View>;
 }
 
 function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, parseReceipt, applyReceipt, saving }) {
@@ -1001,12 +1151,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     zIndex: 50,
   },
-
-
   cardTitleLeft: {
-    marginRight: 'auto',
+    width: '100%',
     alignItems: 'flex-start',
-    textAlign: 'left',
+    textAlign: 'left'
   },
   cardCodeLeft: {
     textAlign: 'left',
@@ -1016,20 +1164,18 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     writingDirection: 'rtl',
   },
-
-
   companyCardLine: {
-    marginTop: 8,
-    marginBottom: 6,
+    marginTop: 7,
+    marginBottom: 7,
     flexDirection: 'row-reverse',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 15,
+    paddingHorizontal: 11,
+    paddingVertical: 9
   },
   companyCardLabel: {
     color: '#64748b',
@@ -1045,15 +1191,125 @@ const styles = StyleSheet.create({
     textAlign: 'left',
     marginRight: 10,
   },
+  investorPanel: {
+    marginTop: 8,
+    marginBottom: 8,
+    padding: 8,
+    borderRadius: 17,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  investorPanelHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+  investorPanelTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'right'
+  },
+  investorPanelCount: {
+    color: '#64748b',
+    fontSize: 11.5,
+    fontWeight: '900'
+  },
+  investorCard: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    padding: 8,
+    marginTop: 7
+  },
+  investorHeaderLine: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 7
+  },
+  investorCardName: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 14.5,
+    fontWeight: '900',
+    textAlign: 'right'
+  },
+  investorShareText: {
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  investorMiniGrid: {
+    flexDirection: 'row-reverse',
+    gap: 5,
+    marginBottom: 6
+  },
+  investorMiniBox: {
+    flex: 1,
+    minHeight: 48,
+    backgroundColor: '#ecfdf5',
+    borderRadius: 11,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  investorMiniLabel: {
+    color: '#64748b',
+    fontSize: 9.5,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  investorMiniValue: {
+    marginTop: 2,
+    color: '#0f766e',
+    fontSize: 10.5,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  investorLineBlock: {
+    marginTop: 6
+  },
+  investorLineHeader: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4
+  },
+  investorLineTitle: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  investorLinePercent: {
+    color: '#0f766e',
+    fontSize: 11,
+    fontWeight: '900'
+  },
+  investorLineTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden'
+  },
 
+  investorLineFill: {
+    height: '100%',
+    borderRadius: 999
+  },
   investorBadgesBox: {
-    marginTop: 10,
+    marginTop: 8,
     marginBottom: 10,
     padding: 10,
     borderRadius: 18,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e2e8f0'
   },
   investorBadgesHeader: {
     flexDirection: 'row-reverse',
@@ -1183,86 +1439,207 @@ const styles = StyleSheet.create({
   sectionRow: { marginTop: 20, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'right' },
   counter: { color: '#0f766e', backgroundColor: '#ccfbf1', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, overflow: 'hidden', fontWeight: '900' },
-  inlineEditButton: { width: 38, height: 38, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
-  card: { marginTop: 6, backgroundColor: '#fff', borderRadius: 16, padding: 9, borderWidth: 1.4, shadowColor: '#0f172a', shadowOpacity: 0.04, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 1 },
-  cardTop: { flexDirection: 'row-reverse', alignItems: 'center', gap: 5 },
-  cardTitleBlock: { flex: 1, alignItems: 'flex-end' },
-  cardCode: { color: '#0f172a', fontSize: 13.5, fontWeight: '900', textAlign: 'right' },
-  cardMeta: { marginTop: 1, color: '#64748b', fontSize: 9, fontWeight: '800', textAlign: 'right' },
-  statusPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999 },
-  statusText: { fontSize: 9.5, fontWeight: '900' },
-  categoryPill: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999 },
-  categoryText: { fontSize: 9.5, fontWeight: '900' },
-  rateBadgesRow: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
-  withdrawalDateRow: { marginTop: 6, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, alignSelf: 'stretch' },
-  withdrawalInlineEditRow: { marginTop: 6, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'flex-end', gap: 6, alignSelf: 'stretch' },
-  withdrawalSmallIconButton: { width: 28, height: 28, borderRadius: 10, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#99f6e4', alignItems: 'center', justifyContent: 'center' },
-  withdrawalEditBox: { marginTop: 7, alignItems: 'flex-end' },
-  withdrawalEditButton: { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 11, paddingHorizontal: 9, paddingVertical: 6 },
-  withdrawalEditText: { color: '#c2410c', fontSize: 10.5, fontWeight: '900' },
-  withdrawalDateInput: { minWidth: 150, backgroundColor: '#fff', borderWidth: 1, borderColor: '#fed7aa', borderRadius: 11, paddingHorizontal: 10, paddingVertical: 7, textAlign: 'right', color: '#0f172a', fontWeight: '900', fontSize: 12 },
-  withdrawalEditActions: { marginTop: 6, flexDirection: 'row-reverse', gap: 6 },
-  withdrawalSaveButton: { backgroundColor: '#0f766e', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  withdrawalSaveText: { color: '#0f172a', fontWeight: '900', fontSize: 11 },
-  withdrawalCancelButton: { backgroundColor: '#f1f5f9', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
-  withdrawalCancelText: { color: '#475569', fontWeight: '900', fontSize: 11 },
-  durationBadgesRow: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
-  durationBadge: { backgroundColor: '#f8fafc', color: '#475569', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: '900', overflow: 'hidden' },
-  rateBadge: { backgroundColor: '#eef2ff', color: '#4338ca', borderRadius: 999, paddingHorizontal: 7, paddingVertical: 3, fontSize: 9, fontWeight: '900', overflow: 'hidden' },
-  actualRateBadge: { backgroundColor: '#dcfce7', color: '#166534' },
-  amounts: { marginTop: 7, flexDirection: 'row-reverse', gap: 5 },
-  mini: { flex: 1, backgroundColor: '#f8fafc', borderRadius: 11, padding: 6, alignItems: 'flex-end' },
-  miniLabel: { color: '#64748b', fontSize: 8.5, fontWeight: '800', textAlign: 'right' },
-  miniValue: { marginTop: 2, color: '#0f172a', fontSize: 10.5, fontWeight: '900', textAlign: 'right' },
-  progressBox: { marginTop: 7, backgroundColor: '#f8fafc', borderRadius: 12, padding: 8 },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  progressPercent: { color: '#0f766e', fontSize: 10.5, fontWeight: '900' },
-  progressTitle: { color: '#64748b', fontSize: 9.5, fontWeight: '900' },
-  progressTrack: { marginTop: 10, height: 12, borderRadius: 999, backgroundColor: '#e5e7eb', overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#0f766e' },
-  progressMeta: { marginTop: 5, color: '#64748b', fontSize: 9.5, fontWeight: '800', textAlign: 'right' },
-  settlementNote: { marginTop: 8, color: '#b45309', backgroundColor: '#fffbeb', borderRadius: 12, padding: 8, overflow: 'hidden', textAlign: 'right', fontWeight: '900' },
-  detailsButton: { marginTop: 7, borderRadius: 12, borderWidth: 1, borderColor: '#99f6e4', backgroundColor: '#f0fdfa', paddingVertical: 9, alignItems: 'center' },
-  detailsButtonText: { color: '#0f766e', fontSize: 12, fontWeight: '900' },
-  detailsBox: { marginTop: 14, backgroundColor: '#fff', borderRadius: 18, padding: 12, alignItems: 'flex-end' },
-  detail: { color: '#334155', fontWeight: '900', textAlign: 'right', marginTop: 7, lineHeight: 24 },
-  subTitle: { marginTop: 14, color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
-  detailInvestorList: { marginTop: 8, alignSelf: 'stretch', gap: 12 },
-  detailInvestorGroup: { alignSelf: 'stretch', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 18, padding: 10 },
-  detailInvestorHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, alignSelf: 'stretch' },
-  detailInvestorDot: { width: 13, height: 13, borderRadius: 999 },
-  detailInvestorName: { flex: 1, color: '#0f172a', fontWeight: '900', fontSize: 15, textAlign: 'right' },
-  detailInvestorPercent: { fontWeight: '900', fontSize: 15, textAlign: 'left' },
-  detailInvestorProgressTrack: { marginTop: 9, height: 9, borderRadius: 999, backgroundColor: '#e5e7eb', overflow: 'hidden', alignSelf: 'stretch' },
-  detailInvestorProgressFill: { height: '100%', borderRadius: 999 },
-  detailInvestorBadges: { marginTop: 10, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 7, alignSelf: 'stretch' },
-  detailInvestorBadge: { flexBasis: '18%', flexGrow: 1, minHeight: 54, borderRadius: 15, paddingHorizontal: 4, paddingVertical: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#d1fae5', backgroundColor: '#ecfdf5' },
-  detailInvestorBadgeLabel: { color: '#0f172a', fontWeight: '800', fontSize: 8.5, textAlign: 'center' },
-  detailInvestorBadgeValue: { fontWeight: '900', fontSize: 8.5, marginTop: 2, textAlign: 'center' },
-  receiptIconActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7 },
-  receiptIconButton: { width: 34, height: 34, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  receiptDeleteIconButton: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
-  receiptEditIconButton: { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' },
-  receiptCompactInfo: { flex: 1, alignItems: 'flex-end', gap: 3 },
-  receiptCompactText: { color: '#0f172a', fontWeight: '900', fontSize: 13, textAlign: 'right' },
-  receiptCompactAmount: { color: '#334155', fontWeight: '900', fontSize: 13, textAlign: 'right' },
-  muted: { color: '#94a3b8', fontWeight: '900', textAlign: 'right', marginTop: 8 },
-  receiptLine: { marginTop: 8, alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderRadius: 14, padding: 10 },
-  fullReceiptLine: { backgroundColor: '#ecfdf5' },
-  receiptText: { flex: 1, color: '#334155', fontWeight: '900', textAlign: 'right' },
-  deleteReceipt: { backgroundColor: '#fee2e2', borderRadius: 11, paddingHorizontal: 10, paddingVertical: 6, marginRight: 8 },
-  deleteReceiptText: { color: '#b91c1c', fontWeight: '900' },
-  emptyCard: { marginTop: 12, backgroundColor: '#fff', borderRadius: 22, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
-  emptyTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900' },
-  emptyText: { marginTop: 6, color: '#64748b', fontWeight: '800' },
-  opportunityEditCard: {
+  inlineEditButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
     backgroundColor: '#fff',
-    borderRadius: 22,
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 10,
-    maxHeight: '94%',
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  amounts: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 7,
+    width: '100%',
+    alignSelf: 'stretch'
+  },
+  miniPrimary: {
+    flexBasis: '100%',
+    minHeight: 64,
+    backgroundColor: '#ecfdf5',
+    borderColor: '#99f6e4',
+    borderWidth: 1.5
+  },
+
+  cardTitleBlock: {
+    order: -30,
+    width: '100%',
+    flexBasis: '100%',
+    marginBottom: 6,
+    alignItems: 'flex-start'
+  },
+  cardCode: {
+    color: '#0f172a',
+    fontSize: 21,
+    fontWeight: '900',
+    textAlign: 'left',
+    writingDirection: 'ltr'
+  },
+  cardMeta: {
+    marginTop: 2,
+    color: '#64748b',
+    fontSize: 12.5,
+    fontWeight: '800',
+    textAlign: 'left'
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6
+  },
+  categoryPill: {
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6
+  },
+  summaryTopBlock: {
+    width: '100%',
+    alignSelf: 'stretch',
+    marginTop: 2,
+    marginBottom: 8
+  },
+  rateBadgesRow: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 6,
+    width: '100%',
+    marginBottom: 7
+  },
+  miniLabel: {
+    color: '#64748b',
+    fontSize: 10.5,
+    fontWeight: '800',
+    textAlign: 'center'
+  },
+  miniValue: {
+    marginTop: 4,
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  progressBox: {
+    marginTop: 8,
+    backgroundColor: '#f8fafc',
+    borderRadius: 15,
+    padding: 9,
+    width: '100%',
+    alignSelf: 'stretch'
+  },
+  progressMeta: {
+    marginTop: 6,
+    color: '#64748b',
+    fontSize: 11.5,
+    fontWeight: '800',
+    textAlign: 'right',
+    lineHeight: 17
+  },
+
+  progressHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+
+  progressPercent: {
+    color: '#0f766e',
+    fontSize: 15,
+    fontWeight: '900'
+  },
+
+  progressTitle: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+
+  progressTrack: {
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden'
+  },
+
+  detailsButtonText: {
+    color: '#0f766e',
+    fontSize: 14,
+    fontWeight: '900'
+  },
+  card: {
+    marginTop: 12,
+    marginBottom: 14,
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    borderWidth: 2,
+    padding: 12,
+    overflow: 'hidden'
+  },
+  opportunityTitleBlock: {
+    width: '100%',
+    marginBottom: 8,
+    alignItems: 'flex-start'
+  },
+  cardHeaderRow: {
+    width: '100%',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 7,
+    marginBottom: 8
+  },
+  cardBadgesRow: {
+    flex: 1,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 5
+  },
+  detailsButton: {
+    marginTop: 8,
+    alignSelf: 'stretch',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  cardTop: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     width: '100%'
+  },
+  miniPrimaryLabel: {
+    color: '#0f766e',
+    fontSize: 12,
+    fontWeight: '900'
+  },
+  miniPrimaryValue: {
+    color: '#064e3b',
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'center'
+  },
+  mini: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    minHeight: 58,
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   opportunityEditScroll: {
     paddingBottom: 8
@@ -1309,4 +1686,590 @@ const styles = StyleSheet.create({
   primary: { flex: 1, backgroundColor: '#0f766e', borderRadius: 16, paddingVertical: 13, alignItems: 'center' },
   primaryText: { color: '#0f172a', fontWeight: '900' },
   disabled: { opacity: 1.6 },
+
+  card: {
+    marginTop: 12,
+    marginBottom: 14,
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    borderWidth: 2,
+    padding: 12,
+    overflow: 'hidden',
+  },
+  opportunityHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 8,
+  },
+  opportunityTitleBlock: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  cardCode: {
+    color: '#0f172a',
+    fontSize: 22,
+    fontWeight: '900',
+    textAlign: 'left',
+    writingDirection: 'ltr',
+  },
+  cardMeta: {
+    marginTop: 3,
+    color: '#64748b',
+    fontSize: 12.5,
+    fontWeight: '800',
+    textAlign: 'left',
+  },
+  inlineEditButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeStrip: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  categoryPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  summaryDashboard: {
+    width: '100%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 18,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 8,
+  },
+  amountHero: {
+    minHeight: 72,
+    backgroundColor: '#ecfdf5',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#99f6e4',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 10,
+  },
+  amountHeroLabel: {
+    color: '#0f766e',
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  amountHeroValue: {
+    marginTop: 4,
+    color: '#064e3b',
+    fontSize: 25,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  summaryKpiGrid: {
+    flexDirection: 'row-reverse',
+    gap: 7,
+    width: '100%',
+  },
+  summaryKpi: {
+    flex: 1,
+    minHeight: 58,
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 8,
+  },
+  summaryKpiPrimary: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+  },
+  summaryKpiLabel: {
+    color: '#64748b',
+    fontSize: 10.5,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  summaryKpiValue: {
+    marginTop: 4,
+    color: '#0f172a',
+    fontSize: 13.5,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  summaryKpiPrimaryLabel: {
+    color: '#0f766e',
+  },
+  summaryKpiPrimaryValue: {
+    color: '#064e3b',
+  },
+  progressBox: {
+    marginTop: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 15,
+    padding: 9,
+    width: '100%',
+  },
+  progressHeader: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  progressTitle: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  progressPercent: {
+    color: '#0f766e',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  progressTrack: {
+    height: 9,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#0f766e',
+  },
+  progressMeta: {
+    marginTop: 6,
+    color: '#64748b',
+    fontSize: 11.5,
+    fontWeight: '800',
+    textAlign: 'right',
+    lineHeight: 17,
+  },
+  companyCardLine: {
+    marginTop: 7,
+    marginBottom: 7,
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 15,
+    paddingHorizontal: 11,
+    paddingVertical: 9,
+  },
+  companyCardLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  companyCardValue: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'left',
+    marginRight: 10,
+  },
+  detailsButton: {
+    marginTop: 8,
+    alignSelf: 'stretch',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    borderRadius: 15,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailsButtonText: {
+    color: '#0f766e',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  detailsBox: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  withdrawalCard: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 15,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+  },
+  withdrawalIconButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 13,
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#99f6e4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  withdrawalTextBlock: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  withdrawalLabel: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  withdrawalValue: {
+    marginTop: 3,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  withdrawalEditArea: {
+    flex: 1,
+    gap: 7,
+  },
+  withdrawalEditInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    color: '#0f172a',
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  withdrawalEditActions: {
+    flexDirection: 'row-reverse',
+    gap: 6,
+  },
+  withdrawalSaveButton: {
+    backgroundColor: '#0f766e',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  withdrawalSaveText: {
+    color: '#ffffff',
+    fontWeight: '900',
+    fontSize: 11,
+  },
+  withdrawalCancelButton: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  withdrawalCancelText: {
+    color: '#475569',
+    fontWeight: '900',
+    fontSize: 11,
+  },
+  investorPanel: {
+    gap: 8,
+  },
+  investorCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    padding: 9,
+  },
+  investorHeaderLine: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  detailInvestorDot: {
+    width: 13,
+    height: 13,
+    borderRadius: 999,
+  },
+  investorCardName: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  investorShareText: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  investorMiniGrid: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 7,
+  },
+  investorMiniBox: {
+    flexBasis: '48%',
+    flexGrow: 1,
+    minHeight: 48,
+    backgroundColor: '#ecfdf5',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  investorMiniLabel: {
+    color: '#64748b',
+    fontSize: 9.5,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  investorMiniValue: {
+    marginTop: 2,
+    color: '#0f766e',
+    fontSize: 10.5,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
+  negativeValue: {
+    color: '#dc2626',
+  },
+  investorLineBlock: {
+    marginTop: 7,
+  },
+  investorLineHeader: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  investorLineTitle: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  investorLinePercent: {
+    color: '#0f766e',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  investorLineTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  investorLineFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  disabled: {
+    opacity: 0.55,
+  },
+  emptyTimeline: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+  },
+  emptyTimelineText: {
+    color: '#94a3b8',
+    fontWeight: '900',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+
+  detailSectionHeader: {
+    marginTop: 5,
+    marginBottom: 5,
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailSectionTitle: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  detailSectionCount: {
+    color: '#64748b',
+    fontSize: 10.5,
+    fontWeight: '900',
+  },
+  receiptTimeline: {
+    gap: 5,
+  },
+  receiptTimelineItem: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 5,
+  },
+  receiptTimelineDot: {
+    width: 7,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: '#2563eb',
+  },
+  receiptTimelineDotFull: {
+    backgroundColor: '#0f766e',
+  },
+  receiptTimelineCard: {
+    flex: 1,
+    minHeight: 46,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+  },
+  receiptTimelineCardFull: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#99f6e4',
+  },
+  receiptOneLine: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  receiptActions: {
+    flexDirection: 'row-reverse',
+    gap: 4,
+  },
+  receiptActionButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  receiptEditAction: {
+    backgroundColor: '#eef2ff',
+    borderColor: '#c7d2fe',
+  },
+  receiptDeleteAction: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
+  },
+  receiptInfoBlock: {
+    minWidth: 78,
+    alignItems: 'flex-end',
+  },
+  receiptDateText: {
+    color: '#0f172a',
+    fontSize: 12.5,
+    fontWeight: '900',
+    textAlign: 'right',
+    lineHeight: 16,
+  },
+  receiptTypeText: {
+    marginTop: 0,
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '900',
+    textAlign: 'right',
+    lineHeight: 12,
+  },
+  receiptAmountText: {
+    flex: 1,
+    color: '#0f766e',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
+  receiptEditBox: {
+    marginTop: 5,
+    gap: 5,
+  },
+  receiptEditInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    textAlign: 'right',
+    color: '#0f172a',
+    fontWeight: '900',
+    fontSize: 11.5,
+  },
+  receiptEditActions: {
+    flexDirection: 'row-reverse',
+    gap: 5,
+  },
+  receiptSaveButton: {
+    backgroundColor: '#0f766e',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  receiptSaveText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 10,
+  },
+  receiptCancelButton: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  receiptCancelText: {
+    color: '#475569',
+    fontWeight: '900',
+    fontSize: 10,
+  },
+
+  headerRightMeta: {
+    minWidth: 54,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+
+  categoryTopPill: {
+    minWidth: 48,
+    height: 44,
+    borderRadius: 15,
+    paddingHorizontal: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.10,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  categoryTopText: {
+    color: '#ffffff',
+    fontSize: 17,
+    fontWeight: '900',
+    textAlign: 'center',
+  },
 });
