@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonTenantController;
+use App\Http\Controllers\Api\DinarInvestmentController;
 use App\Http\Controllers\Api\SecureVaultController;
 use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
@@ -72,6 +73,9 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/moneymoon/investments/{id}', [MoneyMoonTenantController::class, 'update']);
     Route::delete('/moneymoon/investments/{id}', [MoneyMoonTenantController::class, 'destroy']);
     Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonTenantController::class, 'receive']);
+    Route::get('/dinar/investments', [DinarInvestmentController::class, 'index']);
+    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);
+
     Route::get('/ta3meed/investments', [Ta3meedController::class, 'index']);
     Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);
     Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::class, 'finished']);

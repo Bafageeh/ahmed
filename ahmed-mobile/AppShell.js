@@ -6,6 +6,7 @@ import Ta3meedScreen from './Ta3meedNoResetFilterScreen';
 import Ta3meedInvestorAccountsScreen from './Ta3meedInvestorAccountsScreen';
 import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
 import MoneyMoonScreen from './MoneyMoonActiveOnlyScreen';
+import DinarInvestmentsScreen from './DinarInvestmentsScreen';
 import WealthScreen from './WealthScreen';
 import AhmedUsersManagerPanel from './AhmedUsersManagerPanel';
 import SecureVaultScreen from './SecureVaultScreen';
@@ -28,13 +29,13 @@ const tabs = [
   { key: 'more', label: 'مزيد', icon: 'more' },
 ];
 
-const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon'];
+const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar'];
 const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'financeImports', 'stats'];
 
 const platforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد والتصنيفات والمستثمرين.' },
   { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون.' },
-  { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'قريبًا.' },
+  { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'شركات دينار والتوزيعات والإحصائيات.' },
   { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'قريبًا.' },
 ];
 
@@ -74,6 +75,7 @@ export default function AppShell({ currentUser, onLogout }) {
       if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'ta3meedImageImport') return <Ta3meedImageImportScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'moneymoon') return <MoneyMoonScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'dinar') return <DinarInvestmentsScreen onBack={() => setInvestmentScreen('list')} />;
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }
     return <WealthScreen openInvestments={openInvestments} />;
@@ -136,23 +138,113 @@ function FutureMonthlyIncomeScreen({ goTo }) {
   const [monthlyIncomes, setMonthlyIncomes] = useState([]);
   const [moneyMoonMonthlyIncome, setMoneyMoonMonthlyIncome] = useState(0);
   const [ta3meedMonthlyIncome, setTa3meedMonthlyIncome] = useState(0);
+  const [dinarMonthlyIncome, setDinarMonthlyIncome] = useState(0);
   const [financeNetProfitAfterStuckDeduction, setFinanceNetProfitAfterStuckDeduction] = useState(0);
+  const [comMonthlyPersonNet, setComMonthlyPersonNet] = useState(0);
   const [menuId, setMenuId] = useState(null);
   const [editingId, setEditingId] = useState(null);
-  const loadIncomes = async () => { try { const response = await fetch(`${API_URL}/monthly-incomes?screen=future`, { headers: { Accept: 'application/json' } }); const json = await response.json(); setMonthlyIncomes(Array.isArray(json.data) ? json.data : []); } catch {} };
+  const loadIncomes = async () => { try { const response = await fetch(`${API_URL}/monthly-incomes?screen=future`, { headers: { Accept: 'application/json' } }); const json = await response.json(); const rows = Array.isArray(json.data) ? json.data : []; const comRow = rows.find((item) => item.source_key === 'com_monthly_person_net' || item.id === 'fixed-com-monthly-person-net'); setComMonthlyPersonNet(Number(comRow?.amount || 0)); setMonthlyIncomes(rows.filter((item) => item.source_key !== 'com_monthly_person_net' && item.id !== 'fixed-com-monthly-person-net')); } catch {} };
   const loadMoneyMoonIncome = async () => { try { const response = await fetch(`${API_URL}/moneymoon/investments`, { headers: { Accept: 'application/json' } }); const json = await response.json(); const rows = Array.isArray(json.data) ? json.data : []; const activeTotal = rows.filter((item) => item.status !== 'received' && item.status !== 'completed').reduce((sum, item) => sum + Number(item.principal_amount || 0), 0); setMoneyMoonMonthlyIncome((activeTotal * 0.12) / 12); } catch { setMoneyMoonMonthlyIncome(0); } };
-  const loadTa3meedIncome = async () => { try { const response = await fetch(`${API_URL}/ta3meed/investments`, { headers: { Accept: 'application/json' } }); const json = await response.json(); const rows = Array.isArray(json.data) ? json.data : []; const activeTotal = rows.filter((item) => item.status !== 'received' && item.status !== 'completed').reduce((sum, item) => { const allocations = Array.isArray(item.allocations) ? item.allocations : []; const ahmedAllocation = allocations.reduce((allocationSum, allocation) => { const key = String(allocation.investor_code || allocation.investor_name || '').trim().toLowerCase(); const isAhmed = key === 'ahmed' || key === 'أحمد' || key === 'احمد'; return isAhmed ? allocationSum + Number(allocation.invested_amount || 0) : allocationSum; }, 0); return sum + ahmedAllocation; }, 0); setTa3meedMonthlyIncome((activeTotal * 0.12) / 12); } catch { setTa3meedMonthlyIncome(0); } };
+  const loadTa3meedIncome = async () => {
+    const safeNumber = (value) => {
+      const number = Number(String(value ?? 0).replace(/,/g, ''));
+      return Number.isFinite(number) ? number : 0;
+    };
+
+    const endedStatuses = ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done', 'مستلم', 'مستلمة', 'تم الاستلام', 'منتهي', 'منتهية'];
+    const cancelledStatuses = ['cancelled', 'canceled', 'void', 'ملغي', 'ملغية', 'ملغاة'];
+
+    const statusValues = (row) => [
+      row?.opportunity_status,
+      row?.allocation_status,
+      row?.status,
+    ].map((status) => String(status || '').trim().toLowerCase()).filter(Boolean);
+
+    const hasStatus = (row, statuses) => statusValues(row).some((status) => statuses.includes(status));
+    const isInactive = (row) => hasStatus(row, endedStatuses) || hasStatus(row, cancelledStatuses);
+
+    const principalReceivedOf = (row) => {
+      const invested = safeNumber(row?.invested_amount);
+      if (row?.principal_received_amount !== undefined && row?.principal_received_amount !== null) {
+        return Math.min(invested, Math.max(0, safeNumber(row.principal_received_amount)));
+      }
+      return Math.min(invested, Math.max(0, safeNumber(row?.received_total_amount ?? row?.received_amount)));
+    };
+
+    const remainingCapitalOf = (row) => {
+      if (isInactive(row)) return 0;
+      if (row?.ta3meed_remaining_amount !== undefined && row?.ta3meed_remaining_amount !== null) {
+        return Math.max(0, safeNumber(row.ta3meed_remaining_amount));
+      }
+      return Math.max(0, safeNumber(row?.invested_amount) - principalReceivedOf(row));
+    };
+
+    const normalizeTa3meedFromS111 = (raw) => {
+      const summary = raw?.summary || {};
+      const opportunities = Array.isArray(raw?.opportunities) ? raw.opportunities : [];
+
+      if (summary.ta3meed !== undefined && summary.ta3meed !== null) return safeNumber(summary.ta3meed);
+      if (summary.ta3meed_remaining_amount !== undefined && summary.ta3meed_remaining_amount !== null) return safeNumber(summary.ta3meed_remaining_amount);
+      if (raw?.ta3meed !== undefined && raw?.ta3meed !== null) return safeNumber(raw.ta3meed);
+
+      return opportunities
+        .filter((row) => !isInactive(row))
+        .reduce((sum, row) => sum + remainingCapitalOf(row), 0);
+    };
+
+    try {
+      const codes = ['ahmed', 'أحمد', 'احمد'];
+      let ahmedTa3meedInvestorValue = 0;
+
+      for (const code of codes) {
+        const response = await fetch(`${API_URL}/ta3meed/investors/${encodeURIComponent(code)}/account`, {
+          headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) continue;
+
+        const json = await response.json();
+        const data = json.data || json;
+        ahmedTa3meedInvestorValue = normalizeTa3meedFromS111(data);
+
+        if (ahmedTa3meedInvestorValue > 0) break;
+      }
+
+      setTa3meedMonthlyIncome((ahmedTa3meedInvestorValue * 0.12) / 12);
+    } catch {
+      setTa3meedMonthlyIncome(0);
+    }
+  };
+  const loadDinarIncome = async () => {
+    try {
+      const response = await fetch(`${API_URL}/dinar/investments`, { headers: { Accept: 'application/json' } });
+      const json = await response.json();
+
+      if (!response.ok) throw new Error(json.message || 'dinar fetch failed');
+
+      const rows = Array.isArray(json.data) ? json.data : [];
+      const summaryInvestment = Number(json?.summary?.total_investment || 0);
+
+      const totalInvestment = summaryInvestment > 0
+        ? summaryInvestment
+        : rows.reduce((sum, item) => sum + Number(item.investment_amount || item.investment || 0), 0);
+
+      setDinarMonthlyIncome((totalInvestment * 0.12) / 12);
+    } catch {
+      setDinarMonthlyIncome(0);
+    }
+  };
   const loadFinanceNetProfitAfterStuckDeduction = async () => { try { const response = await fetch(FINANCE_SUMMARY_URL, { headers: { Accept: 'application/json' } }); const json = await response.json(); if (!response.ok) throw new Error(json.message || 'finance fetch failed'); const data = json.data || json; setFinanceNetProfitAfterStuckDeduction(pickFinanceNumber(data, FINANCE_NET_PROFIT_AFTER_STUCK_PATHS)); } catch { setFinanceNetProfitAfterStuckDeduction(0); } };
-  useEffect(() => { loadIncomes(); loadMoneyMoonIncome(); loadTa3meedIncome(); loadFinanceNetProfitAfterStuckDeduction(); }, []);
+  useEffect(() => { loadIncomes(); loadMoneyMoonIncome(); loadTa3meedIncome(); loadDinarIncome(); loadFinanceNetProfitAfterStuckDeduction(); }, []);
   const resetForm = () => { setIncomeName(''); setIncomeAmount(''); setEditingId(null); };
   const openAdd = () => { resetForm(); setOpen(true); setMenuId(null); };
   const startEditIncome = (item) => { setEditingId(item.id); setIncomeName(item.name); setIncomeAmount(String(item.amount || '')); setOpen(true); setMenuId(null); };
   const deleteIncome = async (id) => { try { await fetch(`${API_URL}/monthly-incomes/${id}`, { method: 'DELETE', headers: { Accept: 'application/json' } }); await loadIncomes(); } catch {} setMenuId(null); };
   const saveIncome = async () => { const name = String(incomeName || '').trim(); const amount = Number(incomeAmount || 0); if (!name || !amount) return; try { await fetch(editingId ? `${API_URL}/monthly-incomes/${editingId}` : `${API_URL}/monthly-incomes`, { method: editingId ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ screen: 'future', name, amount }) }); await loadIncomes(); resetForm(); setOpen(false); } catch {} };
   const manualTotal = monthlyIncomes.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const total = manualTotal + Number(moneyMoonMonthlyIncome || 0) + Number(ta3meedMonthlyIncome || 0) + Number(financeNetProfitAfterStuckDeduction || 0);
+  const total = manualTotal + Number(moneyMoonMonthlyIncome || 0) + Number(ta3meedMonthlyIncome || 0) + Number(financeNetProfitAfterStuckDeduction || 0) + Number(comMonthlyPersonNet || 0);
   const onlyNumbers = (value) => setIncomeAmount(String(value || '').replace(/[^0-9.]/g, ''));
-  return <View style={styles.fullScreenHost}><ScreenWrap><TopBar title="#S-121 دخل شهري مستقبلي" onBack={() => goTo('accounts')} right={<TouchableOpacity style={styles.topAddButton} onPress={openAdd}><Text style={styles.topAddText}>+</Text></TouchableOpacity>} /><Header badge="حساباتي" title="#S-121 دخل شهري مستقبلي" subtitle="شاشة لحساب الدخل الشهري المتوقع مستقبلًا." icon="reports" /><View style={styles.incomeTotalCard}><Text style={styles.incomeTotalLabel}>إجمالي الدخل الشهري المستقبلي</Text><Text style={styles.incomeTotalValue}>{Number(total || 0).toLocaleString('en-US')} ر.س</Text></View><View style={styles.incomeList}><View style={[styles.incomeRow, styles.fixedIncomeRow]}><View style={styles.fixedIncomeBadge}><Text style={styles.fixedIncomeBadgeText}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="moneymoon" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>موني مون</Text><Text style={styles.incomeRowAmount}>{Number(moneyMoonMonthlyIncome || 0).toLocaleString('en-US')} ر.س</Text><Text style={styles.fixedIncomeFormula}>المبلغ النشط في موني مون × 0.12 ÷ 12</Text></View></View><View style={[styles.incomeRow, styles.fixedIncomeRowTa3meed]}><View style={styles.fixedIncomeBadgeTa3meed}><Text style={styles.fixedIncomeBadgeTextTa3meed}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="ta3meed" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>قيمة استثمار تعميد</Text><Text style={styles.incomeRowAmount}>{Number(ta3meedMonthlyIncome || 0).toLocaleString('en-US')} ر.س</Text><Text style={styles.fixedIncomeFormulaTa3meed}>استثمار تعميد للمستثمر أحمد × 0.12 ÷ 12</Text></View></View><View style={[styles.incomeRow, styles.fixedIncomeRowFinance]}><View style={styles.fixedIncomeBadgeFinance}><Text style={styles.fixedIncomeBadgeTextFinance}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="stats" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>ربح أحمد الشهري الصافي</Text><Text style={styles.incomeRowAmount}>{Number(financeNetProfitAfterStuckDeduction || 0).toLocaleString('en-US')} ر.س</Text><Text style={styles.fixedIncomeFormulaFinance}>Finance: ahmed_monthly_net_profit_after_stuck_deduction</Text></View></View>{monthlyIncomes.length === 0 ? <Text style={styles.emptyIncomeText}>لا توجد حسابات دخل مضافة بعد.</Text> : monthlyIncomes.map((item) => <View key={item.id} style={styles.incomeRow}><View style={styles.incomeRowIcon}><UiIcon name="reports" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>{item.name}</Text><Text style={styles.incomeRowAmount}>{Number(item.amount || 0).toLocaleString('en-US')} ر.س</Text></View><View style={styles.incomeMenuHost}><TouchableOpacity style={styles.incomeDotsButton} onPress={() => setMenuId(menuId === item.id ? null : item.id)}><Text style={styles.incomeDotsText}>⋯</Text></TouchableOpacity>{menuId === item.id ? <View style={styles.incomeDropdownMenu}><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => startEditIncome(item)}><Text style={styles.incomeDropdownText}>تعديل</Text></TouchableOpacity><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => deleteIncome(item.id)}><Text style={[styles.incomeDropdownText, styles.incomeDropdownDeleteText]}>حذف</Text></TouchableOpacity><TouchableOpacity style={[styles.incomeDropdownItem, styles.incomeDropdownLast]} onPress={() => setMenuId(null)}><Text style={styles.incomeDropdownText}>إغلاق</Text></TouchableOpacity></View> : null}</View></View>)}</View></ScreenWrap><Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><View style={styles.modalBackdrop}><View style={styles.incomeModalCard}><View style={styles.modalHeaderRow}><TouchableOpacity style={styles.closeButton} onPress={() => { setOpen(false); resetForm(); }}><Text style={styles.closeText}>×</Text></TouchableOpacity><Text style={styles.modalTitle}>{editingId ? 'تعديل دخل شهري' : 'إضافة دخل شهري'}</Text></View><Text style={styles.inputLabel}>اسم الدخل</Text><TextInput value={incomeName} onChangeText={setIncomeName} placeholder="مثال: راتب، إيجار، أرباح" placeholderTextColor="#94a3b8" style={styles.modalInput} textAlign="right" /><Text style={styles.inputLabel}>المبلغ</Text><TextInput value={incomeAmount} onChangeText={onlyNumbers} placeholder="0" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.modalInput} textAlign="right" /><TouchableOpacity style={styles.modalSaveButton} onPress={saveIncome}><Text style={styles.modalSaveText}>{editingId ? 'حفظ التعديل' : 'حفظ'}</Text></TouchableOpacity></View></View></Modal></View>;
+  return <View style={styles.fullScreenHost}><ScreenWrap><TopBar title="#S-121 دخل شهري مستقبلي" onBack={() => goTo('accounts')} right={<TouchableOpacity style={styles.topAddButton} onPress={openAdd}><Text style={styles.topAddText}>+</Text></TouchableOpacity>} /><Header badge="حساباتي" title="#S-121 دخل شهري مستقبلي" subtitle="شاشة لحساب الدخل الشهري المتوقع مستقبلًا." icon="reports" /><View style={styles.incomeTotalCard}><Text style={styles.incomeTotalLabel}>إجمالي الدخل الشهري المستقبلي</Text><Text style={styles.incomeTotalValue}>{Number(total || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text></View><View style={styles.incomeList}><View style={[styles.incomeRow, styles.fixedIncomeRow]}><View style={styles.fixedIncomeBadge}><Text style={styles.fixedIncomeBadgeText}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="moneymoon" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>موني مون</Text><Text style={styles.incomeRowAmount}>{Number(moneyMoonMonthlyIncome || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text><Text style={styles.fixedIncomeFormula}>المبلغ النشط في موني مون × 0.12 ÷ 12</Text></View></View><View style={[styles.incomeRow, styles.fixedIncomeRowTa3meed]}><View style={styles.fixedIncomeBadgeTa3meed}><Text style={styles.fixedIncomeBadgeTextTa3meed}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="ta3meed" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>قيمة استثمار تعميد</Text><Text style={styles.incomeRowAmount}>{Number(ta3meedMonthlyIncome || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text><Text style={styles.fixedIncomeFormulaTa3meed}>مستثمر تعميد أحمد × 0.12 ÷ 12</Text></View></View><View style={[styles.incomeRow, styles.fixedIncomeRowDinar]}><View style={styles.fixedIncomeBadgeDinar}><Text style={styles.fixedIncomeBadgeTextDinar}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="dinar" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>استثمار دينار</Text><Text style={styles.incomeRowAmount}>{Number(dinarMonthlyIncome || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text><Text style={styles.fixedIncomeFormulaDinar}>إجمالي استثمار دينار × 0.12 ÷ 12</Text></View></View><View style={[styles.incomeRow, styles.fixedIncomeRowFinance]}><View style={styles.fixedIncomeBadgeFinance}><Text style={styles.fixedIncomeBadgeTextFinance}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="stats" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>ربح أحمد الشهري الصافي</Text><Text style={styles.incomeRowAmount}>{Number(financeNetProfitAfterStuckDeduction || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text><Text style={styles.fixedIncomeFormulaFinance}>Finance: ahmed_monthly_net_profit_after_stuck_deduction</Text></View></View><View style={[styles.incomeRow, styles.fixedIncomeRowFinance]}><View style={styles.fixedIncomeBadgeFinance}><Text style={styles.fixedIncomeBadgeTextFinance}>ثابت</Text></View><View style={styles.incomeRowIcon}><UiIcon name="stats" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>صافي الشخص الشهري من COM</Text><Text style={styles.incomeRowAmount}>{Number(comMonthlyPersonNet || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text><Text style={styles.fixedIncomeFormulaFinance}>COM: com_monthly_person_net</Text></View></View>{monthlyIncomes.length === 0 ? <Text style={styles.emptyIncomeText}>لا توجد حسابات دخل مضافة بعد.</Text> : monthlyIncomes.map((item) => <View key={item.id} style={styles.incomeRow}><View style={styles.incomeRowIcon}><UiIcon name="reports" size={22} color={ICON_COLOR_DARK} /></View><View style={styles.incomeRowText}><Text style={styles.incomeRowTitle}>{item.name}</Text><Text style={styles.incomeRowAmount}>{Number(item.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س</Text></View><View style={styles.incomeMenuHost}><TouchableOpacity style={styles.incomeDotsButton} onPress={() => setMenuId(menuId === item.id ? null : item.id)}><Text style={styles.incomeDotsText}>⋯</Text></TouchableOpacity>{menuId === item.id ? <View style={styles.incomeDropdownMenu}><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => startEditIncome(item)}><Text style={styles.incomeDropdownText}>تعديل</Text></TouchableOpacity><TouchableOpacity style={styles.incomeDropdownItem} onPress={() => deleteIncome(item.id)}><Text style={[styles.incomeDropdownText, styles.incomeDropdownDeleteText]}>حذف</Text></TouchableOpacity><TouchableOpacity style={[styles.incomeDropdownItem, styles.incomeDropdownLast]} onPress={() => setMenuId(null)}><Text style={styles.incomeDropdownText}>إغلاق</Text></TouchableOpacity></View> : null}</View></View>)}</View></ScreenWrap><Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}><View style={styles.modalBackdrop}><View style={styles.incomeModalCard}><View style={styles.modalHeaderRow}><TouchableOpacity style={styles.closeButton} onPress={() => { setOpen(false); resetForm(); }}><Text style={styles.closeText}>×</Text></TouchableOpacity><Text style={styles.modalTitle}>{editingId ? 'تعديل دخل شهري' : 'إضافة دخل شهري'}</Text></View><Text style={styles.inputLabel}>اسم الدخل</Text><TextInput value={incomeName} onChangeText={setIncomeName} placeholder="مثال: راتب، إيجار، أرباح" placeholderTextColor="#94a3b8" style={styles.modalInput} textAlign="right" /><Text style={styles.inputLabel}>المبلغ</Text><TextInput value={incomeAmount} onChangeText={onlyNumbers} placeholder="0" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" style={styles.modalInput} textAlign="right" /><TouchableOpacity style={styles.modalSaveButton} onPress={saveIncome}><Text style={styles.modalSaveText}>{editingId ? 'حفظ التعديل' : 'حفظ'}</Text></TouchableOpacity></View></View></Modal></View>;
 }
 
 function ActualMonthlyIncomeScreen({ goTo }) { return <ScreenWrap><TopBar title="دخل شهري حقيقي" onBack={() => goTo('accounts')} /><Header badge="حساباتي" title="#S-122 دخل شهري حقيقي" subtitle="شاشة لحساب الدخل الشهري الفعلي." icon="wealth" /></ScreenWrap>; }
@@ -168,7 +260,7 @@ function flattenFinanceValues(value, prefix) { if (value === null || value === u
 function financeSectionLabel(key) { const labels = { income: 'الدخل', portfolio: 'المحفظة', counts: 'الأعداد', alerts: 'التنبيهات', account: 'الحساب', meta: 'معلومات المزامنة' }; return labels[key] || key; }
 function financeLabel(path) { const labels = { 'income.monthly_installments_total': 'إجمالي الأقساط الشهرية', 'income.ahmed_monthly_profit': 'ربح أحمد الشهري', 'income.ahmed_monthly_net_profit_after_stuck_deduction': 'ربح أحمد الشهري الصافي بعد خصم المتعثر', 'portfolio.ahmed_monthly_net_profit_after_stuck_deduction': 'ربح أحمد الشهري الصافي بعد خصم المتعثر', 'ahmed_monthly_net_profit_after_stuck_deduction': 'ربح أحمد الشهري الصافي بعد خصم المتعثر', 'income.remaining_installments_total': 'إجمالي الأقساط المتبقية', 'portfolio.remaining_principal_total': 'رأس المال المتبقي', 'portfolio.ahmed_total_profit': 'إجمالي ربح أحمد', 'portfolio.active_monthly_installments': 'القسط الشهري النشط', 'counts.active_clients': 'العملاء النشطون', 'counts.overdue_clients': 'العملاء المتأخرون', 'counts.legal_clients': 'عملاء القضايا' }; return labels[path] || arabizeFinanceKey(path); }
 function arabizeFinanceKey(path) { const last = String(path || '').split('.').pop().replace(/\[\d+\]/g, ''); return last.replace(/_/g, ' '); }
-function formatFinanceValue(path, value) { if (value === null || value === undefined || value === '') return '-'; if (typeof value === 'boolean') return value ? 'نعم' : 'لا'; if (typeof value === 'number') { const moneyLike = /amount|total|profit|principal|installment|balance|income|payment|capital|monthly/i.test(path); return moneyLike ? `${value.toLocaleString('en-US')} ر.س` : value.toLocaleString('en-US'); } if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) { const numberValue = Number(value); const moneyLike = /amount|total|profit|principal|installment|balance|income|payment|capital|monthly/i.test(path); return moneyLike ? `${numberValue.toLocaleString('en-US')} ر.س` : numberValue.toLocaleString('en-US'); } return String(value); }
+function formatFinanceValue(path, value) { if (value === null || value === undefined || value === '') return '-'; if (typeof value === 'boolean') return value ? 'نعم' : 'لا'; if (typeof value === 'number') { const moneyLike = /amount|total|profit|principal|installment|balance|income|payment|capital|monthly/i.test(path); return moneyLike ? `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س` : value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } if (typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value)) { const numberValue = Number(value); const moneyLike = /amount|total|profit|principal|installment|balance|income|payment|capital|monthly/i.test(path); return moneyLike ? `${numberValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ر.س` : numberValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); } return String(value); }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f4f7fb' }, fullScreenHost: { flex: 1, backgroundColor: '#f4f7fb' }, screenLayer: { flex: 1, paddingBottom: 98 }, noTabs: { paddingBottom: 0 }, safe: { flex: 1, backgroundColor: '#f4f7fb' }, page: { padding: 18, paddingBottom: 34 },
@@ -183,4 +275,29 @@ const styles = StyleSheet.create({
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 18 }, incomeModalCard: { backgroundColor: '#fff', borderRadius: 26, padding: 16, borderWidth: 1, borderColor: '#e2e8f0' }, modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }, closeButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }, closeText: { color: '#0f172a', fontSize: 26, fontWeight: '900' }, modalTitle: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' }, inputLabel: { marginTop: 10, marginBottom: 6, color: '#334155', fontWeight: '900', textAlign: 'right' }, modalInput: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 12, color: '#0f172a', fontWeight: '900', fontSize: 15 }, modalSaveButton: { marginTop: 16, backgroundColor: '#0f766e', borderRadius: 16, paddingVertical: 14, alignItems: 'center' }, modalSaveText: { color: '#fff', fontWeight: '900', fontSize: 16 },
   menu: { marginTop: 16, backgroundColor: '#fff', borderRadius: 26, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden' }, menuRow: { padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }, menuRowLast: { borderBottomWidth: 0 }, menuRowDanger: { backgroundColor: '#fff1f2' }, menuIconDanger: { backgroundColor: '#ffe4e6', borderColor: '#fecdd3' }, menuTitleDanger: { color: '#b91c1c' }, menuTextDanger: { color: '#be123c' }, menuIcon: { width: 48, height: 48, borderRadius: 18, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' }, menuTextBlock: { flex: 1, alignItems: 'flex-end' }, menuTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' }, menuText: { marginTop: 4, color: '#64748b', fontWeight: '700', textAlign: 'right' },
   tabWrap: { position: 'absolute', left: 12, right: 12, bottom: 12, alignItems: 'center' }, tabBar: { width: '100%', minHeight: 78, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.96)', borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8, paddingVertical: 8 }, tabButton: { flex: 1, minHeight: 58, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }, tabButtonActive: { backgroundColor: '#f8fafc' }, tabIconBubble: { width: 35, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }, tabIconBubbleActive: { backgroundColor: ICON_COLOR }, tabLabel: { marginTop: 4, color: '#64748b', fontSize: 11, fontWeight: '900', textAlign: 'center' }, tabLabelActive: { color: ICON_COLOR_DARK }, centerTabHit: { flex: 1.05, minHeight: 74, alignItems: 'center', justifyContent: 'center', marginTop: -26 }, centerTabButton: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#0f172a', alignItems: 'center', justifyContent: 'center', borderWidth: 5, borderColor: '#fff' }, centerTabButtonActive: { backgroundColor: ICON_COLOR_DARK },
+
+  fixedIncomeRowDinar: {
+    backgroundColor: '#f5f3ff',
+    borderColor: '#ddd6fe',
+  },
+  fixedIncomeBadgeDinar: {
+    backgroundColor: '#ede9fe',
+    borderColor: '#c4b5fd',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  fixedIncomeBadgeTextDinar: {
+    color: '#6d28d9',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  fixedIncomeFormulaDinar: {
+    marginTop: 6,
+    color: '#5b21b6',
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'right',
+  },
 });
