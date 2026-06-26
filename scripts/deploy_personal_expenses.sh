@@ -12,8 +12,8 @@ python3 scripts/enable_personal_expenses_screen.py
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git add ahmed-mobile/AppShell.js
   if ! git diff --cached --quiet; then
-    git commit -m "Enable personal expenses screen in accounts"
-    git push
+    git commit -m "Enable personal expenses screen in accounts" || true
+    git push || true
   fi
 fi
 
