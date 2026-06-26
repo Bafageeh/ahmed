@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonTenantController;
 use App\Http\Controllers\Api\DinarInvestmentController;
+use App\Http\Controllers\Api\PersonalExpenseController;
 use App\Http\Controllers\Api\SecureVaultController;
 use App\Http\Controllers\Api\Ta3meedController;
 use App\Http\Controllers\Api\Ta3meedImportController;
@@ -96,6 +97,10 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::get('/income/basic', [IncomeController::class, 'index']);
     Route::post('/income/basic', [IncomeController::class, 'store']);
     Route::delete('/income/basic/{id}', [IncomeController::class, 'destroy']);
+    Route::get('/personal-expenses', [PersonalExpenseController::class, 'index']);
+    Route::post('/personal-expenses', [PersonalExpenseController::class, 'store']);
+    Route::put('/personal-expenses/{id}', [PersonalExpenseController::class, 'update']);
+    Route::delete('/personal-expenses/{id}', [PersonalExpenseController::class, 'destroy']);
     Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
     Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
     Route::post('/income/linked/finance/visibility', [LinkedIncomeController::class, 'updateFinanceVisibility']);
