@@ -10,6 +10,7 @@ import DinarInvestmentsScreen from './DinarInvestmentsScreen';
 import WealthScreen from './WealthScreen';
 import AhmedUsersManagerPanel from './AhmedUsersManagerPanel';
 import SecureVaultScreen from './SecureVaultScreen';
+import PersonalExpensesScreen from './PersonalExpensesScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
 import * as LocalAuthentication from 'expo-local-authentication';
 
@@ -30,7 +31,7 @@ const tabs = [
 ];
 
 const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar'];
-const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'financeImports', 'stats'];
+const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'financeImports', 'stats'];
 
 const platforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد والتصنيفات والمستثمرين.' },
@@ -66,6 +67,7 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'stats') return <StatsScreen onBack={() => openTab('reports')} />;
     if (activeTab === 'futureMonthlyIncome') return <FutureMonthlyIncomeScreen goTo={openTab} />;
     if (activeTab === 'actualMonthlyIncome') return <ActualMonthlyIncomeScreen goTo={openTab} />;
+    if (activeTab === 'personalExpenses') return <PersonalExpensesScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'financeImports') return <FinanceImportsScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
     if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('more')} />;
@@ -108,6 +110,7 @@ function AccountsScreen({ goTo }) {
     <View style={styles.grid}>
       <Quick title="دخل شهري مستقبلي" text="إدارة مصادر الدخل المتوقعة" icon="reports" onPress={() => goTo('futureMonthlyIncome')} />
       <Quick title="دخل شهري حقيقي" text="الدخل الفعلي المحقق" icon="wealth" onPress={() => goTo('actualMonthlyIncome')} />
+      <Quick title="مصروفاتي" text="إدخال ومتابعة المصروفات الشهرية والسنوية" icon="reports" onPress={() => goTo('personalExpenses')} />
       <Quick title="ثروتي" text="العودة إلى ملخص الثروة" icon="wealth" onPress={() => goTo('wealth')} />
     </View>
   </ScreenWrap>;
