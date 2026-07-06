@@ -2,6 +2,20 @@ import React from 'react';
 
 const n = (value) => Number(value || 0);
 const money = (value, digits = 2) => `${n(value).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })} ر.س`;
+const CATEGORIES = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-'];
+
+function metaOf(item) {
+  try {
+    return typeof item?.metadata === 'string' ? JSON.parse(item.metadata || '{}') : item?.metadata || {};
+  } catch {
+    return {};
+  }
+}
+
+function categoryOf(item) {
+  const raw = String(metaOf(item).category || item.category || '').trim().toUpperCase().replace(/\s+/g, '');
+  return CATEGORIES.includes(raw) ? raw : '-';
+}
 
 function investorKey(allocation) {
   return String(allocation?.investor_code || allocation?.investor_name || '').trim();
@@ -19,6 +33,84 @@ function isPartialOpportunity(item) {
 function itemHasInvestor(item, selectedInvestor) {
   if (!selectedInvestor || selectedInvestor === 'all') return true;
   return (item.allocations || []).some((allocation) => investorKey(allocation) === selectedInvestor);
+}
+
+function itemHasCategory(item, selectedCategory) {
+  if (!selectedCategory || selectedCategory === 'all') return true;
+  return categoryOf(item) === selectedCategory;
+}
+
+function normalizeSearchValue(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[\u0625\u0623\u0622\u0671]/g, '\u0627')
+    .replace(/\u0649/g, '\u064A')
+    .replace(/\u0629/g, '\u0647')
+    .replace(/[^0-9a-z\u0600-\u06FF]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function addSearchPart(parts, value) {
+  if (value === null || value === undefined || value === '') return;
+  const raw = String(value);
+  parts.push(raw);
+  const numeric = raw.replace(/,/g, '');
+  if (numeric !== raw) parts.push(numeric);
+}
+
+function searchTextOf(item) {
+  const meta = metaOf(item);
+  const parts = [];
+
+  [
+    item.reference_number,
+    item.code,
+    meta.reference_number,
+    meta.code,
+    meta.company_name,
+    item.company_name,
+    meta.activity,
+    item.activity,
+    meta.description,
+    item.description,
+    meta.tasks,
+    item.tasks,
+    meta.executor,
+    item.executor,
+    item.principal_amount,
+    item.total_amount,
+    item.amount,
+    meta.total_amount,
+    meta.amount,
+  ].forEach((value) => addSearchPart(parts, value));
+
+  (item.allocations || []).forEach((allocation) => {
+    [
+      allocation.investor_name,
+      allocation.investor_code,
+      allocation.invested_amount,
+    ].forEach((value) => addSearchPart(parts, value));
+  });
+
+  const normalized = normalizeSearchValue(parts.join(' '));
+  const collapsed = normalized.replace(/\s+/g, '');
+  return { normalized, collapsed };
+}
+
+function itemMatchesSearch(item, query) {
+  const tokens = normalizeSearchValue(query).split(' ').filter(Boolean);
+  if (!tokens.length) return true;
+
+  const { normalized, collapsed } = searchTextOf(item);
+
+  return tokens.every((token) => {
+    const cleanToken = normalizeSearchValue(token);
+    if (!cleanToken) return true;
+    const collapsedToken = cleanToken.replace(/\s+/g, '');
+    return normalized.includes(cleanToken) || collapsed.includes(collapsedToken);
+  });
 }
 
 function partialReceivedAmount(items, selectedInvestor = 'all') {
@@ -63,8 +155,16 @@ if (!React.__ta3meedPartialReceivedMemoPatched) {
 
       if (Array.isArray(value) && Array.isArray(deps?.[0]) && deps?.[1] === 'active') {
         const currentIds = new Set(value.map((item) => String(item?.id)));
+        const selectedCategory = typeof deps?.[2] === 'string' ? deps[2] : 'all';
         const selectedInvestor = typeof deps?.[3] === 'string' ? deps[3] : 'all';
-        const extraItems = deps[0].filter((item) => isPartialOpportunity(item) && !currentIds.has(String(item?.id)) && itemHasInvestor(item, selectedInvestor));
+        const query = typeof deps?.[4] === 'string' ? deps[4] : '';
+        const extraItems = deps[0].filter((item) => (
+          isPartialOpportunity(item)
+          && !currentIds.has(String(item?.id))
+          && itemHasCategory(item, selectedCategory)
+          && itemHasInvestor(item, selectedInvestor)
+          && itemMatchesSearch(item, query)
+        ));
         if (extraItems.length) return [...value, ...extraItems];
       }
 
