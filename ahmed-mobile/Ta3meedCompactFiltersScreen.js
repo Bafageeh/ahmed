@@ -52,6 +52,79 @@ function metaOf(item) {
   try { return typeof item?.metadata === 'string' ? JSON.parse(item.metadata || '{}') : item?.metadata || {}; } catch { return {}; }
 }
 
+function normalizeSearchValue(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[\u0625\u0623\u0622\u0671]/g, '\u0627')
+    .replace(/\u0649/g, '\u064A')
+    .replace(/\u0629/g, '\u0647')
+    .replace(/[^0-9a-z\u0600-\u06FF]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function addSearchPart(parts, value) {
+  if (value === null || value === undefined || value === '') return;
+  const raw = String(value);
+  parts.push(raw);
+  const numeric = raw.replace(/,/g, '');
+  if (numeric !== raw) parts.push(numeric);
+}
+
+function searchTextOf(item) {
+  const meta = metaOf(item);
+  const parts = [];
+
+  [
+    item.reference_number,
+    item.code,
+    meta.reference_number,
+    meta.code,
+    meta.company_name,
+    item.company_name,
+    meta.activity,
+    item.activity,
+    meta.description,
+    item.description,
+    meta.tasks,
+    item.tasks,
+    meta.executor,
+    item.executor,
+    item.principal_amount,
+    item.total_amount,
+    item.amount,
+    meta.total_amount,
+    meta.amount,
+  ].forEach((value) => addSearchPart(parts, value));
+
+  (item.allocations || []).forEach((allocation) => {
+    [
+      allocation.investor_name,
+      allocation.investor_code,
+      allocation.invested_amount,
+    ].forEach((value) => addSearchPart(parts, value));
+  });
+
+  const normalized = normalizeSearchValue(parts.join(' '));
+  const collapsed = normalized.replace(/\s+/g, '');
+  return { normalized, collapsed };
+}
+
+function itemMatchesSearch(item, tokens) {
+  if (!tokens.length) return true;
+
+  const { normalized, collapsed } = searchTextOf(item);
+
+  return tokens.every((token) => {
+    const cleanToken = normalizeSearchValue(token);
+    if (!cleanToken) return true;
+    const collapsedToken = cleanToken.replace(/\s+/g, '');
+    return normalized.includes(cleanToken) || collapsed.includes(collapsedToken);
+  });
+}
+
+
 function categoryOf(item) {
   const raw = String(metaOf(item).category || item.category || '').trim().toUpperCase().replace(/\s+/g, '');
   return CATEGORIES.includes(raw) ? raw : '-';
@@ -368,37 +441,18 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
   };
 
   const filteredItems = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
+    const tokens = normalizeSearchValue(query).split(' ').filter(Boolean);
+
     return items.filter((item) => {
       const status = statusOf(item).key;
       const category = categoryOf(item);
+
       if (statusFilter !== 'all' && status !== statusFilter) return false;
       if (categoryFilter !== 'all' && category !== categoryFilter) return false;
       if (!itemHasInvestor(item, investorFilter)) return false;
-      if (!keyword) return true;
-      const meta = metaOf(item);
-      const text = [
-        item.reference_number,
-        item.code,
-        meta.company_name,
-        item.company_name,
-        meta.activity,
-        item.activity,
-        meta.description,
-        item.description,
-        meta.tasks,
-        item.tasks,
-        item.principal_amount,
-        item.total_amount,
-        item.amount,
-        meta.total_amount,
-        meta.amount,
-        ...(item.allocations || []).flatMap((allocation) => [
-          allocation.investor_name,
-          allocation.investor_code,
-        ]),
-      ].filter(Boolean).join(' ').toLowerCase();
-      return text.includes(keyword);
+      if (!itemMatchesSearch(item, tokens)) return false;
+
+      return true;
     }).sort((a, b) => {
       const dateValue = (item) => {
         const dateText = String(item?.maturity_date || item?.due_date || '').slice(0, 10);
@@ -406,12 +460,18 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
         const value = new Date(`${dateText}T00:00:00`).getTime();
         return Number.isFinite(value) ? value : null;
       };
+
       const aValue = dateValue(a);
       const bValue = dateValue(b);
+
       if (aValue === null && bValue !== null) return -1;
       if (aValue !== null && bValue === null) return 1;
       if (aValue !== null && bValue !== null && aValue !== bValue) return aValue - bValue;
-      return String(a?.reference_number || a?.code || a?.id || '').localeCompare(String(b?.reference_number || b?.code || b?.id || ''), 'ar');
+
+      return String(a?.reference_number || a?.code || a?.id || '').localeCompare(
+        String(b?.reference_number || b?.code || b?.id || ''),
+        'ar'
+      );
     });
   }, [items, statusFilter, categoryFilter, investorFilter, query]);
 
@@ -698,7 +758,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {showSearch ? <TextInput ref={searchInputRef} style={styles.searchInput} value={query} onChangeText={setQuery} placeholder="ابحث برقم الفرصة، الشركة، النشاط، المستثمر، المبلغ" placeholderTextColor="#94a3b8" textAlign="right" /> : null}
+        {showSearch ? <TextInput ref={searchInputRef} style={styles.searchInput} value={query} onChangeText={(text) => { setQuery(text); setExpandedId(null); }} placeholder="ابحث برقم الفرصة، الشركة، النشاط، المستثمر، المبلغ" placeholderTextColor="#94a3b8" textAlign="right" /> : null}
 
         <View style={styles.compactFiltersCard}>
           <View style={styles.compactFilterGrid}>
@@ -811,7 +871,7 @@ function FilterPickerModal({ visible, type, onClose, investors, selectedInvestor
     return investors.filter((investor) => investor.name.includes(keyword) || investor.code.includes(keyword));
   }, [investors, query]);
   const title = type === 'investor' ? 'اختيار المستثمر' : type === 'category' ? 'اختيار التصنيف' : 'اختيار الحالة';
-  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><View style={styles.modalBackdrop}><View style={styles.pickerCard}><View style={styles.modalHeader}><TouchableOpacity style={styles.closeButton} onPress={onClose}><Text style={styles.closeText}>×</Text></TouchableOpacity><Text style={styles.modalTitle}>{title}</Text></View>{type === 'investor' ? <TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder="ابحث باسم المستثمر" placeholderTextColor="#94a3b8" textAlign="right" /> : null}<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.pickerList}>{type === 'investor' ? <><PickerOption label="كل المستثمرين" sub="إظهار جميع الفرص" active={selectedInvestor === 'all'} onPress={() => onInvestor('all')} />{investorItems.map((investor) => <PickerOption key={investor.code} label={investor.name} sub={`فرص ${investor.opportunities} · مستثمر ${money(investor.invested, 2)}`} active={selectedInvestor === investor.code} onPress={() => onInvestor(investor.code)} />)}</> : null}{type === 'category' ? <><PickerOption label="كل التصنيفات" active={selectedCategory === 'all'} onPress={() => onCategory('all')} />{CATEGORIES.map((category) => <PickerOption key={category} label={category} active={selectedCategory === category} onPress={() => onCategory(category)} />)}</> : null}{type === 'status' ? STATUS_FILTERS.map(([key, label]) => <PickerOption key={key} label={label} active={selectedStatus === key} onPress={() => onStatus(key)} />) : null}</ScrollView></View></View></Modal>;
+  return <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}><View style={styles.modalBackdrop}><View style={styles.pickerCard}><View style={styles.modalHeader}><TouchableOpacity style={styles.closeButton} onPress={onClose}><Text style={styles.closeText}>×</Text></TouchableOpacity><Text style={styles.modalTitle}>{title}</Text></View>{type === 'investor' ? <TextInput style={styles.searchInput} value={query} onChangeText={(text) => { setQuery(text); setExpandedId(null); }} placeholder="ابحث باسم المستثمر" placeholderTextColor="#94a3b8" textAlign="right" /> : null}<ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.pickerList}>{type === 'investor' ? <><PickerOption label="كل المستثمرين" sub="إظهار جميع الفرص" active={selectedInvestor === 'all'} onPress={() => onInvestor('all')} />{investorItems.map((investor) => <PickerOption key={investor.code} label={investor.name} sub={`فرص ${investor.opportunities} · مستثمر ${money(investor.invested, 2)}`} active={selectedInvestor === investor.code} onPress={() => onInvestor(investor.code)} />)}</> : null}{type === 'category' ? <><PickerOption label="كل التصنيفات" active={selectedCategory === 'all'} onPress={() => onCategory('all')} />{CATEGORIES.map((category) => <PickerOption key={category} label={category} active={selectedCategory === category} onPress={() => onCategory(category)} />)}</> : null}{type === 'status' ? STATUS_FILTERS.map(([key, label]) => <PickerOption key={key} label={label} active={selectedStatus === key} onPress={() => onStatus(key)} />) : null}</ScrollView></View></View></Modal>;
 }
 
 function PickerOption({ label, sub, active, onPress }) {
