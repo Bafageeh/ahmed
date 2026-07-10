@@ -7,12 +7,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class DebtController extends Controller
 {
     public function index(Request $request)
     {
         $userId = $this->userId($request);
+        $this->applyAutomaticPayments($userId);
 
         $debts = DB::table('debts')
             ->where('user_id', $userId)
@@ -38,9 +40,12 @@ class DebtController extends Controller
 
     public function show(Request $request, int $id)
     {
+        $userId = $this->userId($request);
+        $this->applyAutomaticPayments($userId, $id);
+
         $debt = DB::table('debts')
             ->where('id', $id)
-            ->where('user_id', $this->userId($request))
+            ->where('user_id', $userId)
             ->first();
 
         if (! $debt) {
@@ -134,7 +139,7 @@ class DebtController extends Controller
         $original = (float) $debt->original_amount;
         $paid = $normalizedInstallments->sum(fn ($item) => (float) $item['paid_amount']);
         $remaining = max(0, $original - $paid);
-        $overdue = $normalizedInstallments->filter(fn ($item) => $item['status'] === 'late');
+        $overdue = $normalizedInstallments->filter(fn ($item) => in_array($item['status'], ['late', 'late_partial'], true));
         $currentMonth = now()->format('Y-m');
         $currentMonthItems = $normalizedInstallments->filter(fn ($item) => str_starts_with($item['due_date'], $currentMonth));
         $next = $normalizedInstallments->first(fn ($item) => (float) $item['remaining_amount'] > 0);
@@ -160,6 +165,7 @@ class DebtController extends Controller
             'next_installment' => $next,
             'end_date' => $endDate,
             'status' => $remaining <= 0 ? 'completed' : ($overdue->isNotEmpty() ? 'late' : 'active'),
+            'auto_payment_day' => $debt->auto_payment_day ?? null,
             'notes' => $debt->notes,
             'created_at' => $debt->created_at,
             'updated_at' => $debt->updated_at,
@@ -242,6 +248,60 @@ class DebtController extends Controller
             'highest_month' => $highestMonth,
             'last_payment_date' => $remainingInstallments->max('due_date'),
         ];
+    }
+
+    private function applyAutomaticPayments(int $userId, ?int $debtId = null): void
+    {
+        if (! Schema::hasColumn('debts', 'auto_payment_day')) {
+            return;
+        }
+
+        $today = Carbon::now('Asia/Riyadh')->startOfDay();
+        $query = DB::table('debt_installments as installment')
+            ->join('debts as debt', 'debt.id', '=', 'installment.debt_id')
+            ->where('debt.user_id', $userId)
+            ->whereNotNull('debt.auto_payment_day')
+            ->whereDate('installment.due_date', '<=', $today->copy()->endOfMonth()->toDateString())
+            ->whereColumn('installment.paid_amount', '<', 'installment.scheduled_amount')
+            ->select([
+                'installment.id',
+                'installment.due_date',
+                'installment.scheduled_amount',
+                'debt.auto_payment_day',
+            ]);
+
+        if ($debtId !== null) {
+            $query->where('debt.id', $debtId);
+        }
+
+        $dueInstallments = $query->get()->filter(function ($installment) use ($today) {
+            $installmentMonth = Carbon::parse($installment->due_date, 'Asia/Riyadh')->startOfMonth();
+            $automaticDay = min((int) $installment->auto_payment_day, $installmentMonth->daysInMonth);
+            $automaticDate = $installmentMonth->copy()->day($automaticDay)->startOfDay();
+
+            return $automaticDate->lte($today);
+        });
+
+        if ($dueInstallments->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($dueInstallments): void {
+            foreach ($dueInstallments as $installment) {
+                $installmentMonth = Carbon::parse($installment->due_date, 'Asia/Riyadh')->startOfMonth();
+                $automaticDay = min((int) $installment->auto_payment_day, $installmentMonth->daysInMonth);
+                $automaticDate = $installmentMonth->copy()->day($automaticDay)->toDateString();
+
+                DB::table('debt_installments')
+                    ->where('id', $installment->id)
+                    ->update([
+                        'paid_amount' => (float) $installment->scheduled_amount,
+                        'paid_at' => $automaticDate,
+                        'status' => 'paid',
+                        'updated_at' => now(),
+                    ]);
+            }
+        });
     }
 
     private function findInstallment(Request $request, int $installmentId): ?object
