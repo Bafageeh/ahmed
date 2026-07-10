@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AhmedSessionController;
 use App\Http\Controllers\Api\AhmedUserController;
+use App\Http\Controllers\Api\DebtController;
 use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
@@ -101,6 +102,12 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::post('/personal-expenses', [PersonalExpenseController::class, 'store']);
     Route::put('/personal-expenses/{id}', [PersonalExpenseController::class, 'update']);
     Route::delete('/personal-expenses/{id}', [PersonalExpenseController::class, 'destroy']);
+
+    Route::get('/debts', [DebtController::class, 'index']);
+    Route::get('/debts/{id}', [DebtController::class, 'show']);
+    Route::post('/debts/installments/{installmentId}/pay', [DebtController::class, 'pay']);
+    Route::delete('/debts/installments/{installmentId}/payment', [DebtController::class, 'undoPayment']);
+
     Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
     Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
     Route::post('/income/linked/finance/visibility', [LinkedIncomeController::class, 'updateFinanceVisibility']);
@@ -111,7 +118,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::get('/wa/status', [WhatsAppController::class, 'status']);
     Route::get('/wa/messages', [WhatsAppController::class, 'index']);
     Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
-    Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
+    Route::post('/wa/template', [WhatsAppController::class, 'queueTemplate']);
     Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
     Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
 });
