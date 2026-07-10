@@ -54,11 +54,11 @@ if 'function FinancingDetails({ debt })' not in text:
       <FinanceRow label="هامش الربح" value={debt?.profit_margin == null ? '-' : percent(debt.profit_margin)} />
 
       {previousAmount > 0 ? (
-        <FinanceRow label="قيمة القسط السابق" value={money(previousAmount)} />
+        <FinanceRow label="دفعتك الشهرية السابقة" value={money(previousAmount)} />
       ) : null}
       {previousCount > 0 ? (
         <FinanceRow
-          label="الأقساط السابقة"
+          label="دفعاتك السابقة"
           value={`${previousCount} × ${money(previousAmount)} = ${money(previousTotal)}`}
           compact
         />
