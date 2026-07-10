@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Schema;
 
 class DebtDashboardController extends Controller
 {
-    public function __construct(private DebtController $debts)
+    public function __construct(private DebtSupportController $debts)
     {
     }
 
