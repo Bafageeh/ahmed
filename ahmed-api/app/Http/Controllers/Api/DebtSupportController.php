@@ -79,6 +79,20 @@ class DebtSupportController extends Controller
         $item['government_support_enabled'] = $monthlySupport > 0;
 
         if ($includeInstallmentTotals && isset($item['installments']) && is_array($item['installments'])) {
+            $supportByInstallment = Schema::hasColumn('debt_installments', 'government_support_paid_amount')
+                ? DB::table('debt_installments')
+                    ->where('debt_id', $debt->id)
+                    ->pluck('government_support_paid_amount', 'id')
+                : collect();
+
+            $item['installments'] = collect($item['installments'])->map(function ($installment) use ($supportByInstallment) {
+                $installment['government_support_paid_amount'] = round(
+                    (float) $supportByInstallment->get($installment['id'] ?? 0, 0),
+                    2
+                );
+                return $installment;
+            })->values()->all();
+
             $currentMonth = now('Asia/Riyadh')->format('Y-m');
             $current = collect($item['installments'])->first(
                 fn ($installment) => str_starts_with((string) ($installment['due_date'] ?? ''), $currentMonth)
