@@ -107,6 +107,15 @@ function FinanceRow({ label, value, compact, highlight, last }) {
         raise SystemExit('MiniStat anchor not found')
     text = text.replace(anchor, block + anchor, 1)
 
+support_line = '''          {n(item.government_support_paid_amount) > 0 ? <Text style={styles.installmentSupport}>منها دعم حكومي: {money(item.government_support_paid_amount)}</Text> : null}
+'''
+if support_line not in text:
+    anchor = '''          {item.paid_at ? <Text style={styles.installmentPaidDate}>تاريخ السداد: {dateLabel(item.paid_at)}</Text> : null}
+'''
+    if anchor not in text:
+        raise SystemExit('Installment paid date anchor not found')
+    text = text.replace(anchor, support_line + anchor, 1)
+
 if 'financeCard:' not in text:
     anchor = "  filterRow: { marginTop: 13, flexDirection: 'row-reverse', gap: 7 },\n"
     styles = r'''  financeCard: { marginTop: 12, backgroundColor: '#ffffff', borderRadius: 21, borderWidth: 1, borderColor: '#ddd6fe', paddingHorizontal: 14, paddingTop: 14, paddingBottom: 4 },
@@ -126,6 +135,13 @@ if 'financeCard:' not in text:
     if anchor not in text:
         raise SystemExit('Finance styles anchor not found')
     text = text.replace(anchor, styles + anchor, 1)
+
+if 'installmentSupport:' not in text:
+    anchor = "  installmentPaidDate: { marginTop: 3, color: '#047857', fontSize: 10, fontWeight: '800', textAlign: 'right' },\n"
+    style = "  installmentSupport: { marginTop: 3, color: '#047857', fontSize: 10, fontWeight: '900', textAlign: 'right' },\n"
+    if anchor not in text:
+        raise SystemExit('Installment support style anchor not found')
+    text = text.replace(anchor, style + anchor, 1)
 
 path.write_text(text, encoding='utf-8')
 print('Debt support information patch applied')
