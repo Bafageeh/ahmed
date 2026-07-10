@@ -42,7 +42,7 @@ if [ -d "$API_DIR" ]; then
 fi
 
 cd "$PROJECT_PATH"
-for patch in scripts/patch-moneymoon-topbar.py scripts/patch-moneymoon-add-edit-flow.py scripts/patch-moneymoon-compact-inline-edit.py scripts/patch-basic-income-compact.py scripts/patch-income-linked-sync-ui.py scripts/patch-ahmed-icons.py scripts/patch-ta3meed-receipts-ui.py scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-header-layout.py scripts/patch-ta3meed-floating-back.py scripts/patch-debt-finance-details.py; do
+for patch in scripts/patch-moneymoon-topbar.py scripts/patch-moneymoon-add-edit-flow.py scripts/patch-moneymoon-compact-inline-edit.py scripts/patch-basic-income-compact.py scripts/patch-income-linked-sync-ui.py scripts/patch-ahmed-icons.py scripts/patch-ta3meed-receipts-ui.py scripts/patch-ta3meed-receipt-date-preserve-status.py scripts/patch-ta3meed-header-layout.py scripts/patch-ta3meed-floating-back.py scripts/patch-debt-finance-details.py scripts/patch-credit-card-debts-screen.py; do
   if [ -f "$patch" ]; then
     log "Running $patch"
     python3 "$patch" || true
