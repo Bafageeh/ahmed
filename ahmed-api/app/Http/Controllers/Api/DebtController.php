@@ -141,7 +141,9 @@ class DebtController extends Controller
     {
         $normalizedInstallments = $installments->map(fn ($installment) => $this->normalizeInstallment($installment));
         $original = (float) $debt->original_amount;
-        $paid = $normalizedInstallments->sum(fn ($item) => (float) $item['paid_amount']);
+        $openingPaid = (float) ($debt->opening_paid_amount ?? 0);
+        $schedulePaid = $normalizedInstallments->sum(fn ($item) => (float) $item['paid_amount']);
+        $paid = min($original, $openingPaid + $schedulePaid);
         $remaining = max(0, $original - $paid);
         $overdue = $normalizedInstallments->filter(fn ($item) => in_array($item['status'], ['late', 'late_partial'], true));
         $currentMonth = now()->format('Y-m');
@@ -157,6 +159,7 @@ class DebtController extends Controller
             'name' => $debt->name,
             'category' => $debt->category,
             'original_amount' => round($original, 2),
+            'opening_paid_amount' => round($openingPaid, 2),
             'paid_amount' => round($paid, 2),
             'remaining_amount' => round($remaining, 2),
             'progress_percent' => $original > 0 ? round(($paid / $original) * 100, 2) : 0,
