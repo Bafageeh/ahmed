@@ -145,6 +145,14 @@ class DebtController extends Controller
         $schedulePaid = $normalizedInstallments->sum(fn ($item) => (float) $item['paid_amount']);
         $paid = min($original, $openingPaid + $schedulePaid);
         $remaining = max(0, $original - $paid);
+
+        $downPayment = (float) ($debt->down_payment ?? 0);
+        $financingAmount = (float) ($debt->financing_amount ?? max(0, $original - (float) ($debt->profit_amount ?? 0)));
+        $profitAmount = (float) ($debt->profit_amount ?? 0);
+        $totalCost = $downPayment + $original;
+        $totalPaidWithDownPayment = $downPayment + $paid;
+        $overallProgress = $totalCost > 0 ? ($totalPaidWithDownPayment / $totalCost) * 100 : 0;
+
         $overdue = $normalizedInstallments->filter(fn ($item) => in_array($item['status'], ['late', 'late_partial'], true));
         $currentMonth = now()->format('Y-m');
         $currentMonthItems = $normalizedInstallments->filter(fn ($item) => str_starts_with($item['due_date'], $currentMonth));
@@ -158,11 +166,21 @@ class DebtController extends Controller
             'user_id' => $debt->user_id,
             'name' => $debt->name,
             'category' => $debt->category,
+            'contract_date' => $debt->contract_date ?? null,
+            'down_payment' => round($downPayment, 2),
+            'financing_amount' => round($financingAmount, 2),
+            'profit_amount' => round($profitAmount, 2),
+            'profit_margin' => isset($debt->profit_margin) ? round((float) $debt->profit_margin, 4) : null,
+            'previous_installment_amount' => isset($debt->previous_installment_amount) ? round((float) $debt->previous_installment_amount, 2) : null,
+            'previous_installments_count' => isset($debt->previous_installments_count) ? (int) $debt->previous_installments_count : null,
             'original_amount' => round($original, 2),
             'opening_paid_amount' => round($openingPaid, 2),
             'paid_amount' => round($paid, 2),
             'remaining_amount' => round($remaining, 2),
+            'total_cost' => round($totalCost, 2),
+            'total_paid_with_down_payment' => round($totalPaidWithDownPayment, 2),
             'progress_percent' => $original > 0 ? round(($paid / $original) * 100, 2) : 0,
+            'overall_progress_percent' => round($overallProgress, 2),
             'installments_count' => $totalCount,
             'paid_installments_count' => $paidCount,
             'remaining_installments_count' => max(0, $totalCount - $paidCount),
