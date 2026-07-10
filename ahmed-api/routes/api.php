@@ -118,7 +118,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::get('/wa/status', [WhatsAppController::class, 'status']);
     Route::get('/wa/messages', [WhatsAppController::class, 'index']);
     Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
-    Route::post('/wa/template', [WhatsAppController::class, 'queueTemplate']);
+    Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
     Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
     Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
 });
