@@ -46,7 +46,11 @@ class DebtGovernmentSupportService
         }
 
         $items = $query->get()->filter(function ($item) {
-            return (float) $item->government_support_paid_amount < (float) $item->monthly_government_support;
+            $paid = (float) $item->paid_amount;
+            $supportPaid = (float) $item->government_support_paid_amount;
+            $monthlySupport = (float) $item->monthly_government_support;
+
+            return $supportPaid < $monthlySupport || $paid < $supportPaid;
         });
 
         if ($items->isEmpty()) {
@@ -59,18 +63,21 @@ class DebtGovernmentSupportService
             foreach ($items as $item) {
                 $scheduled = (float) $item->scheduled_amount;
                 $paid = (float) $item->paid_amount;
-                $supportAlreadyPaid = (float) $item->government_support_paid_amount;
+                $supportAlreadyPaid = min($scheduled, (float) $item->government_support_paid_amount);
                 $monthlySupport = (float) $item->monthly_government_support;
-                $remainingInstallment = max(0, $scheduled - $paid);
+
+                // الدعم الحكومي لا يُلغى عند إلغاء دفعة المستخدم يدويًا.
+                $paidWithRestoredSupport = max($paid, $supportAlreadyPaid);
+                $remainingInstallment = max(0, $scheduled - $paidWithRestoredSupport);
                 $remainingSupport = max(0, $monthlySupport - $supportAlreadyPaid);
                 $supportToApply = min($remainingInstallment, $remainingSupport);
+                $newPaid = min($scheduled, $paidWithRestoredSupport + $supportToApply);
+                $newSupportPaid = min($scheduled, $supportAlreadyPaid + $supportToApply);
 
-                if ($supportToApply <= 0) {
+                if ($newPaid === $paid && $newSupportPaid === $supportAlreadyPaid) {
                     continue;
                 }
 
-                $newPaid = min($scheduled, $paid + $supportToApply);
-                $newSupportPaid = $supportAlreadyPaid + $supportToApply;
                 $status = $newPaid >= $scheduled ? 'paid' : 'partial';
                 $notes = trim((string) ($item->notes ?? ''));
                 if (! str_contains($notes, 'دعم حكومي')) {
