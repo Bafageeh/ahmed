@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AhmedSessionController;
 use App\Http\Controllers\Api\AhmedUserController;
+use App\Http\Controllers\Api\CreditCardDebtController;
 use App\Http\Controllers\Api\DebtController;
 use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
@@ -20,9 +21,7 @@ use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\MonthlyIncomeController;
 use Illuminate\Support\Facades\Route;
-
 use Illuminate\Support\Str;
-
 
 Route::get('/health', function () {
     return response()->json([
@@ -107,6 +106,11 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::get('/debts/{id}', [DebtController::class, 'show']);
     Route::post('/debts/installments/{installmentId}/pay', [DebtController::class, 'pay']);
     Route::delete('/debts/installments/{installmentId}/payment', [DebtController::class, 'undoPayment']);
+
+    Route::get('/credit-card-debts', [CreditCardDebtController::class, 'index']);
+    Route::post('/credit-card-debts', [CreditCardDebtController::class, 'store']);
+    Route::put('/credit-card-debts/{id}', [CreditCardDebtController::class, 'update']);
+    Route::delete('/credit-card-debts/{id}', [CreditCardDebtController::class, 'destroy']);
 
     Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
     Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
