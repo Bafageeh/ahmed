@@ -13,7 +13,7 @@ class MonthlyIncomeController extends Controller
 
     public function index(Request $request)
     {
-        $screen = $request->query('screen', 'future');
+        $screen = $this->screenKey($request, $request->query('screen', 'future'));
 
         $items = DB::table('monthly_incomes')
             ->where('screen', $screen)
@@ -46,8 +46,10 @@ class MonthlyIncomeController extends Controller
             'amount' => ['required', 'numeric', 'min:0'],
         ]);
 
+        $screen = $this->screenKey($request, $data['screen'] ?? 'future');
+
         $id = DB::table('monthly_incomes')->insertGetId([
-            'screen' => $data['screen'] ?? 'future',
+            'screen' => $screen,
             'name' => $data['name'],
             'amount' => $data['amount'],
             'created_at' => now(),
@@ -81,6 +83,20 @@ class MonthlyIncomeController extends Controller
 
         DB::table('monthly_incomes')->where('id', $id)->delete();
         return response()->json(['data' => ['deleted' => true]]);
+    }
+
+    private function screenKey(Request $request, string $screen): string
+    {
+        if ($screen !== 'wealth') {
+            return $screen;
+        }
+
+        $userId = (int) $request->header('X-Ahmed-User-Id', 1);
+        if ($userId <= 0) {
+            $userId = 1;
+        }
+
+        return "wealth-{$userId}";
     }
 
     private function fetchComMonthlyPersonNet(): float
