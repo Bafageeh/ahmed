@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\AhmedUserController;
 use App\Http\Controllers\Api\CreditCardDebtController;
 use App\Http\Controllers\Api\DebtController;
 use App\Http\Controllers\Api\DebtDashboardController;
+use App\Http\Controllers\Api\DebtSupportController;
 use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
@@ -104,7 +105,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::delete('/personal-expenses/{id}', [PersonalExpenseController::class, 'destroy']);
 
     Route::get('/debts', [DebtDashboardController::class, 'index']);
-    Route::get('/debts/{id}', [DebtController::class, 'show']);
+    Route::get('/debts/{id}', [DebtSupportController::class, 'show']);
     Route::post('/debts/installments/{installmentId}/pay', [DebtController::class, 'pay']);
     Route::delete('/debts/installments/{installmentId}/payment', [DebtController::class, 'undoPayment']);
 
