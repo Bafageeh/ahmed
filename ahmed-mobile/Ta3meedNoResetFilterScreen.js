@@ -30,6 +30,27 @@ function isPartialOpportunity(item) {
   return String(item?.status || '').trim().toLowerCase() === 'partial_received';
 }
 
+function compareOpportunityOrder(a, b) {
+  const dateValue = (item) => {
+    const dateText = String(item?.maturity_date || item?.due_date || '').slice(0, 10);
+    if (!dateText) return null;
+    const value = new Date(`${dateText}T00:00:00`).getTime();
+    return Number.isFinite(value) ? value : null;
+  };
+
+  const aValue = dateValue(a);
+  const bValue = dateValue(b);
+
+  if (aValue === null && bValue !== null) return -1;
+  if (aValue !== null && bValue === null) return 1;
+  if (aValue !== null && bValue !== null && aValue !== bValue) return aValue - bValue;
+
+  return String(a?.reference_number || a?.code || a?.id || '').localeCompare(
+    String(b?.reference_number || b?.code || b?.id || ''),
+    'ar'
+  );
+}
+
 function itemHasInvestor(item, selectedInvestor) {
   if (!selectedInvestor || selectedInvestor === 'all') return true;
   return (item.allocations || []).some((allocation) => investorKey(allocation) === selectedInvestor);
@@ -165,7 +186,7 @@ if (!React.__ta3meedPartialReceivedMemoPatched) {
           && itemHasInvestor(item, selectedInvestor)
           && itemMatchesSearch(item, query)
         ));
-        if (extraItems.length) return [...value, ...extraItems];
+        if (extraItems.length) return [...value, ...extraItems].sort(compareOpportunityOrder);
       }
 
       const looksLikeTa3meedTotals = value && typeof value === 'object' && !Array.isArray(value)
