@@ -57,6 +57,22 @@ jobs:
         working-directory: ahmed-mobile
         run: echo "EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api" > .env
 
+      - name: Set unique Android version code
+        working-directory: ahmed-mobile
+        run: |
+          python3 - <<'PY'
+          import json, os
+          path = 'app.json'
+          with open(path, encoding='utf-8') as f:
+              data = json.load(f)
+          run_number = int(os.environ.get('GITHUB_RUN_NUMBER', '1'))
+          data.setdefault('expo', {}).setdefault('android', {})['versionCode'] = 100000 + run_number
+          with open(path, 'w', encoding='utf-8') as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+              f.write('\n')
+          print('Android versionCode:', data['expo']['android']['versionCode'])
+          PY
+
       - name: Regenerate valid Expo PNG assets
         working-directory: ahmed-mobile
         run: |
@@ -103,13 +119,20 @@ jobs:
           python3 scripts/patch-ahmed-icons.py || true
           python3 scripts/patch-com-monthly-person-net-income.py
           python3 scripts/patch-ta3meed-receipts-ui.py
+          python3 scripts/patch-ta3meed-receipt-date-preserve-status.py || true
+          python3 scripts/patch-ta3meed-header-layout.py || true
+          python3 scripts/patch-ta3meed-floating-back.py || true
+          python3 scripts/patch-debt-finance-details.py || true
+          python3 scripts/patch-credit-card-debts-screen.py || true
+          python3 scripts/patch-debt-support-info.py || true
+          python3 scripts/patch-future-income-layout.py
 
-      - name: Verify S-121 COM income patch
+      - name: Verify latest mobile changes
         run: |
           grep -R "COM: com_monthly_person_net" -n ahmed-mobile/AppShell.js || (echo "COM monthly person net patch was not applied" && exit 1)
-
-      - name: Verify Ta3meed receipts UI patch
-        run: |
+          grep -R "futureIncomeFloatingAdd" -n ahmed-mobile/AppShell.js || (echo "S-121 floating add button is missing" && exit 1)
+          ! grep -R '<Header badge="حساباتي" title="#S-121 دخل شهري مستقبلي"' -n ahmed-mobile/AppShell.js || (echo "S-121 black card is still present" && exit 1)
+          grep -R "compareOpportunityOrder" -n ahmed-mobile/Ta3meedNoResetFilterScreen.js || (echo "Ta3meed active/partial ordering fix is missing" && exit 1)
           grep -R "لصق رسالة استلام تعميد" -n ahmed-mobile || (echo "Ta3meed receipt UI patch was not applied" && exit 1)
           grep -R "اعتماد الدفعة" -n ahmed-mobile || (echo "Ta3meed receipt apply button missing" && exit 1)
 
