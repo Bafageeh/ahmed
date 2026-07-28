@@ -222,7 +222,6 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
 
             <View style={styles.summaryGrid}>
               <SummaryCard label="عدد البطاقات" value={String(numberValue(summary.cards_count))} icon="payments" />
-              <SummaryCard label="متوسط الحد" value={money(summary.average_limit)} icon="wallet" />
               <SummaryCard label="أعلى حد ائتماني" value={money(summary.highest_limit)} icon="stats" wide />
             </View>
 
