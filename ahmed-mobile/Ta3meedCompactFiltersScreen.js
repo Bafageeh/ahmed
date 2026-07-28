@@ -743,19 +743,18 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
       <View style={styles.header}>
-        <TouchableOpacity style={styles.headerIcon} onPress={onBack} activeOpacity={0.85}>
+        <TouchableOpacity style={[styles.headerIcon, styles.backHeaderButton]} onPress={onBack} activeOpacity={0.85}>
           <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>تعميد</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerIcon} onPress={handleSearchPress} activeOpacity={0.85}>
-            <UiIcon name="search" size={21} color={ICON_COLOR_DARK} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.payButton} onPress={() => setReceiptOpen(true)} activeOpacity={0.85}>
-            <Text style={styles.payText}>سداد</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={[styles.headerIcon, styles.searchHeaderButton]} onPress={handleSearchPress} activeOpacity={0.85}>
+          <UiIcon name="search" size={21} color={ICON_COLOR_DARK} />
+        </TouchableOpacity>
       </View>
+
+      <TouchableOpacity style={styles.floatingPayButton} onPress={() => setReceiptOpen(true)} activeOpacity={0.88}>
+        <Text style={styles.payText}>سداد</Text>
+      </TouchableOpacity>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {showSearch ? <TextInput ref={searchInputRef} style={styles.searchInput} value={query} onChangeText={(text) => { setQuery(text); setExpandedId(null); }} placeholder="ابحث برقم الفرصة، الشركة، النشاط، المستثمر، المبلغ" placeholderTextColor="#94a3b8" textAlign="right" /> : null}
@@ -1472,12 +1471,13 @@ const styles = StyleSheet.create({
     textAlign: 'right'
   },
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
-  header: { paddingHorizontal: 22, paddingTop: 34, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
-  headerIcon: { width: 46, height: 46, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'center' },
-  headerActions: { flexDirection: 'row-reverse', alignItems: 'center', gap: 8 },
-  payButton: { height: 46, minWidth: 62, borderRadius: 16, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  payText: { color: '#0f172a', fontSize: 14, fontWeight: '900' },
+  header: { minHeight: 88, paddingHorizontal: 22, paddingTop: 34, paddingBottom: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f7fb', position: 'relative' },
+  headerIcon: { position: 'absolute', top: 34, width: 46, height: 46, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
+  backHeaderButton: { right: 22 },
+  searchHeaderButton: { left: 92 },
+  headerTitle: { color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'center' },
+  floatingPayButton: { position: 'absolute', top: 34, left: 22, height: 46, minWidth: 62, borderRadius: 16, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, elevation: 8, shadowColor: '#0f172a', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, zIndex: 60 },
+  payText: { color: '#ffffff', fontSize: 14, fontWeight: '900' },
   content: { paddingHorizontal: 14, paddingBottom: 28 },
   searchInput: { marginTop: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13, color: '#0f172a', fontWeight: '900' },
   metricGrid: { marginTop: 6, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 5 },
