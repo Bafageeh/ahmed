@@ -1,0 +1,35 @@
+name: Diagnose Ahmed Login Users
+
+on:
+  push:
+    branches:
+      - agent/diagnose-login-users
+    paths:
+      - '.github/workflows/diagnose-login-users.yml'
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read production usernames only
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            AHMED_PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$AHMED_PROJECT_PATH" ] || [ ! -d "$AHMED_PROJECT_PATH" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then
+                AHMED_PROJECT_PATH="/home/pmsa/apps/ahmed"
+              elif [ -d "/mnt/home-storage/home/pmsa/apps/ahmed" ]; then
+                AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
+              else
+                echo "ERROR: Ahmed project path not found"
+                exit 1
+              fi
+            fi
+            cd "$AHMED_PROJECT_PATH/ahmed-api"
+            php artisan tinker --execute="DB::table('users')->select('id','name','username','is_admin')->orderBy('id')->get()->each(function(\$u){ echo 'USER|'.\$u->id.'|'.\$u->name.'|'.(\$u->username ?? '').'|'.((int)(\$u->is_admin ?? 0)).PHP_EOL; });"
