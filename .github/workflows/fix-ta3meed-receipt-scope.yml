@@ -1,0 +1,250 @@
+name: Fix Ta3meed Receipt Scope
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/fix-ta3meed-receipt-scope.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip receipt scope fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch Ta3meed receipt user isolation and stale totals
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              return text.replace(old, new, 1)
+
+          receipt_path = Path('ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php')
+          text = receipt_path.read_text(encoding='utf-8')
+
+          text = replace_once(text,
+          '''    private function applyMessageInternal(Request $request, bool $allowDuplicate)\n    {\n        $data = $request->validate([''',
+          '''    private function applyMessageInternal(Request $request, bool $allowDuplicate)\n    {\n        $userId = $this->userId($request);\n        $data = $request->validate([''', 'apply user')
+
+          text = replace_once(text,
+          '''        $investment = $this->findInvestmentByReference((int) $platform->id, $parsed['reference_number']);''',
+          '''        $investment = $this->findInvestmentByReference((int) $platform->id, $parsed['reference_number'], $userId);''', 'find scoped investment')
+
+          text = text.replace("$this->hasFullReceipt((int) $investment->id)", "$this->hasFullReceipt((int) $investment->id, $userId)")
+          text = text.replace("$this->readInvestment((int) $investment->id)", "$this->readInvestment((int) $investment->id, $userId)")
+          text = text.replace("$this->readInvestment($investment->id)", "$this->readInvestment($investment->id, $userId)")
+
+          text = replace_once(text,
+          '''    public function store(Request $request, int $id)\n    {\n        $data = $request->validate([''',
+          '''    public function store(Request $request, int $id)\n    {\n        $userId = $this->userId($request);\n        $data = $request->validate([''', 'store user')
+
+          text = replace_once(text,
+          '''        $investment = DB::table('investment_opportunities')\n            ->where('id', $id)\n            ->where('platform_id', $platform->id)\n            ->first();''',
+          '''        $investmentQuery = DB::table('investment_opportunities')\n            ->where('id', $id)\n            ->where('platform_id', $platform->id);\n        $this->scopeUser($investmentQuery, 'investment_opportunities', $userId);\n        $investment = $investmentQuery->first();''', 'store scoped investment')
+
+          text = text.replace("$this->readInvestment($id)", "$this->readInvestment($id, $userId)")
+
+          text = replace_once(text,
+          '''    public function update(Request $request, int $id)\n    {\n        $data = $request->validate([''',
+          '''    public function update(Request $request, int $id)\n    {\n        $userId = $this->userId($request);\n        $data = $request->validate([''', 'update user')
+
+          text = replace_once(text,
+          '''        $receipt = DB::table('ta3meed_receipts')->where('id', $id)->first();''',
+          '''        $receiptQuery = DB::table('ta3meed_receipts')->where('id', $id);\n        $this->scopeUser($receiptQuery, 'ta3meed_receipts', $userId);\n        $receipt = $receiptQuery->first();''', 'update receipt scope')
+
+          text = replace_once(text,
+          '''        $investmentBefore = DB::table('investment_opportunities')\n            ->where('id', (int) $receipt->opportunity_id)\n            ->first();''',
+          '''        $investmentBeforeQuery = DB::table('investment_opportunities')\n            ->where('id', (int) $receipt->opportunity_id);\n        $this->scopeUser($investmentBeforeQuery, 'investment_opportunities', $userId);\n        $investmentBefore = $investmentBeforeQuery->first();\n        if (! $investmentBefore) return response()->json(['message' => 'Investment not found'], 404);''', 'update investment scope')
+
+          text = replace_once(text,
+          '''            $previousAllocationStatuses = DB::table('investment_opportunity_allocations')\n                ->where('opportunity_id', (int) $receipt->opportunity_id)\n                ->pluck('status', 'id');''',
+          '''            $previousAllocationQuery = DB::table('investment_opportunity_allocations')\n                ->where('opportunity_id', (int) $receipt->opportunity_id);\n            $this->scopeUser($previousAllocationQuery, 'investment_opportunity_allocations', $userId);\n            $previousAllocationStatuses = $previousAllocationQuery->pluck('status', 'id');''', 'update allocation scope')
+
+          text = text.replace("'investment' => $this->readInvestment((int) $receipt->opportunity_id),", "'investment' => $this->readInvestment((int) $receipt->opportunity_id, $userId),")
+
+          text = replace_once(text,
+          '''    public function destroy(int $id)\n    {''',
+          '''    public function destroy(Request $request, int $id)\n    {\n        $userId = $this->userId($request);''', 'destroy user')
+
+          # The second direct receipt lookup belongs to destroy().
+          old_destroy = "        $receipt = DB::table('ta3meed_receipts')->where('id', $id)->first();"
+          if old_destroy in text:
+              text = replace_once(text, old_destroy,
+              "        $receiptQuery = DB::table('ta3meed_receipts')->where('id', $id);\n        $this->scopeUser($receiptQuery, 'ta3meed_receipts', $userId);\n        $receipt = $receiptQuery->first();", 'destroy receipt scope')
+
+          text = text.replace("'investment' => $this->readInvestment((int) $receipt->opportunity_id)]", "'investment' => $this->readInvestment((int) $receipt->opportunity_id, $userId)]")
+
+          text = replace_once(text,
+          '''    private function findInvestmentByReference(int $platformId, string $reference)\n    {''',
+          '''    private function findInvestmentByReference(int $platformId, string $reference, int $userId)\n    {''', 'find signature')
+
+          text = replace_once(text,
+          '''        return DB::table('investment_opportunities')\n            ->where('platform_id', $platformId)\n            ->where(function ($query) use ($normalizedReference, $withoutDash) {\n                $query->whereRaw('LOWER(reference_number) = ?', [strtolower($normalizedReference)])\n                    ->orWhereRaw('LOWER(REPLACE(reference_number, "-", "")) = ?', [strtolower($withoutDash)]);\n            })\n            ->first();''',
+          '''        $query = DB::table('investment_opportunities')\n            ->where('platform_id', $platformId)\n            ->where(function ($query) use ($normalizedReference, $withoutDash) {\n                $query->whereRaw('LOWER(reference_number) = ?', [strtolower($normalizedReference)])\n                    ->orWhereRaw('LOWER(REPLACE(reference_number, "-", "")) = ?', [strtolower($withoutDash)]);\n            });\n        $this->scopeUser($query, 'investment_opportunities', $userId);\n        return $query->first();''', 'find query scope')
+
+          text = replace_once(text,
+          '''            $allowDuplicate = (bool) ($data['allow_duplicate'] ?? false);\n\n            if (! $allowDuplicate) {''',
+          '''            $allowDuplicate = (bool) ($data['allow_duplicate'] ?? false);\n            $receiptUserId = (int) ($investment->user_id ?? 0);\n\n            if (! $allowDuplicate) {''', 'record user')
+
+          text = replace_once(text,
+          '''                $duplicateQuery = DB::table('ta3meed_receipts')\n                    ->where('opportunity_id', $investment->id)\n                    ->where('reference_number', $reference)\n                    ->where('amount', $amount)\n                    ->where('receipt_type', $receiptType);''',
+          '''                $duplicateQuery = DB::table('ta3meed_receipts')\n                    ->where('opportunity_id', $investment->id)\n                    ->where('reference_number', $reference)\n                    ->where('amount', $amount)\n                    ->where('receipt_type', $receiptType);\n                if ($receiptUserId > 0) $this->scopeUser($duplicateQuery, 'ta3meed_receipts', $receiptUserId);''', 'duplicate scope')
+
+          text = text.replace("\n            $receiptUserId = $investment->user_id ?? null;\n", "\n")
+
+          text = replace_once(text,
+          '''            $allocations = DB::table('investment_opportunity_allocations')->where('opportunity_id', $investment->id)->get();''',
+          '''            $allocationsQuery = DB::table('investment_opportunity_allocations')->where('opportunity_id', $investment->id);\n            if ($receiptUserId > 0) $this->scopeUser($allocationsQuery, 'investment_opportunity_allocations', $receiptUserId);\n            $allocations = $allocationsQuery->get();''', 'record allocation scope')
+
+          text = replace_once(text,
+          '''        $investment = DB::table('investment_opportunities')->where('id', $opportunityId)->first();\n        if (! $investment) return;\n\n        $totalReceived = round((float) DB::table('ta3meed_receipts')->where('opportunity_id', $opportunityId)->sum('amount'), 2);''',
+          '''        $investment = DB::table('investment_opportunities')->where('id', $opportunityId)->first();\n        if (! $investment) return;\n        $userId = (int) ($investment->user_id ?? 0);\n\n        $receiptQuery = DB::table('ta3meed_receipts')->where('opportunity_id', $opportunityId);\n        if ($userId > 0) $this->scopeUser($receiptQuery, 'ta3meed_receipts', $userId);\n        $totalReceived = round((float) $receiptQuery->sum('amount'), 2);''', 'recalc receipt scope')
+
+          text = replace_once(text,
+          '''        $allocations = DB::table('investment_opportunity_allocations')->where('opportunity_id', $opportunityId)->get();\n        foreach ($allocations as $allocation) {\n            $received = round((float) DB::table('ta3meed_receipt_allocations')->where('allocation_id', $allocation->id)->sum('received_amount'), 2);''',
+          '''        $allocationsQuery = DB::table('investment_opportunity_allocations')->where('opportunity_id', $opportunityId);\n        if ($userId > 0) $this->scopeUser($allocationsQuery, 'investment_opportunity_allocations', $userId);\n        $allocations = $allocationsQuery->get();\n        foreach ($allocations as $allocation) {\n            $receiptAllocationQuery = DB::table('ta3meed_receipt_allocations')->where('allocation_id', $allocation->id);\n            if ($userId > 0) $this->scopeUser($receiptAllocationQuery, 'ta3meed_receipt_allocations', $userId);\n            $received = round((float) $receiptAllocationQuery->sum('received_amount'), 2);''', 'recalc allocation scope')
+
+          text = replace_once(text,
+          '''    private function hasFullReceipt(int $opportunityId): bool\n    {''',
+          '''    private function hasFullReceipt(int $opportunityId, int $userId): bool\n    {''', 'full signature')
+
+          text = replace_once(text,
+          '''        return DB::table('ta3meed_receipts')\n            ->where('opportunity_id', $opportunityId)\n            ->where('receipt_type', 'full')\n            ->exists();''',
+          '''        $query = DB::table('ta3meed_receipts')\n            ->where('opportunity_id', $opportunityId)\n            ->where('receipt_type', 'full');\n        $this->scopeUser($query, 'ta3meed_receipts', $userId);\n        return $query->exists();''', 'full scope')
+
+          text = replace_once(text,
+          '''    private function readInvestment(int $id)\n    {\n        $item = DB::table('investment_opportunities')->where('id', $id)->first();''',
+          '''    private function readInvestment(int $id, int $userId)\n    {\n        $itemQuery = DB::table('investment_opportunities')->where('id', $id);\n        $this->scopeUser($itemQuery, 'investment_opportunities', $userId);\n        $item = $itemQuery->first();''', 'read signature scope')
+
+          text = replace_once(text,
+          '''        $item->allocations = DB::table('investment_opportunity_allocations')\n            ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')\n            ->where('investment_opportunity_allocations.opportunity_id', $id)\n            ->select([''',
+          '''        $allocationQuery = DB::table('investment_opportunity_allocations')\n            ->join('investment_investors', 'investment_opportunity_allocations.investor_id', '=', 'investment_investors.id')\n            ->where('investment_opportunity_allocations.opportunity_id', $id);\n        $this->scopeUser($allocationQuery, 'investment_opportunity_allocations', $userId);\n        $item->allocations = $allocationQuery->select([''', 'read allocation scope')
+
+          text = replace_once(text,
+          '''        $item->receipts = DB::table('ta3meed_receipts')->where('opportunity_id', $id)->orderByDesc('receipt_date')->orderByDesc('id')->get();\n        return $item;\n    }\n}''',
+          '''        $receiptQuery = DB::table('ta3meed_receipts')->where('opportunity_id', $id);\n        $this->scopeUser($receiptQuery, 'ta3meed_receipts', $userId);\n        $item->receipts = $receiptQuery->orderByDesc('receipt_date')->orderByDesc('id')->get();\n        return $item;\n    }\n\n    private function userId(Request $request): int\n    {\n        $id = (int) ($request->attributes->get('ahmed_user_id') ?: $request->header('X-Ahmed-User-Id', 0));\n        if ($id > 0 && Schema::hasTable('users') && DB::table('users')->where('id', $id)->exists()) return $id;\n        return Schema::hasTable('users') ? (int) (DB::table('users')->orderBy('id')->value('id') ?: 1) : 1;\n    }\n\n    private function scopeUser($query, string $table, int $userId): void\n    {\n        if (Schema::hasColumn($table, 'user_id')) $query->where($table . '.user_id', $userId);\n    }\n}''', 'read helpers')
+
+          # Ensure every readInvestment call has a user id after the transformations.
+          bad_reads = re.findall(r'\$this->readInvestment\([^,\n\)]*\)', text)
+          if bad_reads:
+              raise SystemExit(f'Unscoped readInvestment calls remain: {bad_reads}')
+          if "findInvestmentByReference((int) $platform->id, $parsed['reference_number'], $userId)" not in text:
+              raise SystemExit('Scoped opportunity lookup missing')
+
+          receipt_path.write_text(text, encoding='utf-8')
+
+          controller_path = Path('ahmed-api/app/Http/Controllers/Api/Ta3meedController.php')
+          ctext = controller_path.read_text(encoding='utf-8')
+          pattern = re.compile(r"    private function appendActualAnnualRate\(object \$item\): void\n    \{.*?\n    \}\n\n    private function platform\(\)", re.S)
+          replacement = r'''    private function appendActualAnnualRate(object $item): void
+    {
+        $principal = (float) $item->principal_amount;
+        $expectedProfit = (float) $item->expected_profit_amount;
+        $expectedTotal = $principal + $expectedProfit;
+        $registeredAnnualRate = (float) $item->expected_rate;
+        if ($registeredAnnualRate <= 0 && $principal > 0 && $expectedProfit > 0) $registeredAnnualRate = ($expectedProfit / $principal) * 100;
+
+        $metadata = json_decode((string) $item->metadata, true);
+        if (! is_array($metadata)) $metadata = [];
+        $receipts = collect($item->receipts ?? []);
+        $receiptTracking = array_key_exists('ta3meed_received_total', $metadata)
+            || array_key_exists('ta3meed_expected_total', $metadata)
+            || $receipts->isNotEmpty();
+
+        if ($receiptTracking) {
+            $receiptAllocationTotals = [];
+            foreach ($receipts as $receipt) {
+                foreach (collect($receipt->allocations ?? []) as $allocation) {
+                    $key = trim((string) ($allocation->investor_code ?? $allocation->investor_name ?? ''));
+                    if ($key === '') continue;
+                    $receiptAllocationTotals[$key] = ($receiptAllocationTotals[$key] ?? 0) + (float) $allocation->received_amount;
+                }
+            }
+            foreach (collect($item->allocations ?? []) as $allocation) {
+                $key = trim((string) ($allocation->investor_code ?? $allocation->investor_name ?? ''));
+                $allocation->received_amount = round((float) ($receiptAllocationTotals[$key] ?? 0), 2);
+            }
+        }
+
+        $receivedFromReceipts = $receipts->sum('amount');
+        $receivedFromAllocations = collect($item->allocations ?? [])->sum('received_amount');
+        $receivedAmount = $receiptTracking
+            ? (float) $receivedFromReceipts
+            : max((float) $receivedFromReceipts, (float) $receivedFromAllocations);
+
+        if ($receiptTracking) {
+            $hasFinalReceipt = $receipts->contains(function ($receipt) {
+                return in_array(strtolower(trim((string) ($receipt->receipt_type ?? ''))), ['full', 'early_settlement'], true);
+            });
+            $isComplete = $hasFinalReceipt || ($expectedTotal > 0 && $receivedAmount >= $expectedTotal - 0.01);
+            $item->status = $isComplete ? 'received' : ($receivedAmount > 0 ? 'partial_received' : 'active');
+            $remaining = $isComplete ? 0 : max(0, round($expectedTotal - $receivedAmount, 2));
+            $settlementDiff = $isComplete ? round($receivedAmount - $expectedTotal, 2) : 0;
+
+            $metadata['ta3meed_received_total'] = round($receivedAmount, 2);
+            $metadata['ta3meed_remaining_amount'] = $remaining;
+            $metadata['ta3meed_expected_total'] = round($expectedTotal, 2);
+            $metadata['ta3meed_settlement_difference'] = $settlementDiff;
+            $metadata['ta3meed_settlement_note'] = $settlementDiff < 0
+                ? 'تسوية مبكرة أقل من المتوقع'
+                : ($settlementDiff > 0 ? 'تسوية أعلى من المتوقع' : null);
+        }
+
+        $status = strtolower(trim((string) $item->status));
+        $closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
+        $isEnded = in_array($status, $closedStatuses, true);
+        $actualProfit = max(0, $receivedAmount - $principal);
+        $showActualAnnualRate = $isEnded && $principal > 0 && $actualProfit > 0 && $expectedTotal > 0 && $receivedAmount < $expectedTotal;
+
+        $item->registered_annual_profit_rate = round($registeredAnnualRate, 6);
+        $item->received_amount = round($receivedAmount, 2);
+        $item->annual_rate_badge = 'سنوي مرفوع ' . number_format((float) $item->registered_annual_profit_rate, 2, '.', '') . '%';
+        $item->actual_received_profit_amount = $showActualAnnualRate ? round($actualProfit, 2) : null;
+        $item->actual_annual_profit_rate = $showActualAnnualRate ? round(($actualProfit / $principal) * 100, 6) : null;
+        $item->actual_annual_rate_badge = $showActualAnnualRate ? 'سنوي حقيقي ' . number_format((float) $item->actual_annual_profit_rate, 2, '.', '') . '%' : null;
+        $item->show_actual_annual_profit_rate = $showActualAnnualRate;
+
+        $metadata['annual_rate_badge'] = $item->annual_rate_badge;
+        $metadata['actual_annual_rate_badge'] = $item->actual_annual_rate_badge;
+        $metadata['registered_annual_profit_rate'] = $item->registered_annual_profit_rate;
+        $metadata['actual_annual_profit_rate'] = $item->actual_annual_profit_rate;
+        $item->metadata = json_encode($metadata, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function platform()'''
+          ctext2, count = pattern.subn(replacement, ctext)
+          if count != 1:
+              raise SystemExit(f'appendActualAnnualRate replacement count={count}')
+          controller_path.write_text(ctext2, encoding='utf-8')
+          PY
+
+      - name: Validate PHP syntax
+        run: |
+          php -l ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php
+          php -l ahmed-api/app/Http/Controllers/Api/Ta3meedController.php
+
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php ahmed-api/app/Http/Controllers/Api/Ta3meedController.php
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Fix Ta3meed receipt isolation and stale received totals [skip receipt scope fix]"
+            git push
+          fi
