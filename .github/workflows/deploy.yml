@@ -45,7 +45,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            echo "[Ta3meed Diagnostic] Inspecting missing/new references"
+            echo "[Ta3meed Fix] Correcting ER-WKCK8O3 -> ER-WKCK803 for Ahmed"
             cd "$AHMED_PROJECT_PATH/ahmed-api"
             DB_PATH=$(grep -E '^DB_DATABASE=' .env | tail -1 | cut -d= -f2- | tr -d '\r\"')
             if [ -z "$DB_PATH" ]; then DB_PATH="database/database.sqlite"; fi
@@ -53,19 +53,15 @@ jobs:
             export DB_PATH
             php -r '
               $dbPath = getenv("DB_PATH");
-              if (!is_file($dbPath)) { echo "DIAG_DB_NOT_FOUND".PHP_EOL; exit(0); }
+              if (!is_file($dbPath)) { fwrite(STDERR, "DB not found\n"); exit(1); }
               $pdo = new PDO("sqlite:".$dbPath);
               $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-              $count = $pdo->query("SELECT COUNT(*) FROM investment_opportunities")->fetchColumn();
-              echo "DIAG_COUNT=".$count.PHP_EOL;
-              $cols = $pdo->query("PRAGMA table_info(investment_opportunities)")->fetchAll(PDO::FETCH_ASSOC);
-              $hasUser = false; foreach ($cols as $c) { if (($c["name"] ?? "") === "user_id") $hasUser = true; }
-              $select = $hasUser ? "id, reference_number, user_id, account_id, status, created_at" : "id, reference_number, NULL AS user_id, account_id, status, created_at";
-              $stmt = $pdo->prepare("SELECT ".$select." FROM investment_opportunities WHERE lower(reference_number) LIKE lower(?) OR lower(reference_number) LIKE lower(?) ORDER BY id DESC LIMIT 20");
-              $stmt->execute(["%WKCK%", "%803%"]);
-              echo "DIAG_SIMILAR=".json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
-              $rows = $pdo->query("SELECT ".$select." FROM investment_opportunities ORDER BY id DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
-              echo "DIAG_LATEST=".json_encode($rows, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+              $stmt = $pdo->prepare("UPDATE investment_opportunities SET reference_number = ?, title = ?, updated_at = datetime(\"now\") WHERE id = ? AND user_id = ? AND reference_number = ?");
+              $stmt->execute(["ER-WKCK803", "تعميد - ER-WKCK803", 271, 1, "ER-WKCK8O3"]);
+              echo "TA3MEED_REFERENCE_FIXED_ROWS=".$stmt->rowCount().PHP_EOL;
+              $check = $pdo->prepare("SELECT id, reference_number, user_id, account_id, status FROM investment_opportunities WHERE id = ?");
+              $check->execute([271]);
+              echo "TA3MEED_REFERENCE_CHECK=".json_encode($check->fetch(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
             '
             cd "$AHMED_PROJECT_PATH"
 
