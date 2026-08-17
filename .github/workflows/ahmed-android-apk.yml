@@ -37,7 +37,7 @@ jobs:
           java-version: 17
 
       - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Normalize Expo PNG assets
         run: |
@@ -97,4 +97,4 @@ jobs:
           path: ahmed-mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-# build trigger 2026-08-17 14:17 Asia/Riyadh
+# build trigger 2026-08-17 14:20 Asia/Riyadh
