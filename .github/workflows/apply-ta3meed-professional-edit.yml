@@ -1,0 +1,45 @@
+name: Apply Ta3meed Professional Edit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/patch-ta3meed-professional-edit.py'
+      - '.github/workflows/apply-ta3meed-professional-edit.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip professional edit]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply professional edit UI
+        run: python3 scripts/patch-ta3meed-professional-edit.py
+
+      - name: Verify expected UI markers
+        run: |
+          grep -F "onEditOpportunity={handleEdit}" ahmed-mobile/Ta3meedNoResetFilterScreen.js
+          grep -F "نفس نموذج الإضافة مع البيانات الحالية" ahmed-mobile/Ta3meedNoResetFilterScreen.js
+          grep -F "حفظ التعديل" ahmed-mobile/Ta3meedNoResetFilterScreen.js
+          grep -F "onEdit={onEditOpportunity || openOpportunityEdit}" ahmed-mobile/Ta3meedCompactFiltersScreen.js
+
+      - name: Commit source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/Ta3meedCompactFiltersScreen.js ahmed-mobile/Ta3meedNoResetFilterScreen.js
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Make Ta3meed edit match add form [skip professional edit]"
+            git push
+          fi
