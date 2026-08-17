@@ -100,7 +100,8 @@ return new class extends Migration
                 throw new RuntimeException("جدول شقة الورود لا يساوي المتبقي: {$scheduledTotal} بدل {$remainingAmount}");
             }
 
-            foreach (array_chunk($rows, 100) as $chunk) {
+            // Keep each multi-row INSERT below SQLite's bind-variable limit.
+            foreach (array_chunk($rows, 80) as $chunk) {
                 DB::table('debt_installments')->insert($chunk);
             }
         });
