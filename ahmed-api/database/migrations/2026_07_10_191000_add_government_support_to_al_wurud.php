@@ -120,7 +120,9 @@ return new class extends Migration
                 throw new RuntimeException("جدول شقة الورود لا يساوي المتبقي: {$scheduledTotal} بدل {$remainingAmount}");
             }
 
-            foreach (array_chunk($rows, 100) as $chunk) {
+            // SQLite's default bind-variable ceiling is commonly 999. Each row has
+            // 10 columns, so keep every bulk insert comfortably below that ceiling.
+            foreach (array_chunk($rows, 80) as $chunk) {
                 DB::table('debt_installments')->insert($chunk);
             }
         });
