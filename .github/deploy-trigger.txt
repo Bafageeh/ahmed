@@ -1,1 +1,1 @@
-trigger professional ta3meed edit ui deploy 2026-08-17
+trigger ta3meed overdue unsettled card styling deploy 2026-08-17
