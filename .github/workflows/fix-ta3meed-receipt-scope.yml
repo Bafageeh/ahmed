@@ -1,4 +1,4 @@
-name: Inspect Ta3meed RBOI322
+name: Fix Ta3meed Receipt Scope
 
 on:
   workflow_dispatch:
@@ -8,20 +8,32 @@ on:
     paths:
       - '.github/workflows/fix-ta3meed-receipt-scope.yml'
 
+permissions:
+  contents: write
+
 jobs:
-  inspect:
+  patch:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect live Ta3meed records
-        uses: appleboy/ssh-action@v1.2.0
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          host: ${{ secrets.AHMED_SSH_HOST }}
-          username: ${{ secrets.AHMED_SSH_USER }}
-          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
-          port: 2222
-          script: |
-            set -e
-            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
-            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then PROJECT="/home/pmsa/apps/ahmed"; fi
-            cd "$PROJECT/ahmed-api"
-            php artisan tinker --execute='$rows=DB::table("investment_opportunities")->whereRaw("UPPER(REPLACE(reference_number, \"-\", \"\")) = ?", ["RBOI322"])->get(["id","user_id","reference_number","status","principal_amount","expected_profit_amount","actual_profit_amount","metadata"]); foreach($rows as $r){ echo "OPP ".json_encode($r, JSON_UNESCAPED_UNICODE).PHP_EOL; $receipts=DB::table("ta3meed_receipts")->where("opportunity_id",$r->id)->get(["id","user_id","amount","receipt_type","receipt_date","reference_number"]); echo "RECEIPTS ".json_encode($receipts, JSON_UNESCAPED_UNICODE).PHP_EOL; $allocs=DB::table("investment_opportunity_allocations")->where("opportunity_id",$r->id)->get(["id","user_id","invested_amount","expected_profit_amount","actual_profit_amount","received_amount","status"]); echo "ALLOCS ".json_encode($allocs, JSON_UNESCAPED_UNICODE).PHP_EOL; }'
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch controller
+        run: python3 scripts/fix-ta3meed-receipt-scope.py
+
+      - name: Validate controller
+        run: php -l ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php
+
+      - name: Commit controller fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Fix Ta3meed receipt user isolation"
+            git push
+          fi
