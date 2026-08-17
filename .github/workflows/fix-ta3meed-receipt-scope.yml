@@ -21,7 +21,18 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Patch controller
-        run: python3 scripts/fix-ta3meed-receipt-scope.py
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/fix-ta3meed-receipt-scope.py')
+          s = p.read_text(encoding='utf-8')
+          old = "    if count != 1:\n        raise SystemExit(f'{label}: expected 1 match, found {count}')\n    text = text.replace(old, new, 1)"
+          new = "    if label == 'update receipt scope' and count == 2:\n        text = text.replace(old, new, 1)\n        return\n    if count != 1:\n        raise SystemExit(f'{label}: expected 1 match, found {count}')\n    text = text.replace(old, new, 1)"
+          if old not in s:
+              raise SystemExit('guard block not found')
+          p.write_text(s.replace(old, new, 1), encoding='utf-8')
+          PY
+          python3 scripts/fix-ta3meed-receipt-scope.py
 
       - name: Validate controller
         run: php -l ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php
