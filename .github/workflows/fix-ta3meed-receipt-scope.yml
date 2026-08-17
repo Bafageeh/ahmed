@@ -1,4 +1,4 @@
-name: Fix Ta3meed Receipt Scope
+name: Repair Ta3meed RBOI322 Totals
 
 on:
   workflow_dispatch:
@@ -8,43 +8,20 @@ on:
     paths:
       - '.github/workflows/fix-ta3meed-receipt-scope.yml'
 
-permissions:
-  contents: write
-
 jobs:
-  patch:
+  repair:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Repair live RBOI322 receipt totals
+        uses: appleboy/ssh-action@v1.2.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Patch controller
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('scripts/fix-ta3meed-receipt-scope.py')
-          s = p.read_text(encoding='utf-8')
-          old = "    if count != 1:\n        raise SystemExit(f'{label}: expected 1 match, found {count}')\n    text = text.replace(old, new, 1)"
-          new = "    if label == 'update receipt scope' and count == 2:\n        text = text.replace(old, new, 1)\n        return\n    if count != 1:\n        raise SystemExit(f'{label}: expected 1 match, found {count}')\n    text = text.replace(old, new, 1)"
-          if old not in s:
-              raise SystemExit('guard block not found')
-          p.write_text(s.replace(old, new, 1), encoding='utf-8')
-          PY
-          python3 scripts/fix-ta3meed-receipt-scope.py
-
-      - name: Validate controller
-        run: php -l ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php
-
-      - name: Commit controller fix
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Fix Ta3meed receipt user isolation"
-            git push
-          fi
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then PROJECT="/home/pmsa/apps/ahmed"; fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='$opps=DB::table("investment_opportunities")->whereRaw("UPPER(REPLACE(reference_number, \"-\", \"\")) = ?", ["RBOI322"])->get(); foreach($opps as $o){ $uid=(int)($o->user_id ?? 0); $rq=DB::table("ta3meed_receipts")->where("opportunity_id",$o->id); if($uid>0 && Schema::hasColumn("ta3meed_receipts","user_id")){$rq->where("user_id",$uid);} $receipts=$rq->get(); $total=round((float)$receipts->sum("amount"),2); $expected=round((float)$o->principal_amount+(float)$o->expected_profit_amount,2); $hasFinal=$receipts->contains(function($r){return in_array(strtolower(trim((string)$r->receipt_type)),["full","early_settlement"],true);}); $complete=$hasFinal || ($expected>0 && $total >= $expected-0.01); $status=$complete?"received":($total>0?"partial_received":"active"); $actual=$complete?round($total-(float)$o->principal_amount,2):0; $diff=$complete?round($total-$expected,2):0; $remaining=$complete?0:max(0,round($expected-$total,2)); $meta=json_decode($o->metadata ?: "{}",true); if(!is_array($meta)){$meta=[];} $meta["ta3meed_received_total"]=$total; $meta["ta3meed_remaining_amount"]=$remaining; $meta["ta3meed_expected_total"]=$expected; $meta["ta3meed_settlement_difference"]=$diff; $meta["ta3meed_settlement_note"]=$diff<0?"تسوية مبكرة أقل من المتوقع":($diff>0?"تسوية أعلى من المتوقع":null); $update=["status"=>$status,"actual_profit_amount"=>$actual,"metadata"=>json_encode($meta,JSON_UNESCAPED_UNICODE),"updated_at"=>now()]; if(Schema::hasColumn("investment_opportunities","completed_at")){$update["completed_at"]=$complete?($o->completed_at ?: now()->toDateString()):null;} if(Schema::hasColumn("investment_opportunities","received_at")){$update["received_at"]=$complete?($o->received_at ?: now()->toDateString()):null;} DB::table("investment_opportunities")->where("id",$o->id)->update($update); $aq=DB::table("investment_opportunity_allocations")->where("opportunity_id",$o->id); if($uid>0 && Schema::hasColumn("investment_opportunity_allocations","user_id")){$aq->where("user_id",$uid);} foreach($aq->get() as $a){$raq=DB::table("ta3meed_receipt_allocations")->where("allocation_id",$a->id); if($uid>0 && Schema::hasColumn("ta3meed_receipt_allocations","user_id")){$raq->where("user_id",$uid);} $received=round((float)$raq->sum("received_amount"),2); DB::table("investment_opportunity_allocations")->where("id",$a->id)->update(["received_amount"=>$received,"actual_profit_amount"=>$complete?round($received-(float)$a->invested_amount,2):0,"status"=>$status,"updated_at"=>now()]); } echo "REPAIRED id={$o->id} user={$uid} status={$status} received={$total} remaining={$remaining}".PHP_EOL; }'
