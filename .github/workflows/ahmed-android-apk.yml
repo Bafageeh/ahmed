@@ -97,4 +97,4 @@ jobs:
           path: ahmed-mobile/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
-# build trigger 2026-08-12
+# build trigger 2026-08-17 14:17 Asia/Riyadh
