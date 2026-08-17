@@ -925,6 +925,10 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
       ? `متبقي ${remainingDaysValue} يوم`
       : `متأخر ${Math.abs(remainingDaysValue)} يوم`;
   const durationBadgeText = raisedMonths ? `الشهور ${raisedMonths}` : '';
+  const isOverdueUnsettled = remainingDaysValue !== null
+    && remainingDaysValue < 0
+    && remaining > 0.009
+    && status.key !== 'received';
 
   const sortedReceipts = [...receipts].sort((a, b) => String(b.receipt_date || b.created_at || '').localeCompare(String(a.receipt_date || a.created_at || '')));
 
@@ -1049,7 +1053,10 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
   };
 
   return (
-    <View style={[styles.card, { borderColor: status.color }]}>
+    <View style={[
+      styles.card,
+      isOverdueUnsettled ? styles.overdueUnsettledCard : { borderColor: status.color },
+    ]}>
       <View style={styles.opportunityHeader}>
         <View style={styles.headerRightMeta}>
           <View style={[styles.categoryTopPill, { backgroundColor: tone.color }]}>
@@ -1087,7 +1094,7 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
         ) : null}
       </View>
 
-      <View style={styles.summaryDashboard}>
+      <View style={[styles.summaryDashboard, isOverdueUnsettled && styles.overdueUnsettledSurface]}>
         <View style={styles.amountHero}>
           <Text style={styles.amountHeroLabel}>المبلغ</Text>
           <Text style={styles.amountHeroValue} numberOfLines={1}>{money(item.principal_amount)}</Text>
@@ -1119,8 +1126,12 @@ function Ta3meedCard({ item, open, onToggle, onDeleteReceipt, deletingReceiptId,
         </View>
       ) : null}
 
-      <TouchableOpacity style={styles.detailsButton} onPress={onToggle} activeOpacity={0.85}>
-        <Text style={styles.detailsButtonText}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text>
+      <TouchableOpacity
+        style={[styles.detailsButton, isOverdueUnsettled && styles.overdueDetailsButton]}
+        onPress={onToggle}
+        activeOpacity={0.85}
+      >
+        <Text style={[styles.detailsButtonText, isOverdueUnsettled && styles.overdueDetailsButtonText]}>{open ? 'إخفاء التفاصيل' : 'تفاصيل وسجل الدفعات'}</Text>
       </TouchableOpacity>
 
       {open ? (
@@ -1755,6 +1766,21 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     padding: 12,
     overflow: 'hidden',
+  },
+  overdueUnsettledCard: {
+    backgroundColor: '#fff1f2',
+    borderColor: '#f87171',
+  },
+  overdueUnsettledSurface: {
+    backgroundColor: '#fff7f7',
+    borderColor: '#fecaca',
+  },
+  overdueDetailsButton: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#fca5a5',
+  },
+  overdueDetailsButtonText: {
+    color: '#b91c1c',
   },
   opportunityHeader: {
     flexDirection: 'row-reverse',
