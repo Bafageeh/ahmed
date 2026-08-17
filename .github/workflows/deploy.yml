@@ -28,8 +28,6 @@ jobs:
             export AHMED_DOMAIN="ahmed.pm.sa"
             export AHMED_EXPO_PORT="8082"
 
-            # داخل jailshell لحساب pmsa المسار الصحيح هو /home/pmsa/apps/ahmed.
-            # المسار /mnt/home-storage/... يعمل غالبًا من root فقط وقد يفشل في SSH Action.
             if [ -z "$AHMED_PROJECT_PATH" ] || [ ! -d "$AHMED_PROJECT_PATH" ]; then
               if [ -d "/home/pmsa/apps/ahmed" ]; then
                 export AHMED_PROJECT_PATH="/home/pmsa/apps/ahmed"
@@ -37,21 +35,17 @@ jobs:
                 export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
               else
                 echo "ERROR: Ahmed project path not found"
-                echo "Tried: $AHMED_PROJECT_PATH"
-                echo "Tried: /home/pmsa/apps/ahmed"
-                echo "Tried: /mnt/home-storage/home/pmsa/apps/ahmed"
                 exit 1
               fi
             fi
 
             cd "$AHMED_PROJECT_PATH"
-
             echo "[Ahmed Deploy] Project path: $AHMED_PROJECT_PATH"
             echo "[Ahmed Deploy] Bootstrap latest files from GitHub"
             git fetch origin main
             git reset --hard origin/main
 
-            echo "[Ta3meed Diagnostic] Looking up ER-WKCK803"
+            echo "[Ta3meed Diagnostic] Inspecting missing/new references"
             cd "$AHMED_PROJECT_PATH/ahmed-api"
             DB_PATH=$(grep -E '^DB_DATABASE=' .env | tail -1 | cut -d= -f2- | tr -d '\r\"')
             if [ -z "$DB_PATH" ]; then DB_PATH="database/database.sqlite"; fi
@@ -59,22 +53,23 @@ jobs:
             export DB_PATH
             php -r '
               $dbPath = getenv("DB_PATH");
-              echo "DB=".$dbPath.PHP_EOL;
               if (!is_file($dbPath)) { echo "DIAG_DB_NOT_FOUND".PHP_EOL; exit(0); }
               $pdo = new PDO("sqlite:".$dbPath);
               $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+              $count = $pdo->query("SELECT COUNT(*) FROM investment_opportunities")->fetchColumn();
+              echo "DIAG_COUNT=".$count.PHP_EOL;
               $cols = $pdo->query("PRAGMA table_info(investment_opportunities)")->fetchAll(PDO::FETCH_ASSOC);
               $hasUser = false; foreach ($cols as $c) { if (($c["name"] ?? "") === "user_id") $hasUser = true; }
-              $sql = $hasUser
-                ? "SELECT io.id, io.reference_number, io.user_id, io.account_id, io.status, io.created_at, u.name AS user_name, u.username AS username FROM investment_opportunities io LEFT JOIN users u ON u.id = io.user_id WHERE lower(trim(io.reference_number)) = lower(trim(?)) ORDER BY io.id DESC"
-                : "SELECT io.id, io.reference_number, NULL AS user_id, io.account_id, io.status, io.created_at, NULL AS user_name, NULL AS username FROM investment_opportunities io WHERE lower(trim(io.reference_number)) = lower(trim(?)) ORDER BY io.id DESC";
-              $stmt = $pdo->prepare($sql); $stmt->execute(["ER-WKCK803"]); $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-              echo "DIAG_ROWS=".json_encode($rows, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+              $select = $hasUser ? "id, reference_number, user_id, account_id, status, created_at" : "id, reference_number, NULL AS user_id, account_id, status, created_at";
+              $stmt = $pdo->prepare("SELECT ".$select." FROM investment_opportunities WHERE lower(reference_number) LIKE lower(?) OR lower(reference_number) LIKE lower(?) ORDER BY id DESC LIMIT 20");
+              $stmt->execute(["%WKCK%", "%803%"]);
+              echo "DIAG_SIMILAR=".json_encode($stmt->fetchAll(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
+              $rows = $pdo->query("SELECT ".$select." FROM investment_opportunities ORDER BY id DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
+              echo "DIAG_LATEST=".json_encode($rows, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
             '
             cd "$AHMED_PROJECT_PATH"
 
             chmod +x scripts/restart-ahmed-expo-clean.sh scripts/deploy-ahmed.sh 2>/dev/null || true
-
             if [ -f scripts/restart-ahmed-expo-clean.sh ]; then
               bash scripts/restart-ahmed-expo-clean.sh
             else
