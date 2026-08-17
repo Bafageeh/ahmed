@@ -342,7 +342,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
+export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onEditOpportunity }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -783,7 +783,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore }) {
           <Text style={styles.sectionTitle}>فرص تعميد</Text>
         </View>
 
-        {filteredItems.map((item) => <Ta3meedCard key={String(item.id)} item={item} open={expandedId === item.id} onToggle={() => setExpandedId((current) => current === item.id ? null : item.id)} onDeleteReceipt={deleteReceipt} deletingReceiptId={deletingReceiptId} editingReceiptId={editingReceiptId} editingReceiptDate={editingReceiptDate} setEditingReceiptDate={setEditingReceiptDate} startEditReceiptDate={startEditReceiptDate} cancelEditReceiptDate={cancelEditReceiptDate} saveReceiptDate={saveReceiptDate} savingReceiptDateId={savingReceiptDateId} editingWithdrawalId={editingWithdrawalId} editingWithdrawalDate={editingWithdrawalDate} setEditingWithdrawalDate={setEditingWithdrawalDate} startEditWithdrawalDate={startEditWithdrawalDate} cancelEditWithdrawalDate={cancelEditWithdrawalDate} saveWithdrawalDate={saveWithdrawalDate} savingWithdrawalId={savingWithdrawalId} onEdit={openOpportunityEdit} />)}
+        {filteredItems.map((item) => <Ta3meedCard key={String(item.id)} item={item} open={expandedId === item.id} onToggle={() => setExpandedId((current) => current === item.id ? null : item.id)} onDeleteReceipt={deleteReceipt} deletingReceiptId={deletingReceiptId} editingReceiptId={editingReceiptId} editingReceiptDate={editingReceiptDate} setEditingReceiptDate={setEditingReceiptDate} startEditReceiptDate={startEditReceiptDate} cancelEditReceiptDate={cancelEditReceiptDate} saveReceiptDate={saveReceiptDate} savingReceiptDateId={savingReceiptDateId} editingWithdrawalId={editingWithdrawalId} editingWithdrawalDate={editingWithdrawalDate} setEditingWithdrawalDate={setEditingWithdrawalDate} startEditWithdrawalDate={startEditWithdrawalDate} cancelEditWithdrawalDate={cancelEditWithdrawalDate} saveWithdrawalDate={saveWithdrawalDate} savingWithdrawalId={savingWithdrawalId} onEdit={onEditOpportunity || openOpportunityEdit} />)}
 
         {!loading && filteredItems.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>لا توجد فرص مطابقة</Text><Text style={styles.emptyText}>غيّر المستثمر أو التصنيف أو الحالة.</Text></View> : null}
       </ScrollView>
