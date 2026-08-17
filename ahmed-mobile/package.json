@@ -10,20 +10,20 @@
     "web:export": "expo export --platform web --output-dir dist-web"
   },
   "dependencies": {
-    "@expo/metro-runtime": "latest",
+    "@expo/metro-runtime": "^57.0.0",
     "@expo/vector-icons": "^15.0.3",
-    "expo": "55.0.0",
-    "expo-image-manipulator": "~55.0.16",
-    "expo-image-picker": "~55.0.20",
-    "expo-local-authentication": "~55.0.14",
-    "expo-secure-store": "*",
-    "expo-status-bar": "latest",
+    "expo": "~57.0.9",
+    "expo-image-manipulator": "~57.0.5",
+    "expo-image-picker": "~57.0.5",
+    "expo-local-authentication": "~57.0.1",
+    "expo-secure-store": "~57.0.1",
+    "expo-status-bar": "~57.0.1",
     "lucide-react-native": "^1.16.0",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-native": "0.83.2",
-    "react-native-svg": "^15.15.5",
-    "react-native-web": "latest"
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.2",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "~0.21.0"
   },
   "private": true,
   "devDependencies": {
