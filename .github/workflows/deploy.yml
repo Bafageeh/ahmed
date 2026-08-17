@@ -28,6 +28,8 @@ jobs:
             export AHMED_DOMAIN="ahmed.pm.sa"
             export AHMED_EXPO_PORT="8082"
 
+            # داخل jailshell لحساب pmsa المسار الصحيح هو /home/pmsa/apps/ahmed.
+            # المسار /mnt/home-storage/... يعمل غالبًا من root فقط وقد يفشل في SSH Action.
             if [ -z "$AHMED_PROJECT_PATH" ] || [ ! -d "$AHMED_PROJECT_PATH" ]; then
               if [ -d "/home/pmsa/apps/ahmed" ]; then
                 export AHMED_PROJECT_PATH="/home/pmsa/apps/ahmed"
@@ -35,37 +37,22 @@ jobs:
                 export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
               else
                 echo "ERROR: Ahmed project path not found"
+                echo "Tried: $AHMED_PROJECT_PATH"
+                echo "Tried: /home/pmsa/apps/ahmed"
+                echo "Tried: /mnt/home-storage/home/pmsa/apps/ahmed"
                 exit 1
               fi
             fi
 
             cd "$AHMED_PROJECT_PATH"
+
             echo "[Ahmed Deploy] Project path: $AHMED_PROJECT_PATH"
             echo "[Ahmed Deploy] Bootstrap latest files from GitHub"
             git fetch origin main
             git reset --hard origin/main
 
-            echo "[Ta3meed Fix] Correcting ER-WKCK8O3 -> ER-WKCK803 for Ahmed"
-            cd "$AHMED_PROJECT_PATH/ahmed-api"
-            DB_PATH=$(grep -E '^DB_DATABASE=' .env | tail -1 | cut -d= -f2- | tr -d '\r\"')
-            if [ -z "$DB_PATH" ]; then DB_PATH="database/database.sqlite"; fi
-            if [ "${DB_PATH#/}" = "$DB_PATH" ]; then DB_PATH="$PWD/$DB_PATH"; fi
-            export DB_PATH
-            php -r '
-              $dbPath = getenv("DB_PATH");
-              if (!is_file($dbPath)) { fwrite(STDERR, "DB not found\n"); exit(1); }
-              $pdo = new PDO("sqlite:".$dbPath);
-              $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-              $stmt = $pdo->prepare("UPDATE investment_opportunities SET reference_number = ?, title = ?, updated_at = datetime(\"now\") WHERE id = ? AND user_id = ? AND reference_number = ?");
-              $stmt->execute(["ER-WKCK803", "تعميد - ER-WKCK803", 271, 1, "ER-WKCK8O3"]);
-              echo "TA3MEED_REFERENCE_FIXED_ROWS=".$stmt->rowCount().PHP_EOL;
-              $check = $pdo->prepare("SELECT id, reference_number, user_id, account_id, status FROM investment_opportunities WHERE id = ?");
-              $check->execute([271]);
-              echo "TA3MEED_REFERENCE_CHECK=".json_encode($check->fetch(PDO::FETCH_ASSOC), JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
-            '
-            cd "$AHMED_PROJECT_PATH"
-
             chmod +x scripts/restart-ahmed-expo-clean.sh scripts/deploy-ahmed.sh 2>/dev/null || true
+
             if [ -f scripts/restart-ahmed-expo-clean.sh ]; then
               bash scripts/restart-ahmed-expo-clean.sh
             else
