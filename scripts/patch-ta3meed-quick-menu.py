@@ -137,10 +137,19 @@ def patch_ta3meed():
   moreFloatingButton: {'''
         text = text.replace(style_anchor, quick_styles, 1)
 
+    # Keep the header title centered while placing navigation icons at the screen edges.
+    text = text.replace("  backHeaderButton: { right: 22 },", "  backHeaderButton: { left: 22 },", 1)
+    text = text.replace("  searchHeaderButton: { left: 92 },", "  searchHeaderButton: { right: 22 },", 1)
+    text = text.replace("  searchHeaderButton: { left: 22 },", "  searchHeaderButton: { right: 22 },", 1)
+
     if 'اختصارات تعميد' not in text:
         raise RuntimeError('Ta3meed quick menu was not inserted')
     if 'floatingPayButton} onPress={() => setReceiptOpen(true)' in text:
         raise RuntimeError('Old top payment button still exists')
+    if "backHeaderButton: { left: 22 }" not in text:
+        raise RuntimeError('Ta3meed back button was not moved to the left edge')
+    if "searchHeaderButton: { right: 22 }" not in text:
+        raise RuntimeError('Ta3meed search button was not moved to the right edge')
 
     TA3MEED.write_text(text, encoding='utf-8')
 
