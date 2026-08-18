@@ -43,6 +43,8 @@ log "Applying Ta3meed company card patch"
 python3 scripts/patch-ta3meed-company-on-cards.py
 log "Applying Ta3meed company search patch"
 python3 scripts/patch-ta3meed-company-search.py
+log "Applying Ta3meed quick menu patch"
+python3 scripts/patch-ta3meed-quick-menu.py
 log "Applying COM S-121 fixed card patch"
 python3 scripts/patch-com-monthly-person-net-income.py
 log "Applying secure vault bank/site patch"
@@ -67,6 +69,22 @@ grep -n "companyCardLine" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/nul
   echo "ERROR: Ta3meed company card display is missing." >&2
   exit 1
 }
+grep -n "اختصارات تعميد" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" >/dev/null || {
+  echo "ERROR: Ta3meed quick menu patch is missing." >&2
+  exit 1
+}
+grep -n "onOpenInvestorAccounts" "$MOBILE_DIR/AppShell.js" >/dev/null || {
+  echo "ERROR: Ta3meed investor accounts navigation callback is missing." >&2
+  exit 1
+}
+if grep -q '<MenuRow title="استيراد صورة تعميد"' "$MOBILE_DIR/AppShell.js"; then
+  echo "ERROR: Ta3meed image import still exists in More screen." >&2
+  exit 1
+fi
+if grep -q '<MenuRow title="حسابات المستثمرين"' "$MOBILE_DIR/AppShell.js"; then
+  echo "ERROR: Ta3meed investor accounts still exists in More screen." >&2
+  exit 1
+fi
 grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/AppShell.js" >/dev/null || {
   echo "ERROR: AppShell does not point to Ta3meedNoResetFilterScreen.js" >&2
   exit 1
