@@ -4,57 +4,157 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   deploy:
-    name: Deploy to server
+    name: Apply Ta3meed quick menu
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.AHMED_SSH_HOST }}
-          username: ${{ secrets.AHMED_SSH_USER }}
-          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
-          port: 2222
-          script: |
-            set -e
-            export AHMED_PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
-            export AHMED_DOMAIN="ahmed.pm.sa"
-            export AHMED_EXPO_PORT="8082"
+          fetch-depth: 2
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-            # داخل jailshell لحساب pmsa المسار الصحيح هو /home/pmsa/apps/ahmed.
-            # المسار /mnt/home-storage/... يعمل غالبًا من root فقط وقد يفشل في SSH Action.
-            if [ -z "$AHMED_PROJECT_PATH" ] || [ ! -d "$AHMED_PROJECT_PATH" ]; then
-              if [ -d "/home/pmsa/apps/ahmed" ]; then
-                export AHMED_PROJECT_PATH="/home/pmsa/apps/ahmed"
-              elif [ -d "/mnt/home-storage/home/pmsa/apps/ahmed" ]; then
-                export AHMED_PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
-              else
-                echo "ERROR: Ahmed project path not found"
-                echo "Tried: $AHMED_PROJECT_PATH"
-                echo "Tried: /home/pmsa/apps/ahmed"
-                echo "Tried: /mnt/home-storage/home/pmsa/apps/ahmed"
-                exit 1
-              fi
-            fi
+      - name: Patch source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
 
-            cd "$AHMED_PROJECT_PATH"
+          ta = Path('ahmed-mobile/Ta3meedCompactFiltersScreen.js')
+          text = ta.read_text()
 
-            echo "[Ahmed Deploy] Project path: $AHMED_PROJECT_PATH"
-            echo "[Ahmed Deploy] Bootstrap latest files from GitHub"
-            git fetch origin main
-            git reset --hard origin/main
+          old_sig = "export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onEditOpportunity }) {"
+          new_sig = "export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onEditOpportunity }) {"
+          if old_sig in text:
+              text = text.replace(old_sig, new_sig, 1)
 
-            chmod +x scripts/restart-ahmed-expo-clean.sh scripts/deploy-ahmed.sh 2>/dev/null || true
+          anchor = "  const [receiptOpen, setReceiptOpen] = useState(false);\n"
+          if "const [quickMenuOpen, setQuickMenuOpen]" not in text:
+              assert anchor in text
+              text = text.replace(anchor, anchor + "  const [quickMenuOpen, setQuickMenuOpen] = useState(false);\n", 1)
 
-            if [ -f scripts/restart-ahmed-expo-clean.sh ]; then
-              bash scripts/restart-ahmed-expo-clean.sh
-            else
-              bash scripts/deploy-ahmed.sh
-            fi
+          pay = '''      <TouchableOpacity style={styles.floatingPayButton} onPress={() => setReceiptOpen(true)} activeOpacity={0.88}>
+        <Text style={styles.payText}>سداد</Text>
+      </TouchableOpacity>
+
+'''
+          text = text.replace(pay, '', 1)
+
+          old_more = '''      <TouchableOpacity
+        activeOpacity={0.86}
+        onPress={() => onOpenMore ? onOpenMore() : onBack?.()}
+        style={styles.moreFloatingButton}
+      >
+        <UiIcon name="more" size={27} color={ICON_COLOR_DARK} />
+      </TouchableOpacity>
+'''
+          new_more = '''      <TouchableOpacity
+        activeOpacity={0.86}
+        onPress={() => setQuickMenuOpen(true)}
+        style={styles.moreFloatingButton}
+        accessibilityRole="button"
+        accessibilityLabel="اختصارات تعميد"
+      >
+        <UiIcon name="more" size={27} color={ICON_COLOR_DARK} />
+      </TouchableOpacity>
+
+      <Modal visible={quickMenuOpen} transparent animationType="fade" onRequestClose={() => setQuickMenuOpen(false)}>
+        <View style={styles.quickMenuOverlay}>
+          <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFillObject} onPress={() => setQuickMenuOpen(false)} />
+          <View style={styles.quickMenuCard}>
+            <View style={styles.quickMenuHeader}>
+              <TouchableOpacity style={styles.quickMenuClose} onPress={() => setQuickMenuOpen(false)} activeOpacity={0.82}>
+                <Text style={styles.quickMenuCloseText}>×</Text>
+              </TouchableOpacity>
+              <View style={styles.quickMenuHeaderText}>
+                <Text style={styles.quickMenuTitle}>اختصارات تعميد</Text>
+                <Text style={styles.quickMenuSubtitle}>وصول سريع لأهم الأدوات والشاشات</Text>
+              </View>
+              <View style={styles.quickMenuHeaderIcon}><UiIcon name="more" size={22} color="#ffffff" /></View>
+            </View>
+
+            <View style={styles.quickMenuGrid}>
+              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); setReceiptOpen(true); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#ecfdf5' }]}><UiIcon name="payments" size={26} color="#0f766e" /></View>
+                <Text style={styles.quickMenuItemTitle}>السداد</Text>
+                <Text style={styles.quickMenuItemText}>إضافة واعتماد دفعة تعميد</Text>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenInvestments || onBack)?.(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f5f3ff' }]}><UiIcon name="investments" size={26} color="#7c3aed" /></View>
+                <Text style={styles.quickMenuItemTitle}>استثماراتي</Text>
+                <Text style={styles.quickMenuItemText}>العودة إلى منصات الاستثمار</Text>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenInvestorAccounts || onOpenMore)?.(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#eff6ff' }]}><UiIcon name="users" size={26} color="#2563eb" /></View>
+                <Text style={styles.quickMenuItemTitle}>حسابات المستثمرين</Text>
+                <Text style={styles.quickMenuItemText}>الحركات والأرصدة والتفاصيل</Text>
+              </TouchableOpacity>
+              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenImageImport || onOpenMore)?.(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#fff7ed' }]}><UiIcon name="ta3meed" size={26} color="#c2410c" /></View>
+                <Text style={styles.quickMenuItemTitle}>استيراد صورة تعميد</Text>
+                <Text style={styles.quickMenuItemText}>قراءة بيانات الفرصة من الصورة</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+'''
+          if old_more in text:
+              text = text.replace(old_more, new_more, 1)
+
+          style_anchor = "const styles = StyleSheet.create({\n\n  moreFloatingButton: {"
+          if "quickMenuOverlay:" not in text:
+              style_insert = '''const styles = StyleSheet.create({
+
+  quickMenuOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.38)', justifyContent: 'flex-end', paddingHorizontal: 14, paddingBottom: 92 },
+  quickMenuCard: { width: '100%', maxWidth: 560, alignSelf: 'center', backgroundColor: '#ffffff', borderRadius: 26, borderWidth: 1, borderColor: '#e2e8f0', padding: 14, elevation: 22, shadowColor: '#0f172a', shadowOpacity: 0.24, shadowRadius: 24, shadowOffset: { width: 0, height: 12 } },
+  quickMenuHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  quickMenuClose: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  quickMenuCloseText: { color: '#475569', fontSize: 26, lineHeight: 28, fontWeight: '500' },
+  quickMenuHeaderText: { flex: 1, alignItems: 'flex-end', paddingHorizontal: 12 },
+  quickMenuTitle: { color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' },
+  quickMenuSubtitle: { marginTop: 3, color: '#64748b', fontSize: 11.5, fontWeight: '800', textAlign: 'right' },
+  quickMenuHeaderIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: '#312e81', alignItems: 'center', justifyContent: 'center' },
+  quickMenuGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
+  quickMenuItem: { flexBasis: '47%', flexGrow: 1, minHeight: 142, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20, padding: 12, alignItems: 'flex-end' },
+  quickMenuItemIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+  quickMenuItemTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900', textAlign: 'right' },
+  quickMenuItemText: { marginTop: 5, color: '#64748b', fontSize: 11.5, fontWeight: '700', lineHeight: 17, textAlign: 'right' },
+
+  moreFloatingButton: {'''
+              assert style_anchor in text
+              text = text.replace(style_anchor, style_insert, 1)
+
+          ta.write_text(text)
+
+          app = Path('ahmed-mobile/AppShell.js')
+          app_text = app.read_text()
+          old_route = "      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenMore={() => openTab('more')} />;"
+          new_route = "      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} />;"
+          app_text = app_text.replace(old_route, new_route, 1)
+          rows = '<MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment(\'ta3meedImageImport\')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment(\'ta3meedAccounts\')} />'
+          app_text = app_text.replace(rows, '', 1)
+          app.write_text(app_text)
+
+          assert 'اختصارات تعميد' in ta.read_text()
+          assert 'onOpenInvestorAccounts' in app.read_text()
+          assert '<MenuRow title="استيراد صورة تعميد"' not in app.read_text()
+          print('Ta3meed quick menu verified')
+          PY
+
+      - name: Restore deploy workflow and clean temporary files
+        shell: bash
+        run: |
+          git show HEAD^:.github/workflows/deploy.yml > .github/workflows/deploy.yml
+          rm -f .github/workflows/apply-ta3meed-quick-menu.yml .github/workflows/run-ta3meed-quick-menu.yml .github/ta3meed-quick-menu-trigger.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Add professional Ta3meed floating quick menu"
+          git push
