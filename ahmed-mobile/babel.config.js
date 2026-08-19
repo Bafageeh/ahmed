@@ -3,6 +3,9 @@ module.exports = function (api) {
 
   return {
     presets: ['babel-preset-expo'],
-    plugins: ['./babel-plugin-ahmed-appshell-fixes'],
+    plugins: [
+      './babel-plugin-ahmed-appshell-fixes',
+      './babel-plugin-debt-detail-extra-stats',
+    ],
   };
 };
