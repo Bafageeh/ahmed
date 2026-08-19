@@ -10,6 +10,29 @@ module.exports = function debtDetailExtraStatsPlugin({ types: t }) {
   const member = (name) => t.memberExpression(t.identifier('debt'), t.identifier(name));
   const call = (name, args) => t.callExpression(t.identifier(name), args);
 
+  const lastInstallmentAmount = () => {
+    const installments = member('installments');
+    const isArray = t.callExpression(
+      t.memberExpression(t.identifier('Array'), t.identifier('isArray')),
+      [t.cloneNode(installments, true)],
+    );
+    const length = t.memberExpression(t.cloneNode(installments, true), t.identifier('length'));
+    const hasInstallments = t.logicalExpression(
+      '&&',
+      isArray,
+      t.binaryExpression('>', t.cloneNode(length, true), t.numericLiteral(0)),
+    );
+    const lastIndex = t.binaryExpression('-', t.cloneNode(length, true), t.numericLiteral(1));
+    const lastInstallment = t.memberExpression(t.cloneNode(installments, true), lastIndex, true);
+    const scheduledAmount = t.memberExpression(lastInstallment, t.identifier('scheduled_amount'));
+
+    return t.conditionalExpression(
+      hasInstallments,
+      call('money', [scheduledAmount]),
+      t.stringLiteral('-'),
+    );
+  };
+
   const styleAttrName = (openingElement) => {
     if (!openingElement) return null;
     const attr = openingElement.attributes.find((attribute) => (
@@ -167,7 +190,7 @@ module.exports = function debtDetailExtraStatsPlugin({ types: t }) {
               if (!isDetailStatsGrid(grid)) return;
 
               const stats = [
-                ['الدفعة الأولى', call('money', [member('down_payment')])],
+                ['الدفعة الأخيرة', lastInstallmentAmount()],
                 ['تاريخ البدء', t.conditionalExpression(
                   member('contract_date'),
                   call('dateLabel', [member('contract_date')]),
