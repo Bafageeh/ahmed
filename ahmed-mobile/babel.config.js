@@ -6,6 +6,7 @@ module.exports = function (api) {
     plugins: [
       './babel-plugin-ahmed-appshell-fixes',
       './babel-plugin-debt-detail-extra-stats',
+      './babel-plugin-debt-header-safe-area',
     ],
   };
 };
