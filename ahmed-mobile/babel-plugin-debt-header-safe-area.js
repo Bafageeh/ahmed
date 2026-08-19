@@ -1,63 +1,192 @@
 'use strict';
 
-module.exports = function debtHeaderSafeAreaPlugin() {
+module.exports = function debtHeaderSafeAreaPlugin({ types: t, template }) {
+  const isTargetFile = (state) => {
+    const filename = (state && state.file && state.file.opts && state.file.opts.filename) || '';
+    return filename.replace(/\\/g, '/').endsWith('/DebtsLoansScreen.js');
+  };
+
+  const styleMember = (name) => t.memberExpression(t.identifier('styles'), t.identifier(name));
+
+  const styleAttributeName = (element) => {
+    const attribute = element.openingElement.attributes.find((item) => (
+      t.isJSXAttribute(item)
+      && t.isJSXIdentifier(item.name, { name: 'style' })
+      && t.isJSXExpressionContainer(item.value)
+    ));
+    if (!attribute) return null;
+    const expression = attribute.value.expression;
+    if (!t.isMemberExpression(expression) || !t.isIdentifier(expression.object, { name: 'styles' })) return null;
+    return t.isIdentifier(expression.property) ? expression.property.name : null;
+  };
+
+  const jsxText = (styleExpression, text) => t.jsxElement(
+    t.jsxOpeningElement(
+      t.jsxIdentifier('Text'),
+      [t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(styleExpression))],
+      false,
+    ),
+    t.jsxClosingElement(t.jsxIdentifier('Text')),
+    [t.jsxText(text)],
+    false,
+  );
+
+  const mainTitleNode = () => t.jsxElement(
+    t.jsxOpeningElement(
+      t.jsxIdentifier('View'),
+      [t.jsxAttribute(t.jsxIdentifier('style'), t.jsxExpressionContainer(styleMember('topTitleWrap')))],
+      false,
+    ),
+    t.jsxClosingElement(t.jsxIdentifier('View')),
+    [
+      jsxText(t.arrayExpression([styleMember('topTitle'), styleMember('mainTopTitle')]), 'ديوني'),
+      jsxText(styleMember('screenCode'), '#S-124'),
+    ],
+    false,
+  );
+
+  const objectExpression = (code) => template.expression.ast(`(${code})`);
+
+  const setStyle = (stylesObject, name, value) => {
+    const property = stylesObject.properties.find((item) => (
+      t.isObjectProperty(item)
+      && ((t.isIdentifier(item.key) && item.key.name === name) || (t.isStringLiteral(item.key) && item.key.value === name))
+    ));
+
+    if (property) {
+      property.value = value;
+    } else {
+      stylesObject.properties.push(t.objectProperty(t.identifier(name), value));
+    }
+  };
+
   return {
     name: 'ahmed-debt-header-safe-area',
+    visitor: {
+      Program(path, state) {
+        if (!isTargetFile(state)) return;
 
-    parserOverride(code, parserOptions, parse) {
-      if (!code.includes('function DebtsScreen') || !code.includes('#S-124 ديوني')) {
-        return parse(code, parserOptions);
-      }
+        const reactNativeImport = path.node.body.find((node) => (
+          t.isImportDeclaration(node) && node.source.value === 'react-native'
+        ));
 
-      let source = code;
+        if (reactNativeImport) {
+          const hasPlatform = reactNativeImport.specifiers.some((specifier) => (
+            t.isImportSpecifier(specifier) && t.isIdentifier(specifier.local, { name: 'Platform' })
+          ));
+          const hasNativeStatusBar = reactNativeImport.specifiers.some((specifier) => (
+            t.isImportSpecifier(specifier) && t.isIdentifier(specifier.local, { name: 'NativeStatusBar' })
+          ));
 
-      // React Native SafeAreaView does not reliably protect Android edge-to-edge
-      // status bars on newer devices, so reserve the real Android status-bar height.
-      if (!source.includes('StatusBar as NativeStatusBar')) {
-        source = source.replace(
-          '  Modal,\n  RefreshControl,',
-          '  Modal,\n  Platform,\n  RefreshControl,\n  StatusBar as NativeStatusBar,',
-        );
-      }
+          if (!hasPlatform) {
+            reactNativeImport.specifiers.push(t.importSpecifier(t.identifier('Platform'), t.identifier('Platform')));
+          }
+          if (!hasNativeStatusBar) {
+            reactNativeImport.specifiers.push(t.importSpecifier(t.identifier('NativeStatusBar'), t.identifier('StatusBar')));
+          }
+        }
+      },
 
-      // Use a real invisible spacer instead of rendering a second white back button.
-      source = source.replace(
-        /<View style=\{styles\.backButton\} \/>/g,
-        '<View style={styles.topBarSpacer} />',
-      );
+      FunctionDeclaration(path, state) {
+        if (!isTargetFile(state)) return;
+        if (!path.node.id || path.node.id.name !== 'DebtsScreen') return;
 
-      // Keep the production title clean and make the internal screen id unobtrusive.
-      source = source.replace(
-        '<Text style={styles.topTitle}>#S-124 ديوني</Text>',
-        '<View style={styles.topTitleWrap}><Text style={[styles.topTitle, styles.mainTopTitle]}>ديوني</Text><Text style={styles.screenCode}>#S-124</Text></View>',
-      );
+        path.traverse({
+          JSXElement(jsxPath) {
+            const element = jsxPath.node;
+            const tagName = t.isJSXIdentifier(element.openingElement.name)
+              ? element.openingElement.name.name
+              : '';
+            const styleName = styleAttributeName(element);
 
-      source = source.replace(
-        "  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8, paddingBottom: 10 },",
-        "  topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 24) + 8 : 8, paddingBottom: 8, minHeight: Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 24) + 58 : 58 },",
-      );
+            if (tagName === 'View' && styleName === 'backButton' && element.openingElement.selfClosing) {
+              const styleAttribute = element.openingElement.attributes.find((item) => (
+                t.isJSXAttribute(item) && t.isJSXIdentifier(item.name, { name: 'style' })
+              ));
+              styleAttribute.value.expression = styleMember('topBarSpacer');
+              return;
+            }
 
-      source = source.replace(
-        "  backButton: { width: 52, height: 52, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },",
-        "  backButton: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },\n  topBarSpacer: { width: 44, height: 44 },\n  topTitleWrap: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },",
-      );
+            if (tagName === 'Text' && styleName === 'topTitle') {
+              const text = element.children
+                .filter((child) => t.isJSXText(child))
+                .map((child) => child.value)
+                .join('')
+                .trim();
 
-      source = source.replace(
-        "  topTitle: { color: '#0f172a', fontSize: 23, fontWeight: '900', textAlign: 'center' },",
-        "  topTitle: { flex: 1, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'center', textAlignVertical: 'center' },\n  mainTopTitle: { flex: 0 },\n  screenCode: { marginTop: 1, color: '#94a3b8', fontSize: 9, fontWeight: '800', letterSpacing: 0.2, textAlign: 'center' },",
-      );
+              if (text === '#S-124 ديوني') {
+                jsxPath.replaceWith(mainTitleNode());
+                jsxPath.skip();
+              }
+            }
+          },
+        });
+      },
 
-      // Normalize the first content position below the corrected header.
-      source = source.replace(
-        "  content: { padding: 18, paddingTop: 2, paddingBottom: 36 },",
-        "  content: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 36 },",
-      );
-      source = source.replace(
-        "  detailContent: { padding: 18, paddingTop: 2, paddingBottom: 40 },",
-        "  detailContent: { paddingHorizontal: 18, paddingTop: 6, paddingBottom: 40 },",
-      );
+      CallExpression(path, state) {
+        if (!isTargetFile(state)) return;
+        const callee = path.node.callee;
+        if (!t.isMemberExpression(callee)) return;
+        if (!t.isIdentifier(callee.object, { name: 'StyleSheet' }) || !t.isIdentifier(callee.property, { name: 'create' })) return;
 
-      return parse(source, parserOptions);
+        const stylesObject = path.node.arguments[0];
+        if (!t.isObjectExpression(stylesObject)) return;
+
+        setStyle(stylesObject, 'topBar', objectExpression(`{
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 16,
+          paddingTop: Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 24) + 8 : 8,
+          paddingBottom: 8,
+          minHeight: Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 24) + 58 : 58,
+        }`));
+
+        setStyle(stylesObject, 'backButton', objectExpression(`{
+          width: 44,
+          height: 44,
+          borderRadius: 15,
+          backgroundColor: '#ffffff',
+          borderWidth: 1,
+          borderColor: '#dbe3ea',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }`));
+
+        setStyle(stylesObject, 'topBarSpacer', objectExpression(`{ width: 44, height: 44 }`));
+        setStyle(stylesObject, 'topTitleWrap', objectExpression(`{
+          flex: 1,
+          minHeight: 44,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }`));
+        setStyle(stylesObject, 'topTitle', objectExpression(`{
+          flex: 1,
+          color: '#0f172a',
+          fontSize: 22,
+          fontWeight: '900',
+          textAlign: 'center',
+          textAlignVertical: 'center',
+        }`));
+        setStyle(stylesObject, 'mainTopTitle', objectExpression(`{ flex: 0 }`));
+        setStyle(stylesObject, 'screenCode', objectExpression(`{
+          marginTop: 1,
+          color: '#94a3b8',
+          fontSize: 9,
+          fontWeight: '800',
+          letterSpacing: 0.2,
+          textAlign: 'center',
+        }`));
+        setStyle(stylesObject, 'content', objectExpression(`{
+          paddingHorizontal: 18,
+          paddingTop: 6,
+          paddingBottom: 36,
+        }`));
+        setStyle(stylesObject, 'detailContent', objectExpression(`{
+          paddingHorizontal: 18,
+          paddingTop: 6,
+          paddingBottom: 40,
+        }`));
+      },
     },
   };
 };
