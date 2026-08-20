@@ -1,20 +1,23 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
-// Rendered directly in CreditCardDebtsScreen by the server-side source patch.
 const BANKS = [
-  { aliases: ['الانماء', 'الإنماء', 'alinma'], domain: 'alinma.com' },
-  { aliases: ['الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'], domain: 'alrajhibank.com.sa' },
-  { aliases: ['الاهلي', 'الأهلي', 'البنك الاهلي', 'البنك الأهلي', 'snb', 'saudi national bank'], domain: 'alahli.com' },
+  { aliases: ['الانماء', 'الإنماء', 'بنك الانماء', 'بنك الإنماء', 'مصرف الانماء', 'مصرف الإنماء', 'alinma'], domain: 'alinma.com' },
+  { aliases: ['الراجحي', 'بنك الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'], domain: 'alrajhibank.com.sa' },
+  { aliases: ['الاهلي', 'الأهلي', 'البنك الاهلي', 'البنك الأهلي', 'البنك الاهلي السعودي', 'البنك الأهلي السعودي', 'snb', 'saudi national bank'], domain: 'alahli.com' },
   { aliases: ['البلاد', 'بنك البلاد', 'bank albilad', 'albilad'], domain: 'bankalbilad.com' },
   { aliases: ['الرياض', 'بنك الرياض', 'riyad bank', 'riyadbank'], domain: 'riyadbank.com' },
-  { aliases: ['العربي', 'البنك العربي', 'anb', 'arab national bank'], domain: 'anb.com.sa' },
+  { aliases: ['العربي', 'البنك العربي', 'البنك العربي الوطني', 'anb', 'arab national bank'], domain: 'anb.com.sa' },
   { aliases: ['الجزيرة', 'بنك الجزيرة', 'bank aljazira', 'aljazira'], domain: 'bankaljazira.com' },
-  { aliases: ['الفرنسي', 'السعودي الفرنسي', 'بنك السعودي الفرنسي', 'bsf', 'banque saudi fransi'], domain: 'bsf.sa' },
-  { aliases: ['ساب', 'البنك السعودي الأول', 'sabb', 'sab', 'saudi awaal bank'], domain: 'sab.com' },
-  { aliases: ['السعودي للاستثمار', 'بنك الاستثمار', 'saib', 'saudi investment bank'], domain: 'saib.com.sa' },
+  { aliases: ['الفرنسي', 'البنك الفرنسي', 'السعودي الفرنسي', 'البنك السعودي الفرنسي', 'بنك السعودي الفرنسي', 'bsf', 'banque saudi fransi'], domain: 'bsf.sa' },
+  { aliases: ['ساب', 'الأول', 'الاول', 'البنك السعودي الأول', 'البنك السعودي الاول', 'sabb', 'sab', 'saudi awaal bank'], domain: 'sab.com' },
+  { aliases: ['السعودي للاستثمار', 'البنك السعودي للاستثمار', 'بنك الاستثمار', 'saib', 'saudi investment bank'], domain: 'saib.com.sa' },
+  { aliases: ['الخليج الدولي', 'بنك الخليج الدولي', 'بنك الخليج الدولي - السعودية', 'gib', 'gib saudi'], domain: 'gib.com' },
+  { aliases: ['اس تي سي', 'إس تي سي', 'بنك اس تي سي', 'بنك إس تي سي', 'stc bank', 'stcbank'], domain: 'stcbank.com.sa' },
+  { aliases: ['فيجن', 'بنك فيجن', 'vision bank', 'visionbank'], domain: 'visionbank.com.sa' },
+  { aliases: ['د360', 'د 360', 'بنك د360', 'بنك d360', 'd360'], domain: 'd360.com' },
+  { aliases: ['ايزي', 'آيزي', 'ايزي بنك', 'آيزي بنك', 'ez bank', 'ezbank'], domain: 'ezbank.sa' },
   { aliases: ['ميم', 'meem'], domain: 'meem.com.sa' },
-  { aliases: ['د360', 'd360'], domain: 'd360.com' },
 ];
 
 function normalize(value) {
@@ -34,6 +37,11 @@ function bankDomain(bankName) {
 export default function BankLogo({ bankName, size = 40 }) {
   const [failed, setFailed] = useState(false);
   const domain = useMemo(() => bankDomain(bankName), [bankName]);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [domain, bankName]);
+
   const source = domain
     ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
     : null;
