@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { SNB_LOGO_DATA_URI } from './snbLogoData';
 import { ANB_LOGO_DATA_URI } from './anbLogoData';
 
+// Embedded brand assets are always preferred for SNB and ANB.
 const BANKS = [
   { aliases: ['الانماء', 'الإنماء', 'بنك الانماء', 'بنك الإنماء', 'مصرف الانماء', 'مصرف الإنماء', 'alinma'], domain: 'alinma.com' },
   { aliases: ['الراجحي', 'بنك الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'], domain: 'alrajhibank.com.sa' },
