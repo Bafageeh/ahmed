@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
+// Rendered directly in CreditCardDebtsScreen by the server-side source patch.
 const BANKS = [
   { aliases: ['الانماء', 'الإنماء', 'alinma'], domain: 'alinma.com' },
   { aliases: ['الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'], domain: 'alrajhibank.com.sa' },
@@ -27,7 +28,7 @@ function normalize(value) {
 function bankDomain(bankName) {
   const value = normalize(bankName);
   const match = BANKS.find((bank) => bank.aliases.some((alias) => value.includes(normalize(alias))));
-  return match?.domain || null;
+  return match ? match.domain : null;
 }
 
 export default function BankLogo({ bankName, size = 40 }) {
