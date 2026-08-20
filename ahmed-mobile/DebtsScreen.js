@@ -27,9 +27,9 @@ export default function DebtsScreen({ onBack }) {
     loadCreditCardSummary();
   }, []);
 
-  const closeCreditCards = async () => {
-    await loadCreditCardSummary();
+  const closeCreditCards = () => {
     setShowCreditCards(false);
+    loadCreditCardSummary();
   };
 
   if (showCreditCards) {
