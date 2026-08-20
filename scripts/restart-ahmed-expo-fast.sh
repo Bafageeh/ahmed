@@ -21,6 +21,9 @@ log "Syncing latest main"
 git fetch origin main
 git reset --hard origin/main
 
+log "Removing halala decimals from credit-card amounts"
+python3 scripts/patch-credit-card-no-cents.py
+
 # Verify the compact credit-card UI is committed directly in source.
 grep -q "creditCardSummary={creditCardSummary}" "$MOBILE_DIR/DebtsScreen.js" || {
   echo "ERROR: Credit-card summary wiring is missing from DebtsScreen.js" >&2
@@ -40,6 +43,10 @@ grep -q "cardBottomRow" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
 }
 grep -q "SAUDI_BANKS" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
   echo "ERROR: Saudi bank dropdown source is missing" >&2
+  exit 1
+}
+grep -q "minimumFractionDigits: 0" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
+  echo "ERROR: Credit-card no-halalas display patch is missing" >&2
   exit 1
 }
 if grep -q "babel-plugin-credit-card-bank-logos" "$MOBILE_DIR/babel.config.js"; then
