@@ -1,0 +1,3 @@
+Ahmed mobile debts credit-card summary deployment target
+Version: 2026-08-20-1237
+Expected UI: no floating credit-card button; credit cards shown as a compact debt card in the debts list.
