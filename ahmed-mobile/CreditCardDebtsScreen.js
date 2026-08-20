@@ -212,7 +212,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
 
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.82}>
-          <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
+          <UiIcon name="back" size={23} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
         <View style={styles.topTitleWrap}>
           <Text style={styles.topTitle}>ديون بطائق الائتمان</Text>
@@ -236,18 +236,27 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
         )}
         ListHeaderComponent={(
           <>
-            <View style={styles.hero}>
-              <View style={styles.heroGlow} />
-              <View style={styles.heroTopRow}>
-                <View style={styles.heroBadge}>
-                  <UiIcon name="payments" size={18} color="#ddd6fe" />
-                  <Text style={styles.heroBadgeText}>بطائق الائتمان</Text>
+            <View style={styles.summaryCard}>
+              <View style={styles.summaryTopRow}>
+                <View style={styles.summaryBadge}>
+                  <Text style={styles.summaryBadgeText}>{numberValue(summary.cards_count)} بطاقة</Text>
                 </View>
-                <Text style={styles.heroCount}>{numberValue(summary.cards_count)} بطاقة</Text>
+                <Text style={styles.summaryLabel}>إجمالي دين البطاقات</Text>
               </View>
-              <Text style={styles.heroAmount}>{money(summary.total_debt)}</Text>
-              <Text style={styles.heroLabel}>إجمالي دين البطاقات</Text>
-              <Text style={styles.heroNote}>يُحتسب الحد الائتماني كاملًا كدين لكل بطاقة.</Text>
+              <Text style={styles.summaryAmount}>{money(summary.total_debt)}</Text>
+
+              <View style={styles.summaryDivider} />
+
+              <View style={styles.summaryBottomRow}>
+                <View style={styles.summaryInfoBlock}>
+                  <Text style={styles.summaryInfoValue}>{money(summary.highest_limit)}</Text>
+                  <Text style={styles.summaryInfoLabel}>أعلى حد</Text>
+                </View>
+                <View style={styles.summaryInfoBlockWide}>
+                  <Text style={styles.summaryInfoName} numberOfLines={1}>{highestCardLabel}</Text>
+                  <Text style={styles.summaryInfoLabel}>صاحبة أعلى حد</Text>
+                </View>
+              </View>
             </View>
 
             {loading ? (
@@ -259,71 +268,67 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
 
             {!!message ? <Text style={styles.message}>{message}</Text> : null}
 
-            {!loading ? (
-              <View style={styles.insightRow}>
-                <View style={styles.insightBox}>
-                  <Text style={styles.insightValue}>{money(summary.highest_limit)}</Text>
-                  <Text style={styles.insightLabel}>أعلى حد ائتماني</Text>
-                </View>
-                <View style={[styles.insightBox, styles.insightBoxWide]}>
-                  <Text style={styles.insightCardName} numberOfLines={1}>{highestCardLabel}</Text>
-                  <Text style={styles.insightLabel}>صاحبة أعلى حد</Text>
-                </View>
-              </View>
-            ) : null}
-
             <View style={styles.sectionHeader}>
-              <View style={styles.sectionCount}><Text style={styles.sectionCountText}>{cards.length}</Text></View>
+              <View style={styles.sectionCount}>
+                <Text style={styles.sectionCountText}>{cards.length}</Text>
+              </View>
               <View style={styles.sectionTitleBlock}>
                 <Text style={styles.sectionTitle}>البطائق المسجلة</Text>
-                <Text style={styles.sectionSubtitle}>اضغط تعديل لتحديث بيانات أي بطاقة</Text>
+                <Text style={styles.sectionSubtitle}>عرض مختصر وسريع للبطاقات</Text>
               </View>
             </View>
           </>
         )}
         ListEmptyComponent={!loading ? (
           <View style={styles.emptyCard}>
-            <View style={styles.emptyIcon}><UiIcon name="payments" size={30} color={ICON_COLOR} /></View>
+            <UiIcon name="payments" size={28} color={ICON_COLOR} />
             <Text style={styles.emptyTitle}>لا توجد بطائق مضافة</Text>
             <Text style={styles.emptyText}>استخدم زر الإضافة لإدخال أول بطاقة ائتمانية.</Text>
           </View>
         ) : null}
         renderItem={({ item }) => (
           <View style={styles.creditCard}>
-            <View style={styles.cardHeader}>
+            <View style={styles.cardTopRow}>
               <View style={styles.cardTextBlock}>
-                <Text style={styles.cardName}>{item.card_name}</Text>
-                <Text style={styles.bankName}>{item.bank_name}</Text>
+                <Text style={styles.cardName} numberOfLines={1}>{item.card_name}</Text>
+                <Text style={styles.bankName} numberOfLines={1}>{item.bank_name}</Text>
               </View>
               <View style={styles.cardIcon}>
-                <BankLogo bankName={item.bank_name} size={40} />
+                <BankLogo bankName={item.bank_name} size={29} />
               </View>
             </View>
 
-            <View style={styles.limitRow}>
-              <View style={styles.limitTextBlock}>
+            <View style={styles.cardBottomRow}>
+              <View style={styles.amountBlock}>
                 <Text style={styles.limitValue}>{money(item.credit_limit)}</Text>
                 <Text style={styles.limitLabel}>الحد المحتسب كدين</Text>
               </View>
-              <View style={styles.limitPill}><Text style={styles.limitPillText}>حد ائتماني</Text></View>
-            </View>
 
-            <View style={styles.cardFooter}>
-              <TouchableOpacity style={styles.actionButton} onPress={() => openEdit(item)} activeOpacity={0.82}>
-                <UiIcon name="edit" size={18} color="#475569" />
-                <Text style={styles.actionText}>تعديل</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.actionButton, styles.deleteButton]} onPress={() => remove(item)} activeOpacity={0.82}>
-                <UiIcon name="delete" size={18} color="#b91c1c" />
-                <Text style={styles.deleteText}>حذف</Text>
-              </TouchableOpacity>
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={styles.iconAction}
+                  onPress={() => openEdit(item)}
+                  activeOpacity={0.82}
+                  accessibilityLabel="تعديل البطاقة"
+                >
+                  <UiIcon name="edit" size={17} color="#475569" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.iconAction, styles.deleteAction]}
+                  onPress={() => remove(item)}
+                  activeOpacity={0.82}
+                  accessibilityLabel="حذف البطاقة"
+                >
+                  <UiIcon name="delete" size={17} color="#b91c1c" />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}
       />
 
       <TouchableOpacity style={styles.floatingAdd} onPress={openAdd} activeOpacity={0.88}>
-        <UiIcon name="add" size={28} color="#ffffff" />
+        <UiIcon name="add" size={25} color="#ffffff" />
       </TouchableOpacity>
 
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
@@ -366,7 +371,9 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
                         onPress={() => chooseBank(bank)}
                         activeOpacity={0.8}
                       >
-                        <View style={styles.bankOptionLogo}><BankLogo bankName={bank} size={28} /></View>
+                        <View style={styles.bankOptionLogo}>
+                          <BankLogo bankName={bank} size={27} />
+                        </View>
                         <Text style={[styles.bankOptionText, selected && styles.bankOptionTextSelected]}>{bank}</Text>
                         {selected ? <Text style={styles.bankOptionCheck}>✓</Text> : <View style={styles.bankOptionCheckSpace} />}
                       </TouchableOpacity>
@@ -402,7 +409,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
             <TouchableOpacity style={[styles.saveButton, saving && styles.disabledButton]} onPress={save} disabled={saving}>
               {saving ? <ActivityIndicator color="#ffffff" /> : (
                 <>
-                  <UiIcon name="save" size={20} color="#ffffff" />
+                  <UiIcon name="save" size={19} color="#ffffff" />
                   <Text style={styles.saveText}>حفظ</Text>
                 </>
               )}
@@ -421,110 +428,157 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: androidTopInset + 6,
-    paddingBottom: 12,
-    minHeight: 68 + androidTopInset,
+    paddingHorizontal: 16,
+    paddingTop: androidTopInset + 4,
+    paddingBottom: 8,
+    minHeight: 62 + androidTopInset,
     backgroundColor: '#f4f7fb',
   },
   backButton: {
-    width: 50,
-    height: 50,
-    borderRadius: 17,
+    width: 46,
+    height: 46,
+    borderRadius: 15,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#dbe3ea',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  topBarSpacer: { width: 50, height: 50 },
-  topTitleWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  topTitle: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'center' },
-  topSubtitle: { marginTop: 2, color: '#94a3b8', fontSize: 10, fontWeight: '800', textAlign: 'center' },
-  content: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 124 },
+  topBarSpacer: { width: 46, height: 46 },
+  topTitleWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  topTitle: { color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  topSubtitle: { marginTop: 1, color: '#94a3b8', fontSize: 9, fontWeight: '800', textAlign: 'center' },
 
-  hero: { backgroundColor: '#0f172a', borderRadius: 28, padding: 20, overflow: 'hidden', marginBottom: 14 },
-  heroGlow: { position: 'absolute', width: 185, height: 185, borderRadius: 999, backgroundColor: '#7c3aed', opacity: 0.22, top: -75, left: -46 },
-  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  heroBadge: { flexDirection: 'row-reverse', alignItems: 'center', gap: 7, backgroundColor: 'rgba(148,163,184,0.18)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  heroBadgeText: { color: '#ddd6fe', fontSize: 12, fontWeight: '900' },
-  heroCount: { color: '#94a3b8', fontSize: 12, fontWeight: '900' },
-  heroAmount: { marginTop: 18, color: '#ffffff', fontSize: 32, fontWeight: '900', textAlign: 'right' },
-  heroLabel: { marginTop: 4, color: '#cbd5e1', fontSize: 15, fontWeight: '900', textAlign: 'right' },
-  heroNote: { marginTop: 8, color: '#94a3b8', fontSize: 11, fontWeight: '700', textAlign: 'right' },
+  content: { paddingHorizontal: 15, paddingTop: 2, paddingBottom: 94 },
 
-  loadingState: { paddingVertical: 18, alignItems: 'center' },
-  loadingText: { marginTop: 7, color: '#64748b', fontWeight: '800' },
-  message: { marginBottom: 12, backgroundColor: '#fff1f2', color: '#b91c1c', borderRadius: 15, padding: 12, fontWeight: '900', textAlign: 'right' },
+  summaryCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 22,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 14,
+  },
+  summaryTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  summaryBadge: { backgroundColor: 'rgba(167,139,250,0.18)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  summaryBadgeText: { color: '#ddd6fe', fontSize: 10, fontWeight: '900' },
+  summaryLabel: { color: '#cbd5e1', fontSize: 12, fontWeight: '900', textAlign: 'right' },
+  summaryAmount: { marginTop: 8, color: '#ffffff', fontSize: 27, fontWeight: '900', textAlign: 'right' },
+  summaryDivider: { height: StyleSheet.hairlineWidth, backgroundColor: 'rgba(148,163,184,0.25)', marginVertical: 10 },
+  summaryBottomRow: { flexDirection: 'row', gap: 14 },
+  summaryInfoBlock: { flex: 0.85, alignItems: 'flex-end' },
+  summaryInfoBlockWide: { flex: 1.15, alignItems: 'flex-end' },
+  summaryInfoValue: { color: '#f8fafc', fontSize: 14, fontWeight: '900', textAlign: 'right' },
+  summaryInfoName: { color: '#f8fafc', fontSize: 12, fontWeight: '900', textAlign: 'right', maxWidth: '100%' },
+  summaryInfoLabel: { marginTop: 2, color: '#94a3b8', fontSize: 8, fontWeight: '800', textAlign: 'right' },
 
-  insightRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
-  insightBox: { flex: 0.9, minHeight: 88, backgroundColor: '#ffffff', borderRadius: 20, borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 14, paddingVertical: 14, alignItems: 'flex-end', justifyContent: 'center' },
-  insightBoxWide: { flex: 1.1 },
-  insightValue: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' },
-  insightCardName: { color: '#0f172a', fontSize: 15, fontWeight: '900', textAlign: 'right', maxWidth: '100%' },
-  insightLabel: { marginTop: 5, color: '#64748b', fontSize: 11, fontWeight: '800', textAlign: 'right' },
+  loadingState: { paddingVertical: 14, alignItems: 'center' },
+  loadingText: { marginTop: 6, color: '#64748b', fontSize: 11, fontWeight: '800' },
+  message: { marginBottom: 10, backgroundColor: '#fff1f2', color: '#b91c1c', borderRadius: 13, padding: 10, fontSize: 11, fontWeight: '900', textAlign: 'right' },
 
-  sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 12, gap: 10 },
-  sectionCount: { minWidth: 40, height: 40, paddingHorizontal: 10, borderRadius: 20, backgroundColor: '#efe9ff', alignItems: 'center', justifyContent: 'center' },
-  sectionCountText: { color: '#6d28d9', fontSize: 15, fontWeight: '900' },
+  sectionHeader: { flexDirection: 'row-reverse', alignItems: 'center', marginBottom: 8, gap: 8 },
+  sectionCount: { minWidth: 31, height: 31, paddingHorizontal: 7, borderRadius: 16, backgroundColor: '#efe9ff', alignItems: 'center', justifyContent: 'center' },
+  sectionCountText: { color: '#6d28d9', fontSize: 12, fontWeight: '900' },
   sectionTitleBlock: { flex: 1, alignItems: 'flex-end' },
-  sectionTitle: { color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'right' },
-  sectionSubtitle: { marginTop: 2, color: '#94a3b8', fontSize: 10, fontWeight: '800', textAlign: 'right' },
+  sectionTitle: { color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'right' },
+  sectionSubtitle: { marginTop: 1, color: '#94a3b8', fontSize: 9, fontWeight: '800', textAlign: 'right' },
 
-  creditCard: { backgroundColor: '#ffffff', borderRadius: 24, borderWidth: 1, borderColor: '#dbe3ea', padding: 16, marginBottom: 13 },
-  cardHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 12 },
+  creditCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: '#dbe3ea',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  cardTopRow: { flexDirection: 'row-reverse', alignItems: 'center', gap: 9 },
   cardTextBlock: { flex: 1, alignItems: 'flex-end' },
-  cardName: { color: '#0f172a', fontSize: 23, fontWeight: '900', textAlign: 'right' },
-  bankName: { marginTop: 3, color: '#64748b', fontSize: 14, fontWeight: '800', textAlign: 'right' },
-  cardIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ddd6fe', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  cardName: { color: '#0f172a', fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  bankName: { marginTop: 1, color: '#64748b', fontSize: 11, fontWeight: '800', textAlign: 'right' },
+  cardIcon: {
+    width: 39,
+    height: 39,
+    borderRadius: 12,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  cardBottomRow: {
+    marginTop: 7,
+    paddingTop: 7,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#eef2f7',
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: 8,
+  },
+  amountBlock: { flex: 1, alignItems: 'flex-end' },
+  limitValue: { color: '#312e81', fontSize: 17, fontWeight: '900', textAlign: 'right' },
+  limitLabel: { marginTop: 1, color: '#64748b', fontSize: 8, fontWeight: '800', textAlign: 'right' },
+  cardActions: { flexDirection: 'row-reverse', gap: 6 },
+  iconAction: {
+    width: 35,
+    height: 35,
+    borderRadius: 11,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteAction: { backgroundColor: '#fff7f7', borderColor: '#fecaca' },
 
-  limitRow: { marginTop: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13 },
-  limitTextBlock: { flex: 1, alignItems: 'flex-end' },
-  limitValue: { color: '#312e81', fontSize: 20, fontWeight: '900', textAlign: 'right' },
-  limitLabel: { marginTop: 3, color: '#64748b', fontSize: 10, fontWeight: '800', textAlign: 'right' },
-  limitPill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: '#ede9fe' },
-  limitPillText: { color: '#6d28d9', fontSize: 10, fontWeight: '900' },
+  emptyCard: { backgroundColor: '#ffffff', borderRadius: 18, borderWidth: 1, borderColor: '#dbe3ea', padding: 20, alignItems: 'center' },
+  emptyTitle: { marginTop: 9, color: '#0f172a', fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  emptyText: { marginTop: 5, color: '#64748b', fontSize: 11, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
 
-  cardFooter: { marginTop: 12, flexDirection: 'row-reverse', gap: 9 },
-  actionButton: { flex: 1, minHeight: 42, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  actionText: { color: '#475569', fontSize: 13, fontWeight: '900' },
-  deleteButton: { backgroundColor: '#fff7f7', borderColor: '#fecaca' },
-  deleteText: { color: '#b91c1c', fontSize: 13, fontWeight: '900' },
-
-  emptyCard: { backgroundColor: '#ffffff', borderRadius: 24, borderWidth: 1, borderColor: '#dbe3ea', padding: 24, alignItems: 'center' },
-  emptyIcon: { width: 60, height: 60, borderRadius: 20, backgroundColor: '#f5f3ff', alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { marginTop: 12, color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'center' },
-  emptyText: { marginTop: 7, color: '#64748b', fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 20 },
-
-  floatingAdd: { position: 'absolute', left: 22, bottom: 28, width: 64, height: 64, borderRadius: 32, backgroundColor: '#7c3aed', alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#312e81', shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+  floatingAdd: {
+    position: 'absolute',
+    left: 18,
+    bottom: 22,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#7c3aed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 10,
+    shadowColor: '#312e81',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.38)', justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#ffffff', borderRadius: 26, padding: 20, maxHeight: '90%' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  closeButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  closeText: { fontSize: 24, lineHeight: 24, color: '#64748b', fontWeight: '900' },
-  modalTitle: { flex: 1, color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' },
-  inputLabel: { marginTop: 10, marginBottom: 7, color: '#0f172a', fontSize: 13, fontWeight: '900', textAlign: 'right' },
-  input: { minHeight: 52, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', paddingHorizontal: 14, color: '#0f172a', fontSize: 16, fontWeight: '700' },
-  inputHint: { marginTop: 7, color: '#64748b', fontSize: 11, fontWeight: '700', textAlign: 'right' },
+  modalCard: { backgroundColor: '#ffffff', borderRadius: 24, padding: 18, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  closeButton: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  closeText: { fontSize: 23, lineHeight: 23, color: '#64748b', fontWeight: '900' },
+  modalTitle: { flex: 1, color: '#0f172a', fontSize: 20, fontWeight: '900', textAlign: 'right' },
+  inputLabel: { marginTop: 9, marginBottom: 6, color: '#0f172a', fontSize: 12, fontWeight: '900', textAlign: 'right' },
+  input: { minHeight: 50, borderRadius: 15, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', paddingHorizontal: 13, color: '#0f172a', fontSize: 15, fontWeight: '700' },
+  inputHint: { marginTop: 6, color: '#64748b', fontSize: 10, fontWeight: '700', textAlign: 'right' },
 
-  bankSelector: { minHeight: 54, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  bankSelector: { minHeight: 50, borderRadius: 15, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', paddingHorizontal: 13, flexDirection: 'row-reverse', alignItems: 'center', gap: 9 },
   bankSelectorOpen: { borderColor: '#8b5cf6', backgroundColor: '#faf9ff' },
-  bankSelectorText: { flex: 1, color: '#0f172a', fontSize: 15, fontWeight: '900', textAlign: 'right' },
+  bankSelectorText: { flex: 1, color: '#0f172a', fontSize: 14, fontWeight: '900', textAlign: 'right' },
   bankSelectorPlaceholder: { color: '#94a3b8', fontWeight: '700' },
-  bankSelectorArrow: { color: '#6d28d9', fontSize: 12, fontWeight: '900' },
-  bankMenu: { marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#ddd6fe', backgroundColor: '#ffffff', overflow: 'hidden' },
-  bankMenuScroll: { maxHeight: 255 },
-  bankMenuContent: { paddingVertical: 5 },
-  bankOption: { minHeight: 50, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef2f7' },
+  bankSelectorArrow: { color: '#6d28d9', fontSize: 11, fontWeight: '900' },
+  bankMenu: { marginTop: 7, borderRadius: 15, borderWidth: 1, borderColor: '#ddd6fe', backgroundColor: '#ffffff', overflow: 'hidden' },
+  bankMenuScroll: { maxHeight: 245 },
+  bankMenuContent: { paddingVertical: 4 },
+  bankOption: { minHeight: 47, paddingHorizontal: 11, paddingVertical: 7, flexDirection: 'row-reverse', alignItems: 'center', gap: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef2f7' },
   bankOptionSelected: { backgroundColor: '#f5f3ff' },
-  bankOptionLogo: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  bankOptionText: { flex: 1, color: '#334155', fontSize: 14, fontWeight: '800', textAlign: 'right' },
+  bankOptionLogo: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  bankOptionText: { flex: 1, color: '#334155', fontSize: 13, fontWeight: '800', textAlign: 'right' },
   bankOptionTextSelected: { color: '#6d28d9', fontWeight: '900' },
-  bankOptionCheck: { width: 22, color: '#6d28d9', fontSize: 16, fontWeight: '900', textAlign: 'center' },
-  bankOptionCheckSpace: { width: 22 },
+  bankOptionCheck: { width: 20, color: '#6d28d9', fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  bankOptionCheckSpace: { width: 20 },
 
-  saveButton: { marginTop: 18, minHeight: 52, borderRadius: 17, backgroundColor: '#7c3aed', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  saveButton: { marginTop: 16, minHeight: 50, borderRadius: 16, backgroundColor: '#7c3aed', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   disabledButton: { opacity: 0.7 },
-  saveText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
+  saveText: { color: '#ffffff', fontSize: 15, fontWeight: '900' },
 });
