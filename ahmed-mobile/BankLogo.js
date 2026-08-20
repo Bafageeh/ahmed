@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { SNB_LOGO_DATA_URI } from './snbLogoData';
 
 const BANKS = [
   { aliases: ['الانماء', 'الإنماء', 'بنك الانماء', 'بنك الإنماء', 'مصرف الانماء', 'مصرف الإنماء', 'alinma'], domain: 'alinma.com' },
@@ -20,12 +21,19 @@ const BANKS = [
   { aliases: ['ميم', 'meem'], domain: 'meem.com.sa' },
 ];
 
+const SNB_ALIASES = ['الاهلي', 'الأهلي', 'البنك الاهلي', 'البنك الأهلي', 'البنك الاهلي السعودي', 'البنك الأهلي السعودي', 'snb', 'saudi national bank'];
+
 function normalize(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/[أإآ]/g, 'ا')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function isSnbBank(bankName) {
+  const value = normalize(bankName);
+  return SNB_ALIASES.some((alias) => value.includes(normalize(alias)));
 }
 
 function bankDomain(bankName) {
@@ -36,15 +44,18 @@ function bankDomain(bankName) {
 
 export default function BankLogo({ bankName, size = 40 }) {
   const [failed, setFailed] = useState(false);
+  const snb = useMemo(() => isSnbBank(bankName), [bankName]);
   const domain = useMemo(() => bankDomain(bankName), [bankName]);
 
   useEffect(() => {
     setFailed(false);
-  }, [domain, bankName]);
+  }, [domain, bankName, snb]);
 
-  const source = domain
-    ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
-    : null;
+  const source = snb
+    ? { uri: SNB_LOGO_DATA_URI }
+    : domain
+      ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
+      : null;
 
   if (!source || failed) {
     const letter = String(bankName || 'ب').trim().charAt(0) || 'ب';
