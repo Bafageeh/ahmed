@@ -196,6 +196,7 @@ module.exports = function debtDetailExtraStatsPlugin({ types: t }) {
                   call('dateLabel', [member('contract_date')]),
                   t.stringLiteral('-'),
                 )],
+                ['الدفعة الأولى', call('money', [member('down_payment')])],
                 ['مبلغ الربح', call('money', [member('profit_amount')])],
                 ['هامش الربح', t.conditionalExpression(
                   t.binaryExpression('!=', member('profit_margin'), t.nullLiteral()),
