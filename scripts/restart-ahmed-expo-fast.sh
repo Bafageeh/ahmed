@@ -24,6 +24,9 @@ git reset --hard origin/main
 log "Applying safe credit-card bank logo source patch"
 python3 scripts/patch-credit-card-bank-logos.py
 
+log "Applying compact credit-card layout patch"
+python3 scripts/patch-credit-card-compact-layout.py
+
 # Mobile-only verification for the current debts UI. Fail fast if the server did not receive the new source.
 grep -q "creditCardSummary={creditCardSummary}" "$MOBILE_DIR/DebtsScreen.js" || {
   echo "ERROR: New credit-card summary wiring is missing from DebtsScreen.js" >&2
@@ -39,6 +42,10 @@ grep -q "babel-plugin-credit-card-summary-card" "$MOBILE_DIR/babel.config.js" ||
 }
 grep -q "BankLogo bankName={item.bank_name}" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
   echo "ERROR: Bank logo source patch is missing" >&2
+  exit 1
+}
+grep -q "compact-credit-card-layout-v1" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
+  echo "ERROR: Compact credit-card layout patch is missing" >&2
   exit 1
 }
 if grep -q "babel-plugin-credit-card-bank-logos" "$MOBILE_DIR/babel.config.js"; then
