@@ -7,6 +7,7 @@ import {
   Platform,
   RefreshControl,
   SafeAreaView,
+  ScrollView,
   StatusBar as NativeStatusBar,
   StyleSheet,
   Text,
@@ -16,9 +17,28 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK } from './UiIcon';
+import BankLogo from './BankLogo';
 import { ahmedUserHeaders } from './ahmedCurrentUser';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+
+const SAUDI_BANKS = [
+  'البنك الأهلي',
+  'البنك العربي',
+  'البنك الفرنسي',
+  'بنك الراجحي',
+  'بنك الرياض',
+  'بنك البلاد',
+  'بنك الإنماء',
+  'البنك السعودي الأول',
+  'البنك السعودي للاستثمار',
+  'بنك الجزيرة',
+  'بنك الخليج الدولي - السعودية',
+  'بنك إس تي سي',
+  'بنك فيجن',
+  'بنك D360',
+  'آيزي بنك',
+];
 
 const numberValue = (value) => {
   const parsed = Number(String(value ?? 0).replace(/,/g, ''));
@@ -39,6 +59,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingCard, setEditingCard] = useState(null);
   const [bankName, setBankName] = useState('');
+  const [bankMenuOpen, setBankMenuOpen] = useState(false);
   const [cardName, setCardName] = useState('');
   const [creditLimit, setCreditLimit] = useState('');
   const [saving, setSaving] = useState(false);
@@ -77,6 +98,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
   const openAdd = () => {
     setEditingCard(null);
     setBankName('');
+    setBankMenuOpen(false);
     setCardName('');
     setCreditLimit('');
     setMessage('');
@@ -86,6 +108,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
   const openEdit = (card) => {
     setEditingCard(card);
     setBankName(card.bank_name || '');
+    setBankMenuOpen(false);
     setCardName(card.card_name || '');
     setCreditLimit(String(numberValue(card.credit_limit)));
     setMessage('');
@@ -94,8 +117,14 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
 
   const closeModal = () => {
     if (saving) return;
+    setBankMenuOpen(false);
     setModalVisible(false);
     setEditingCard(null);
+  };
+
+  const chooseBank = (bank) => {
+    setBankName(bank);
+    setBankMenuOpen(false);
   };
 
   const save = async () => {
@@ -104,7 +133,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
     const limit = numberValue(creditLimit);
 
     if (!bank || !name || limit <= 0) {
-      setMessage('أدخل اسم البنك واسم البطاقة والحد الائتماني بصورة صحيحة.');
+      setMessage('اختر البنك وأدخل اسم البطاقة والحد الائتماني بصورة صحيحة.');
       return;
     }
 
@@ -130,6 +159,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'تعذر حفظ البطاقة');
 
+      setBankMenuOpen(false);
       setModalVisible(false);
       setEditingCard(null);
       await load();
@@ -266,7 +296,7 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
                 <Text style={styles.bankName}>{item.bank_name}</Text>
               </View>
               <View style={styles.cardIcon}>
-                <UiIcon name="payments" size={24} color={ICON_COLOR} />
+                <BankLogo bankName={item.bank_name} size={40} />
               </View>
             </View>
 
@@ -307,15 +337,44 @@ export default function CreditCardDebtsScreen({ onBack, onChanged }) {
             </View>
 
             <Text style={styles.inputLabel}>اسم البنك</Text>
-            <TextInput
-              value={bankName}
-              onChangeText={setBankName}
-              placeholder="مثال: مصرف الراجحي"
-              placeholderTextColor="#94a3b8"
-              style={styles.input}
-              textAlign="right"
-              maxLength={120}
-            />
+            <TouchableOpacity
+              style={[styles.bankSelector, bankMenuOpen && styles.bankSelectorOpen]}
+              onPress={() => setBankMenuOpen((value) => !value)}
+              activeOpacity={0.82}
+            >
+              <Text style={[styles.bankSelectorText, !bankName && styles.bankSelectorPlaceholder]} numberOfLines={1}>
+                {bankName || 'اختر البنك'}
+              </Text>
+              <Text style={styles.bankSelectorArrow}>{bankMenuOpen ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+
+            {bankMenuOpen ? (
+              <View style={styles.bankMenu}>
+                <ScrollView
+                  style={styles.bankMenuScroll}
+                  contentContainerStyle={styles.bankMenuContent}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {SAUDI_BANKS.map((bank) => {
+                    const selected = bank === bankName;
+                    return (
+                      <TouchableOpacity
+                        key={bank}
+                        style={[styles.bankOption, selected && styles.bankOptionSelected]}
+                        onPress={() => chooseBank(bank)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={styles.bankOptionLogo}><BankLogo bankName={bank} size={28} /></View>
+                        <Text style={[styles.bankOptionText, selected && styles.bankOptionTextSelected]}>{bank}</Text>
+                        {selected ? <Text style={styles.bankOptionCheck}>✓</Text> : <View style={styles.bankOptionCheckSpace} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
 
             <Text style={styles.inputLabel}>اسم البطاقة</Text>
             <TextInput
@@ -417,7 +476,7 @@ const styles = StyleSheet.create({
   cardTextBlock: { flex: 1, alignItems: 'flex-end' },
   cardName: { color: '#0f172a', fontSize: 23, fontWeight: '900', textAlign: 'right' },
   bankName: { marginTop: 3, color: '#64748b', fontSize: 14, fontWeight: '800', textAlign: 'right' },
-  cardIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ddd6fe', alignItems: 'center', justifyContent: 'center' },
+  cardIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ddd6fe', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
 
   limitRow: { marginTop: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 13 },
   limitTextBlock: { flex: 1, alignItems: 'flex-end' },
@@ -440,7 +499,7 @@ const styles = StyleSheet.create({
   floatingAdd: { position: 'absolute', left: 22, bottom: 28, width: 64, height: 64, borderRadius: 32, backgroundColor: '#7c3aed', alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#312e81', shadowOpacity: 0.28, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.38)', justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#ffffff', borderRadius: 26, padding: 20 },
+  modalCard: { backgroundColor: '#ffffff', borderRadius: 26, padding: 20, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   closeButton: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
   closeText: { fontSize: 24, lineHeight: 24, color: '#64748b', fontWeight: '900' },
@@ -448,6 +507,23 @@ const styles = StyleSheet.create({
   inputLabel: { marginTop: 10, marginBottom: 7, color: '#0f172a', fontSize: 13, fontWeight: '900', textAlign: 'right' },
   input: { minHeight: 52, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', paddingHorizontal: 14, color: '#0f172a', fontSize: 16, fontWeight: '700' },
   inputHint: { marginTop: 7, color: '#64748b', fontSize: 11, fontWeight: '700', textAlign: 'right' },
+
+  bankSelector: { minHeight: 54, borderRadius: 16, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#dbe3ea', paddingHorizontal: 14, flexDirection: 'row-reverse', alignItems: 'center', gap: 10 },
+  bankSelectorOpen: { borderColor: '#8b5cf6', backgroundColor: '#faf9ff' },
+  bankSelectorText: { flex: 1, color: '#0f172a', fontSize: 15, fontWeight: '900', textAlign: 'right' },
+  bankSelectorPlaceholder: { color: '#94a3b8', fontWeight: '700' },
+  bankSelectorArrow: { color: '#6d28d9', fontSize: 12, fontWeight: '900' },
+  bankMenu: { marginTop: 8, borderRadius: 16, borderWidth: 1, borderColor: '#ddd6fe', backgroundColor: '#ffffff', overflow: 'hidden' },
+  bankMenuScroll: { maxHeight: 255 },
+  bankMenuContent: { paddingVertical: 5 },
+  bankOption: { minHeight: 50, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row-reverse', alignItems: 'center', gap: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef2f7' },
+  bankOptionSelected: { backgroundColor: '#f5f3ff' },
+  bankOptionLogo: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  bankOptionText: { flex: 1, color: '#334155', fontSize: 14, fontWeight: '800', textAlign: 'right' },
+  bankOptionTextSelected: { color: '#6d28d9', fontWeight: '900' },
+  bankOptionCheck: { width: 22, color: '#6d28d9', fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  bankOptionCheckSpace: { width: 22 },
+
   saveButton: { marginTop: 18, minHeight: 52, borderRadius: 17, backgroundColor: '#7c3aed', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   disabledButton: { opacity: 0.7 },
   saveText: { color: '#ffffff', fontSize: 16, fontWeight: '900' },
