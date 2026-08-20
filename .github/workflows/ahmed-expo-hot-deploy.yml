@@ -10,6 +10,10 @@ on:
       - '.github/workflows/ahmed-expo-hot-deploy.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   restart-expo:
     name: Sync and restart Expo 8082
@@ -45,3 +49,14 @@ jobs:
             git reset --hard origin/main
             chmod +x scripts/restart-ahmed-expo-fast.sh
             bash scripts/restart-ahmed-expo-fast.sh
+
+      - name: Record successful restart
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `✅ Ahmed Expo 8082 restarted successfully from commit ${context.sha} at ${new Date().toISOString()}`,
+            });
