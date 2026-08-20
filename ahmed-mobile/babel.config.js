@@ -9,6 +9,7 @@ module.exports = function (api) {
       './babel-plugin-debt-header-safe-area',
       './babel-plugin-debt-last-payment-stat',
       './babel-plugin-credit-card-summary-card',
+      './babel-plugin-credit-card-bank-logos',
       './babel-plugin-mercedes-finance-analysis',
     ],
   };
