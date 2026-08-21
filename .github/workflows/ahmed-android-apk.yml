@@ -129,4 +129,4 @@ jobs:
               body: `📦 Ahmed APK ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk`,
             });
 
-# build trigger 2026-08-21 20:55 Asia/Riyadh
+# build trigger 2026-08-21 21:51 Asia/Riyadh - source synced with Expo
