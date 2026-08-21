@@ -24,6 +24,17 @@ jobs:
       EXPO_NO_TELEMETRY: 1
       CI: 1
     steps:
+      - name: Record APK build start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `⏳ Ahmed APK build started | run_id=${context.runId} | commit=${context.sha}`,
+            });
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -118,4 +129,4 @@ jobs:
               body: `📦 Ahmed APK ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk`,
             });
 
-# build trigger 2026-08-21 20:51 Asia/Riyadh
+# build trigger 2026-08-21 20:55 Asia/Riyadh
