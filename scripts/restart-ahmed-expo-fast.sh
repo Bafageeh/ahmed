@@ -114,3 +114,5 @@ log "Commit: $(git rev-parse HEAD)"
 log "PID: $PID"
 log "URL: exp://$DOMAIN:$EXPO_PORT"
 tail -n 60 "$LOG_FILE" || true
+
+# manual restart trigger 2026-08-21T21:43+03:00
