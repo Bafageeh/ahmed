@@ -60,3 +60,5 @@ jobs:
               issue_number: 1,
               body: `✅ Ahmed Expo 8082 restarted successfully from commit ${context.sha} at ${new Date().toISOString()}`,
             });
+
+# restart trigger 2026-08-21 21:51 Asia/Riyadh - source synced with APK
