@@ -46,8 +46,8 @@ const numberValue = (value) => {
 };
 
 const money = (value) => `${numberValue(value).toLocaleString('en-US', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
 })} ر.س`;
 
 export default function CreditCardDebtsScreen({ onBack, onChanged }) {
