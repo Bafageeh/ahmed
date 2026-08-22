@@ -66,9 +66,9 @@ fi
 cd "$MOBILE_DIR"
 echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 
-if [ ! -d node_modules ]; then
+if [ ! -d node_modules ] || [ ! -d node_modules/expo-updates ]; then
   log "Installing mobile dependencies"
-  npm install --legacy-peer-deps
+  npm install --legacy-peer-deps --no-audit --no-fund
 fi
 
 log "Clearing Metro/Expo caches"
