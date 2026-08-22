@@ -13,8 +13,16 @@
       "backgroundColor": "#1e104e"
     },
     "updates": {
-      "enabled": false,
-      "checkAutomatically": "NEVER"
+      "enabled": true,
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/85d588cc-f97a-4907-a248-0e778d83d674",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "ios": {
       "supportsTablet": true,
@@ -34,7 +42,7 @@
     },
     "extra": {
       "apiUrl": "https://ahmed.pm.sa/api",
-      "buildLabel": "2026-08-22-source-synced",
+      "buildLabel": "2026-08-22-auto-updates",
       "eas": {
         "projectId": "85d588cc-f97a-4907-a248-0e778d83d674"
       }
