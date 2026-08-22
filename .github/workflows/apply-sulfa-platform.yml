@@ -1,0 +1,45 @@
+name: Apply Sulfa platform
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/sulfa-platform
+    paths:
+      - "scripts/patch-sulfa-platform.js"
+      - ".github/workflows/apply-sulfa-platform.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip sulfa patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply Sulfa platform patch
+        run: node scripts/patch-sulfa-platform.js
+
+      - name: Verify Sulfa integration
+        run: |
+          grep -n "SulfaInvestmentScreen" ahmed-mobile/AppShell.js
+          grep -n "10.5%" ahmed-mobile/SulfaInvestmentScreen.js
+          grep -n "sulfa/investment" ahmed-api/routes/api.php
+          grep -n "sulfa: Banknote" ahmed-mobile/UiIcon.js
+
+      - name: Commit patched files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/AppShell.js ahmed-mobile/UiIcon.js ahmed-api/routes/api.php
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Integrate Sulfa investment platform [skip sulfa patch]"
+            git push
+          fi
