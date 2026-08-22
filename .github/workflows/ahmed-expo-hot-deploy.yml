@@ -16,11 +16,11 @@ permissions:
 
 jobs:
   restart-expo:
-    name: Sync and restart Expo 8082
+    name: Sync Expo 8082 and publish OTA
     runs-on: ubuntu-latest
 
     steps:
-      - name: Restart Ahmed Expo over SSH
+      - name: Restart Ahmed Expo and publish OTA over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -50,7 +50,13 @@ jobs:
             chmod +x scripts/restart-ahmed-expo-fast.sh
             bash scripts/restart-ahmed-expo-fast.sh
 
-      - name: Record successful restart
+            cd "$AHMED_PROJECT_PATH/ahmed-mobile"
+            echo "Checking Expo account for automatic OTA publishing"
+            npx eas-cli whoami
+            echo "Publishing Ahmed OTA update to production"
+            npx eas-cli update --channel production --platform android --message "Automatic Ahmed update ${{ github.sha }}" --non-interactive
+
+      - name: Record successful restart and OTA publish
         uses: actions/github-script@v7
         with:
           script: |
@@ -58,7 +64,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 1,
-              body: `✅ Ahmed Expo 8082 restarted successfully from commit ${context.sha} at ${new Date().toISOString()}`,
+              body: `✅ Ahmed Expo 8082 restarted and 🚀 OTA update published to production from commit ${context.sha} at ${new Date().toISOString()}`,
             });
 
-# restart trigger 2026-08-21 21:51 Asia/Riyadh - source synced with APK
+# Automatic OTA publishing enabled 2026-08-22
