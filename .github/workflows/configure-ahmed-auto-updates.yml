@@ -1,3 +1,4 @@
+# trigger after workflow installation
 name: Configure Ahmed Automatic Updates
 
 on:
