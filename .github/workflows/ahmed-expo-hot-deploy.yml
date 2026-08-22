@@ -65,7 +65,7 @@ jobs:
             echo "Checking Expo account for automatic OTA publishing"
             npx eas-cli whoami
             echo "Publishing Ahmed OTA update to production"
-            npx eas-cli update --channel production --platform android --message "Automatic Ahmed update ${{ github.sha }}" --non-interactive
+            npx eas-cli update --channel production --platform android --environment production --message "Automatic Ahmed update ${{ github.sha }}" --non-interactive
 
       - name: Record successful restart and OTA publish
         uses: actions/github-script@v7
