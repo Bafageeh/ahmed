@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ahmed",
     "slug": "ahmed",
-    "version": "1.0.18",
+    "version": "1.0.19",
     "orientation": "portrait",
     "scheme": "ahmed",
     "userInterfaceStyle": "automatic",
@@ -34,7 +34,7 @@
     },
     "android": {
       "package": "sa.pm.ahmed",
-      "versionCode": 19,
+      "versionCode": 20,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e104e"
@@ -42,7 +42,7 @@
     },
     "extra": {
       "apiUrl": "https://ahmed.pm.sa/api",
-      "buildLabel": "2026-08-22-auto-updates",
+      "buildLabel": "2026-08-22-auto-updates-v1",
       "eas": {
         "projectId": "85d588cc-f97a-4907-a248-0e778d83d674"
       }
