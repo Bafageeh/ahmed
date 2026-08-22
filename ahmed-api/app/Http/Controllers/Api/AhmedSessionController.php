@@ -25,9 +25,9 @@ class AhmedSessionController extends Controller
         $username = trim($data['username']);
         $query = DB::table('users');
         if (Schema::hasColumn('users', 'username')) {
-            $query->where('username', $username);
+            $query->whereRaw('LOWER(username) = ?', [Str::lower($username)]);
         } else {
-            $query->where('email', $username);
+            $query->whereRaw('LOWER(email) = ?', [Str::lower($username)]);
         }
 
         $user = $query->first();
