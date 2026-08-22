@@ -1,0 +1,100 @@
+name: Ahmed Android APK Recovery
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ahmed-android-apk-recovery.yml'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: ahmed-mobile
+    env:
+      EXPO_PUBLIC_API_URL: https://ahmed.pm.sa/api
+      EXPO_NO_TELEMETRY: 1
+      CI: 1
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx4g
+    steps:
+      - name: Record recovery build start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `🛠️ Ahmed APK recovery build started | run_id=${context.runId} | commit=${context.sha}`,
+            });
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply same source patches used by Expo
+        run: |
+          cd ..
+          python3 scripts/patch-ta3meed-quick-menu.py
+          python3 scripts/patch-credit-card-no-cents.py
+          grep -F 'اختصارات تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
+          grep -F "onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')}" ahmed-mobile/AppShell.js
+          grep -F 'minimumFractionDigits: 0' ahmed-mobile/CreditCardDebtsScreen.js
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ahmed-mobile/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+
+      - name: Prebuild Android project
+        run: npx expo prebuild --platform android --clean --non-interactive
+
+      - name: Build release APK with hard timeout
+        run: |
+          cd android
+          chmod +x ./gradlew
+          timeout 25m ./gradlew assembleRelease --no-daemon --console=plain --stacktrace --max-workers=2
+
+      - name: Prepare APK
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/release/*.apk apk/ahmed-release.apk
+          ls -lh apk/ahmed-release.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ahmed-android-apk-recovery
+          path: ahmed-mobile/apk/ahmed-release.apk
+          if-no-files-found: error
+
+      - name: Record APK ready
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `📦 Ahmed APK recovery ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk-recovery`,
+            });
