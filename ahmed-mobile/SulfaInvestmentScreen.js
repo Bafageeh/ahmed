@@ -16,6 +16,7 @@ import { ahmedUserHeaders } from './ahmedCurrentUser';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const DEFAULT_ANNUAL_RATE = 10.5;
+const PRINCIPAL_RETURN_MONTHS = 24;
 
 const parseAmount = (value) => {
   const normalized = String(value ?? '')
@@ -51,6 +52,10 @@ export default function SulfaInvestmentScreen({ onBack }) {
     [investedAmount, annualRate]
   );
   const monthlyProfit = useMemo(() => annualProfit / 12, [annualProfit]);
+  const monthlyPrincipalReturn = useMemo(
+    () => investedAmount / PRINCIPAL_RETURN_MONTHS,
+    [investedAmount]
+  );
 
   const load = async () => {
     setLoading(true);
@@ -126,7 +131,7 @@ export default function SulfaInvestmentScreen({ onBack }) {
             <Text style={styles.heroBadgeText}>سلفة</Text>
           </View>
           <Text style={styles.heroTitle}>استثمار سلفة</Text>
-          <Text style={styles.heroText}>سجل المبلغ المستثمر، ويحسب التطبيق الربح الشهري تلقائيًا على عائد سنوي 10.5%.</Text>
+          <Text style={styles.heroText}>سجل المبلغ المستثمر، ويحسب التطبيق الربح الشهري تلقائيًا على عائد سنوي 10.5%، واسترجاع رأس المال على 24 شهرًا.</Text>
         </View>
 
         {loading ? <ActivityIndicator color="#7c3aed" style={styles.loader} /> : null}
@@ -146,6 +151,11 @@ export default function SulfaInvestmentScreen({ onBack }) {
             <Text style={styles.monthlyValue}>{money(monthlyProfit)}</Text>
             <Text style={styles.formula}>المبلغ المستثمر × 10.5% ÷ 12</Text>
           </View>
+          <View style={[styles.statCard, styles.principalCard]}>
+            <Text style={styles.statLabel}>استرجاع القسط الشهري</Text>
+            <Text style={styles.principalValue}>{money(monthlyPrincipalReturn)}</Text>
+            <Text style={styles.principalFormula}>المبلغ المستثمر ÷ 24</Text>
+          </View>
         </View>
 
         <View style={styles.formCard}>
@@ -164,6 +174,10 @@ export default function SulfaInvestmentScreen({ onBack }) {
           <View style={styles.previewRow}>
             <Text style={styles.previewValue}>{money(monthlyProfit)}</Text>
             <Text style={styles.previewLabel}>الربح الشهري المتوقع</Text>
+          </View>
+          <View style={[styles.previewRow, styles.previewPrincipalRow]}>
+            <Text style={[styles.previewValue, styles.previewPrincipalValue]}>{money(monthlyPrincipalReturn)}</Text>
+            <Text style={[styles.previewLabel, styles.previewPrincipalLabel]}>استرجاع القسط الشهري</Text>
           </View>
 
           <TouchableOpacity
@@ -203,10 +217,13 @@ const styles = StyleSheet.create({
   statsGrid: { marginTop: 14, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
   statCard: { flexBasis: '47.5%', flexGrow: 1, backgroundColor: '#fff', borderRadius: 22, padding: 15, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'flex-end' },
   monthlyCard: { flexBasis: '100%', backgroundColor: '#f5f3ff', borderColor: '#ddd6fe' },
+  principalCard: { flexBasis: '100%', backgroundColor: '#ecfeff', borderColor: '#a5f3fc' },
   statLabel: { color: '#64748b', fontSize: 13, fontWeight: '900', textAlign: 'right' },
   statValue: { marginTop: 6, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right' },
   monthlyValue: { marginTop: 6, color: '#6d28d9', fontSize: 31, fontWeight: '900', textAlign: 'right' },
   formula: { marginTop: 5, color: '#6d28d9', fontSize: 12, fontWeight: '800', textAlign: 'right' },
+  principalValue: { marginTop: 6, color: '#0e7490', fontSize: 31, fontWeight: '900', textAlign: 'right' },
+  principalFormula: { marginTop: 5, color: '#0e7490', fontSize: 12, fontWeight: '800', textAlign: 'right' },
   formCard: { marginTop: 14, backgroundColor: '#fff', borderRadius: 26, padding: 17, borderWidth: 1, borderColor: '#e2e8f0' },
   formTitle: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' },
   inputLabel: { marginTop: 14, marginBottom: 7, color: '#334155', fontWeight: '900', textAlign: 'right' },
@@ -214,6 +231,9 @@ const styles = StyleSheet.create({
   previewRow: { marginTop: 12, backgroundColor: '#faf5ff', borderRadius: 17, borderWidth: 1, borderColor: '#e9d5ff', padding: 13, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   previewLabel: { color: '#6b21a8', fontWeight: '900', textAlign: 'right' },
   previewValue: { color: '#6d28d9', fontWeight: '900', fontSize: 17, textAlign: 'left' },
+  previewPrincipalRow: { backgroundColor: '#ecfeff', borderColor: '#a5f3fc' },
+  previewPrincipalLabel: { color: '#0e7490' },
+  previewPrincipalValue: { color: '#0e7490' },
   saveButton: { marginTop: 14, minHeight: 54, borderRadius: 17, backgroundColor: '#7c3aed', flexDirection: 'row-reverse', gap: 8, alignItems: 'center', justifyContent: 'center' },
   disabledButton: { opacity: 0.7 },
   saveText: { color: '#fff', fontSize: 16, fontWeight: '900' },
