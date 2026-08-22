@@ -1,0 +1,49 @@
+name: Ahmed Login Diagnostic
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ahmed-login-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-login:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect Ahmed users on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then
+                PROJECT="/home/pmsa/apps/ahmed"
+              else
+                PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"
+              fi
+            fi
+            cd "$PROJECT/ahmed-api"
+            php -r '
+              require "vendor/autoload.php";
+              $app = require "bootstrap/app.php";
+              $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+              $kernel->bootstrap();
+              $cols = ["id","name","username","updated_at"];
+              if (Illuminate\Support\Facades\Schema::hasColumn("users", "is_admin")) $cols[] = "is_admin";
+              $users = Illuminate\Support\Facades\DB::table("users")->select($cols)->orderBy("id")->get();
+              echo "AHMED_USERS_START\n";
+              foreach ($users as $u) {
+                echo json_encode($u, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
+              }
+              echo "AHMED_USERS_END\n";
+            '
+            echo "HEALTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' https://ahmed.pm.sa/api/health)"
