@@ -64,6 +64,7 @@ const iconMap = {
   ta3meed: Landmark,
   moneymoon: Moon,
   dinar: CircleDollarSign,
+  sulfa: Banknote,
   tokenize: Hexagon,
   settings: Settings,
 };
