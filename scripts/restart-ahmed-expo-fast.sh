@@ -21,7 +21,8 @@ log "Syncing latest main"
 git fetch origin main
 git reset --hard origin/main
 
-log "Removing halala decimals from credit-card amounts"
+log "Applying the same source patches used by Android APK"
+python3 scripts/patch-ta3meed-quick-menu.py
 python3 scripts/patch-credit-card-no-cents.py
 
 # Verify the compact credit-card UI is committed directly in source.
@@ -43,6 +44,14 @@ grep -q "cardBottomRow" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
 }
 grep -q "SAUDI_BANKS" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
   echo "ERROR: Saudi bank dropdown source is missing" >&2
+  exit 1
+}
+grep -q "اختصارات تعميد" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
+  echo "ERROR: Ta3meed floating quick menu is missing" >&2
+  exit 1
+}
+grep -q "onOpenInvestorAccounts" "$MOBILE_DIR/AppShell.js" || {
+  echo "ERROR: Ta3meed quick-menu navigation callbacks are missing" >&2
   exit 1
 }
 grep -q "minimumFractionDigits: 0" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
@@ -115,4 +124,4 @@ log "PID: $PID"
 log "URL: exp://$DOMAIN:$EXPO_PORT"
 tail -n 60 "$LOG_FILE" || true
 
-# manual restart trigger 2026-08-21T21:43+03:00
+# Expo and APK now share scripts/patch-ta3meed-quick-menu.py and patch-credit-card-no-cents.py
