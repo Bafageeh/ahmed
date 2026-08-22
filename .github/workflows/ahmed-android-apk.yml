@@ -40,11 +40,12 @@ jobs:
 
       - name: Apply same source patches used by Expo
         run: |
-          python3 ../scripts/patch-ta3meed-quick-menu.py
-          python3 ../scripts/patch-credit-card-no-cents.py
-          grep -F 'اختصارات تعميد' Ta3meedCompactFiltersScreen.js
-          grep -F "onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')}" AppShell.js
-          grep -F 'minimumFractionDigits: 0' CreditCardDebtsScreen.js
+          cd ..
+          python3 scripts/patch-ta3meed-quick-menu.py
+          python3 scripts/patch-credit-card-no-cents.py
+          grep -F 'اختصارات تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
+          grep -F "onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')}" ahmed-mobile/AppShell.js
+          grep -F 'minimumFractionDigits: 0' ahmed-mobile/CreditCardDebtsScreen.js
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -137,4 +138,4 @@ jobs:
               body: `📦 Ahmed APK ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk`,
             });
 
-# build trigger 2026-08-22 - force APK to use the same Ta3meed/credit-card patches as Expo
+# build trigger 2026-08-22 - APK and Expo use identical source patch scripts
