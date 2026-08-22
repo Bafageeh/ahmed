@@ -13,7 +13,6 @@ permissions:
 
 jobs:
   fix:
-    if: ${{ !contains(github.event.head_commit.message, '[skip ta3meed source fix]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -21,39 +20,68 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Apply source fix
+      - name: Apply current Expo source to committed app
+        run: |
+          python3 scripts/patch-ta3meed-quick-menu.py
+          python3 scripts/patch-credit-card-no-cents.py
+
+      - name: Restore normal Android identity and stop runtime source mutation
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import json
 
-          path = Path('ahmed-mobile/Ta3meedCompactFiltersScreen.js')
-          text = path.read_text(encoding='utf-8')
+          app = Path('ahmed-mobile/app.json')
+          data = json.loads(app.read_text(encoding='utf-8'))
+          expo = data['expo']
+          expo['name'] = 'Ahmed'
+          expo['version'] = '1.0.18'
+          expo['scheme'] = 'ahmed'
+          expo['android']['package'] = 'sa.pm.ahmed'
+          expo['android']['versionCode'] = 19
+          expo.setdefault('extra', {})['buildLabel'] = '2026-08-22-source-synced'
+          app.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
-          reset_line = "          {hasFilters ? <TouchableOpacity style={styles.resetButton} onPress={resetFilters} activeOpacity={0.85}><Text style={styles.resetButtonText}>إعادة الفلتر إلى نشط</Text></TouchableOpacity> : null}\n"
-          text = text.replace(reset_line, '')
+          restart = Path('scripts/restart-ahmed-expo-fast.sh')
+          text = restart.read_text(encoding='utf-8')
+          text = text.replace('log "Removing halala decimals from credit-card amounts"\npython3 scripts/patch-credit-card-no-cents.py\n\n', '')
 
-          old_sort = "]).sort((a, b) => withdrawalSortValue(b) - withdrawalSortValue(a));"
-          new_sort = ""]).sort((a, b) => {\n      const dateTextOf = (item) => String(item?.maturity_date || item?.due_date || '').slice(0, 10);\n      const dateValueOf = (item) => {\n        const dateText = dateTextOf(item);\n        if (!dateText) return null;\n        const value = new Date(`${dateText}T00:00:00`).getTime();\n        return Number.isFinite(value) ? value : null;\n      };\n      const aValue = dateValueOf(a);\n      const bValue = dateValueOf(b);\n      const aMissing = aValue === null;\n      const bMissing = bValue === null;\n      if (aMissing && !bMissing) return -1;\n      if (!aMissing && bMissing) return 1;\n      if (!aMissing && !bMissing && aValue !== bValue) return aValue - bValue;\n      return String(a?.reference_number || a?.code || a?.id || '').localeCompare(String(b?.reference_number || b?.code || b?.id || ''), 'ar');\n    });"""
-          if old_sort not in text and 'aMissing && !bMissing' not in text:
-              raise SystemExit('Old Ta3meed sort line not found and new sort not present')
-          text = text.replace(old_sort, new_sort)
-
-          if 'إعادة الفلتر إلى نشط' in text:
-              raise SystemExit('Reset filter text still exists')
-          if 'aMissing && !bMissing' not in text:
-              raise SystemExit('Maturity sort was not applied')
-
-          path.write_text(text, encoding='utf-8')
+          marker = 'grep -q "SAUDI_BANKS" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {\n  echo "ERROR: Saudi bank dropdown source is missing" >&2\n  exit 1\n}\n'
+          quick = '''grep -q "اختصارات تعميد" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
+  echo "ERROR: Ta3meed floating quick menu is missing from source" >&2
+  exit 1
+}
+grep -q "onOpenInvestorAccounts" "$MOBILE_DIR/AppShell.js" || {
+  echo "ERROR: Ta3meed quick-menu navigation callbacks are missing" >&2
+  exit 1
+}
+'''
+          if quick not in text:
+              if marker not in text:
+                  raise SystemExit('Restart verification marker not found')
+              text = text.replace(marker, marker + quick, 1)
+          restart.write_text(text, encoding='utf-8')
           PY
+
+      - name: Verify committed UI
+        run: |
+          grep -F 'اختصارات تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
+          grep -F 'إضافة واعتماد دفعة تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
+          grep -F "onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')}" ahmed-mobile/AppShell.js
+          grep -F "onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')}" ahmed-mobile/AppShell.js
+          grep -F 'minimumFractionDigits: 0' ahmed-mobile/CreditCardDebtsScreen.js
+          ! grep -F 'python3 scripts/patch-credit-card-no-cents.py' scripts/restart-ahmed-expo-fast.sh
+          grep -F '"package": "sa.pm.ahmed"' ahmed-mobile/app.json
+          grep -F '"versionCode": 19' ahmed-mobile/app.json
 
       - name: Commit fixed source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ahmed-mobile/Ta3meedCompactFiltersScreen.js
+          git add ahmed-mobile/Ta3meedCompactFiltersScreen.js ahmed-mobile/AppShell.js ahmed-mobile/CreditCardDebtsScreen.js ahmed-mobile/app.json scripts/restart-ahmed-expo-fast.sh
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Fix Ta3meed source sorting and remove reset filter [skip ta3meed source fix]"
+            git commit -m "Commit Ta3meed floating quick menu into app source"
             git push
           fi
