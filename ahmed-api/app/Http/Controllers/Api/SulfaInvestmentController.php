@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 class SulfaInvestmentController extends Controller
 {
     private const ANNUAL_RATE = 10.5;
+    private const PRINCIPAL_RETURN_MONTHS = 24;
 
     public function show(Request $request)
     {
@@ -72,6 +73,7 @@ class SulfaInvestmentController extends Controller
         $annualRate = (float) ($item->annual_rate ?? self::ANNUAL_RATE);
         $annualProfit = $amount * ($annualRate / 100);
         $monthlyProfit = $annualProfit / 12;
+        $monthlyPrincipalReturn = $amount / self::PRINCIPAL_RETURN_MONTHS;
 
         return [
             'id' => $item->id ?? null,
@@ -80,6 +82,8 @@ class SulfaInvestmentController extends Controller
             'annual_rate' => round($annualRate, 3),
             'annual_profit' => round($annualProfit, 2),
             'monthly_profit' => round($monthlyProfit, 2),
+            'principal_return_months' => self::PRINCIPAL_RETURN_MONTHS,
+            'monthly_principal_return' => round($monthlyPrincipalReturn, 2),
             'created_at' => $item->created_at ?? null,
             'updated_at' => $item->updated_at ?? null,
         ];
