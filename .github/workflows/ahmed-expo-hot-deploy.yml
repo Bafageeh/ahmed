@@ -20,6 +20,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Record OTA deploy start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `⏳ Ahmed OTA deploy started | run_id=${context.runId} | commit=${context.sha}`,
+            });
+
       - name: Restart Ahmed Expo and publish OTA over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
