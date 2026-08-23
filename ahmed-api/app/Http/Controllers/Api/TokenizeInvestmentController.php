@@ -182,6 +182,8 @@ class TokenizeInvestmentController extends Controller
             'roi' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             'apr' => ['nullable', 'numeric', 'min:0', 'max:1000'],
             'irr' => ['nullable', 'numeric', 'min:0', 'max:1000'],
+            'platform_fee_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'platform_fee_vat_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'distribution_type' => ['nullable', 'string', 'max:100'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date'],
@@ -215,6 +217,8 @@ class TokenizeInvestmentController extends Controller
             'roi' => $data['roi'] ?? 0,
             'apr' => $data['apr'] ?? 0,
             'irr' => $data['irr'] ?? 0,
+            'platform_fee_rate' => $data['platform_fee_rate'] ?? 1,
+            'platform_fee_vat_rate' => $data['platform_fee_vat_rate'] ?? 15,
             'distribution_type' => $data['distribution_type'] ?? null,
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
@@ -245,6 +249,17 @@ class TokenizeInvestmentController extends Controller
                 $table->text('notes')->nullable();
                 $table->timestamps();
                 $table->unique(['user_id', 'external_key']);
+            });
+        }
+
+        if (! Schema::hasColumn('tokenize_investments', 'platform_fee_rate')) {
+            Schema::table('tokenize_investments', function (Blueprint $table) {
+                $table->decimal('platform_fee_rate', 8, 4)->default(1)->after('irr');
+            });
+        }
+        if (! Schema::hasColumn('tokenize_investments', 'platform_fee_vat_rate')) {
+            Schema::table('tokenize_investments', function (Blueprint $table) {
+                $table->decimal('platform_fee_vat_rate', 8, 4)->default(15)->after('platform_fee_rate');
             });
         }
 
@@ -360,6 +375,24 @@ class TokenizeInvestmentController extends Controller
             ->orderBy('due_date')
             ->orderBy('installment_no')
             ->get();
+
+        $amount = (float) $item->investment_amount;
+        $durationMonths = max(0, (int) $item->duration_months);
+        $feeRate = isset($item->platform_fee_rate) ? (float) $item->platform_fee_rate : 1.0;
+        $vatRate = isset($item->platform_fee_vat_rate) ? (float) $item->platform_fee_vat_rate : 15.0;
+        $grossProfit = $amount * ((float) $item->roi / 100);
+        $feeBeforeVat = $amount * ($feeRate / 100) * ($durationMonths / 12);
+        $feeVat = $feeBeforeVat * ($vatRate / 100);
+        $scheduledProfit = (float) $item->payments->sum('profit_amount');
+
+        $item->platform_fee_rate = round($feeRate, 4);
+        $item->platform_fee_vat_rate = round($vatRate, 4);
+        $item->gross_profit = round($grossProfit, 2);
+        $item->platform_fee_before_vat = round($feeBeforeVat, 2);
+        $item->platform_fee_vat = round($feeVat, 2);
+        $item->platform_fee_total = round($feeBeforeVat + $feeVat, 2);
+        $item->net_profit_calculated = round($grossProfit - $feeBeforeVat - $feeVat, 2);
+        $item->scheduled_profit = round($scheduledProfit, 2);
         return $item;
     }
 
@@ -368,12 +401,16 @@ class TokenizeInvestmentController extends Controller
         $total = 0.0;
         $expected = 0.0;
         $received = 0.0;
+        $grossExpected = 0.0;
+        $platformFees = 0.0;
         $weightedApr = 0.0;
         $active = 0;
 
         foreach ($items as $item) {
             $amount = (float) $item->investment_amount;
             $total += $amount;
+            $grossExpected += (float) ($item->gross_profit ?? 0);
+            $platformFees += (float) ($item->platform_fee_total ?? 0);
             $weightedApr += $amount * (float) $item->apr;
             if ($item->status === 'active') $active++;
             foreach ($item->payments as $payment) {
@@ -386,6 +423,8 @@ class TokenizeInvestmentController extends Controller
             'count' => $items->count(),
             'active_count' => $active,
             'total_investment' => round($total, 2),
+            'gross_expected_profit' => round($grossExpected, 2),
+            'platform_fee_total' => round($platformFees, 2),
             'expected_profit' => round($expected, 2),
             'received_profit' => round($received, 2),
             'weighted_apr' => $total > 0 ? round($weightedApr / $total, 2) : 0,

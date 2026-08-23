@@ -22,7 +22,7 @@ const money = (value, digits = 2) => `${Number(value || 0).toLocaleString('en-US
 const num = (value) => { const n = Number(String(value ?? '').replace(/,/g, '')); return Number.isFinite(n) ? n : 0; };
 const pct = (value) => `${num(value).toFixed(2)}%`;
 const statusLabel = (status) => status === 'completed' ? 'منتهية' : status === 'paused' ? 'موقوفة' : 'قائمة';
-const emptyInvestment = () => ({ external_key: '', title: '', sector: '', investment_amount: '', units: '', duration_months: '', roi: '', apr: '', irr: '', distribution_type: 'ربع سنوي', start_date: '', end_date: '', status: 'active', notes: '' });
+const emptyInvestment = () => ({ external_key: '', title: '', sector: '', investment_amount: '', units: '', duration_months: '', roi: '', apr: '', irr: '', platform_fee_rate: '1', platform_fee_vat_rate: '15', distribution_type: 'ربع سنوي', start_date: '', end_date: '', status: 'active', notes: '' });
 const emptyPayment = () => ({ due_date: '', profit_amount: '', principal_amount: '', is_paid: false, notes: '' });
 
 export default function TokenizeInvestmentsScreen({ onBack }) {
@@ -66,7 +66,7 @@ export default function TokenizeInvestmentsScreen({ onBack }) {
     setForm({
       external_key: item.external_key || '', title: item.title || '', sector: item.sector || '', investment_amount: String(item.investment_amount ?? ''),
       units: String(item.units ?? ''), duration_months: String(item.duration_months ?? ''), roi: String(item.roi ?? ''), apr: String(item.apr ?? ''), irr: String(item.irr ?? ''),
-      distribution_type: item.distribution_type || '', start_date: item.start_date || '', end_date: item.end_date || '', status: item.status || 'active', notes: item.notes || '',
+      platform_fee_rate: String(item.platform_fee_rate ?? 1), platform_fee_vat_rate: String(item.platform_fee_vat_rate ?? 15), distribution_type: item.distribution_type || '', start_date: item.start_date || '', end_date: item.end_date || '', status: item.status || 'active', notes: item.notes || '',
     });
     setFormOpen(true);
   };
@@ -82,7 +82,7 @@ export default function TokenizeInvestmentsScreen({ onBack }) {
         body: JSON.stringify({
           ...form,
           investment_amount: num(form.investment_amount), units: Math.round(num(form.units)), duration_months: Math.round(num(form.duration_months)),
-          roi: num(form.roi), apr: num(form.apr), irr: num(form.irr), start_date: form.start_date || null, end_date: form.end_date || null,
+          roi: num(form.roi), apr: num(form.apr), irr: num(form.irr), platform_fee_rate: num(form.platform_fee_rate), platform_fee_vat_rate: num(form.platform_fee_vat_rate), start_date: form.start_date || null, end_date: form.end_date || null,
         }),
       });
       const json = await response.json();
@@ -162,8 +162,8 @@ export default function TokenizeInvestmentsScreen({ onBack }) {
         <View style={styles.detailHero}><Text style={styles.heroBadge}>ترميز</Text><Text style={styles.detailTitle}>{selected.title}</Text><Text style={styles.detailSub}>{selected.sector || 'بدون قطاع'}</Text></View>
         {!!message && <Text style={styles.message}>{message}</Text>}
         <View style={styles.statsGrid}><Stat title="الاستثمار" value={money(selected.investment_amount, 0)} /><Stat title="ROI" value={pct(selected.roi)} /><Stat title="APR" value={pct(selected.apr)} /><Stat title="IRR" value={pct(selected.irr)} /></View>
-        <View style={styles.infoCard}><Info label="المدة" value={`${selected.duration_months} شهر`} /><Info label="عدد الصكوك" value={String(selected.units || 0)} /><Info label="التوزيع" value={selected.distribution_type || '-'} /><Info label="الحالة" value={statusLabel(selected.status)} /><Info label="بداية التوزيع" value={selected.start_date || '-'} /><Info label="نهاية التوزيع" value={selected.end_date || '-'} /></View>
-        <View style={styles.profitCard}><Text style={styles.profitLabel}>إجمالي أرباح جدول التوزيعات</Text><Text style={styles.profitValue}>{money(scheduledProfit, 2)}</Text><Text style={styles.profitSub}>المستلم {money(received, 2)} · المتبقي {money(Math.max(0, scheduledProfit - received), 2)}</Text></View>
+        <View style={styles.infoCard}><Info label="المدة" value={`${selected.duration_months} شهر`} /><Info label="عدد الصكوك" value={String(selected.units || 0)} /><Info label="التوزيع" value={selected.distribution_type || '-'} /><Info label="الحالة" value={statusLabel(selected.status)} /><Info label="عمولة ترميز السنوية" value={pct(selected.platform_fee_rate)} /><Info label="ضريبة العمولة" value={pct(selected.platform_fee_vat_rate)} /><Info label="بداية التوزيع" value={selected.start_date || '-'} /><Info label="نهاية التوزيع" value={selected.end_date || '-'} /></View>
+        <View style={styles.profitCard}><Text style={styles.profitLabel}>صافي الربح بعد عمولة ترميز</Text><Text style={styles.profitValue}>{money(scheduledProfit, 2)}</Text><Text style={styles.profitSub}>قبل العمولة {money(selected.gross_profit, 2)} · العمولة والضريبة {money(selected.platform_fee_total, 2)}</Text><Text style={styles.profitSub}>عمولة {money(selected.platform_fee_before_vat, 2)} + ضريبة {money(selected.platform_fee_vat, 2)} · المستلم {money(received, 2)} · المتبقي {money(Math.max(0, scheduledProfit - received), 2)}</Text></View>
         <View style={styles.sectionRow}><Text style={styles.sectionTitle}>جدول التوزيعات</Text><TouchableOpacity style={styles.smallAdd} onPress={openAddPayment}><Text style={styles.smallAddText}>+ إضافة توزيع</Text></TouchableOpacity></View>
         {payments.length === 0 ? <Text style={styles.empty}>لا توجد توزيعات مسجلة.</Text> : payments.map((payment) => <View key={payment.id} style={[styles.paymentCard, Boolean(Number(payment.is_paid)) && styles.paymentPaid]}>
           <View style={styles.paymentHeader}><Text style={styles.paymentDate}>{payment.due_date}</Text><Text style={styles.paymentNo}>دفعة {payment.installment_no}</Text></View>
@@ -183,7 +183,7 @@ export default function TokenizeInvestmentsScreen({ onBack }) {
       <View style={styles.hero}><Text style={styles.heroBadge}>ترميز</Text><Text style={styles.heroTitle}>صكوك وفرص الاستثمار</Text><Text style={styles.heroText}>إضافة الفرص وإدارتها ومتابعة العوائد والتوزيعات ورأس المال.</Text></View>
       {!!message && <Text style={styles.message}>{message}</Text>}
       {loading && !items.length ? <ActivityIndicator color="#7c3aed" style={{ marginTop: 14 }} /> : null}
-      <View style={styles.statsGrid}><Stat title="إجمالي الاستثمار" value={money(summary.total_investment, 0)} /><Stat title="الفرص القائمة" value={String(summary.active_count || 0)} /><Stat title="الربح المتوقع" value={money(summary.expected_profit, 2)} /><Stat title="متوسط APR" value={pct(summary.weighted_apr)} /></View>
+      <View style={styles.statsGrid}><Stat title="إجمالي الاستثمار" value={money(summary.total_investment, 0)} /><Stat title="الفرص القائمة" value={String(summary.active_count || 0)} /><Stat title="الربح قبل العمولة" value={money(summary.gross_expected_profit, 2)} /><Stat title="عمولة ترميز + الضريبة" value={money(summary.platform_fee_total, 2)} /><Stat title="صافي الربح" value={money(summary.expected_profit, 2)} /><Stat title="متوسط APR" value={pct(summary.weighted_apr)} /></View>
       <TouchableOpacity style={styles.primaryAdd} onPress={openAdd}><Text style={styles.primaryAddText}>+ إضافة فرصة ترميز</Text></TouchableOpacity>
       <Text style={styles.sectionTitle}>الفرص</Text>
       {items.length === 0 && !loading ? <Text style={styles.empty}>لا توجد فرص مسجلة.</Text> : null}
@@ -208,6 +208,7 @@ function InvestmentModal({ visible, form, setForm, editing, onClose, onSave }) {
     <View style={styles.twoCols}><Field label="مبلغ الاستثمار" value={form.investment_amount} onChange={(v) => field('investment_amount', v)} numeric /><Field label="عدد الصكوك" value={form.units} onChange={(v) => field('units', v)} numeric /></View>
     <View style={styles.twoCols}><Field label="المدة بالشهور" value={form.duration_months} onChange={(v) => field('duration_months', v)} numeric /><Field label="ROI %" value={form.roi} onChange={(v) => field('roi', v)} numeric /></View>
     <View style={styles.twoCols}><Field label="APR %" value={form.apr} onChange={(v) => field('apr', v)} numeric /><Field label="IRR %" value={form.irr} onChange={(v) => field('irr', v)} numeric /></View>
+    <View style={styles.twoCols}><Field label="عمولة ترميز السنوية %" value={form.platform_fee_rate} onChange={(v) => field('platform_fee_rate', v)} numeric /><Field label="ضريبة العمولة %" value={form.platform_fee_vat_rate} onChange={(v) => field('platform_fee_vat_rate', v)} numeric /></View>
     <Label text="نوع التوزيع" /><TextInput style={styles.input} value={form.distribution_type} onChangeText={(v) => field('distribution_type', v)} placeholder="ربع سنوي" />
     <View style={styles.twoCols}><Field label="تاريخ البداية" value={form.start_date} onChange={(v) => field('start_date', v)} placeholder="2026-11-24" /><Field label="تاريخ النهاية" value={form.end_date} onChange={(v) => field('end_date', v)} placeholder="2027-08-24" /></View>
     <Label text="الحالة" /><View style={styles.choiceRow}>{[['active','قائمة'],['completed','منتهية'],['paused','موقوفة']].map(([key,label]) => <TouchableOpacity key={key} style={[styles.choice, form.status === key && styles.choiceActive]} onPress={() => field('status', key)}><Text style={[styles.choiceText, form.status === key && styles.choiceTextActive]}>{label}</Text></TouchableOpacity>)}</View>
