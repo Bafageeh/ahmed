@@ -54,10 +54,24 @@ jobs:
               $controller = app(App\Http\Controllers\Api\TokenizeInvestmentController::class);
               $response = $controller->index($request);
               $json = json_decode($response->getContent(), true);
-              echo "SUMMARY_GROSS=".$json["summary"]["gross_expected_profit"]."\n";
-              echo "SUMMARY_FEES=".$json["summary"]["platform_fee_total"]."\n";
-              echo "SUMMARY_NET=".$json["summary"]["expected_profit"]."\n";
+              $gross = (float)$json["summary"]["gross_expected_profit"];
+              $fees = (float)$json["summary"]["platform_fee_total"];
+              $net = (float)$json["summary"]["expected_profit"];
+              echo "SUMMARY_GROSS=".$gross."\n";
+              echo "SUMMARY_FEES=".$fees."\n";
+              echo "SUMMARY_NET=".$net."\n";
+              if (abs($gross - 3125.00) > 0.01 || abs($fees - 249.17) > 0.01 || abs($net - 2875.83) > 0.01) {
+                fwrite(STDERR, "Tokenize summary mismatch\n"); exit(2);
+              }
               foreach ($json["data"] as $item) {
                 echo "OPPORTUNITY=".$item["external_key"]." GROSS=".$item["gross_profit"]." FEE=".$item["platform_fee_before_vat"]." VAT=".$item["platform_fee_vat"]." TOTAL_FEE=".$item["platform_fee_total"]." NET_CALC=".$item["net_profit_calculated"]." SCHEDULED=".$item["scheduled_profit"]."\n";
+                if ($item["external_key"] === "1171-09" && (abs((float)$item["platform_fee_total"] - 115.00) > 0.01 || abs((float)$item["scheduled_profit"] - 1260.00) > 0.01)) exit(3);
+                if ($item["external_key"] === "1159-24" && (abs((float)$item["platform_fee_total"] - 134.17) > 0.01 || abs((float)$item["scheduled_profit"] - 1615.83) > 0.01)) exit(4);
               }
             '
+
+      - name: Record verified totals
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `✅ Tokenize commission verified: gross 3,125.00 SAR - fee/VAT 249.17 SAR = net 2,875.83 SAR | commit=${context.sha}`});
