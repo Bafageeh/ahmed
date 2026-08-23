@@ -63,6 +63,12 @@ grep -q "TokenizeInvestmentsScreen" "$MOBILE_DIR/AppShell.js" || {
   echo "ERROR: Tokenize platform is not wired into AppShell.js" >&2
   exit 1
 }
+TOKENIZE_IMPORT_COUNT="$(grep -Fc "import TokenizeInvestmentsScreen from './TokenizeInvestmentsScreen';" "$MOBILE_DIR/AppShell.js")"
+TOKENIZE_NAV_COUNT="$(grep -Fc "if (investmentScreen === 'tokenize')" "$MOBILE_DIR/AppShell.js")"
+if [ "$TOKENIZE_IMPORT_COUNT" -ne 1 ] || [ "$TOKENIZE_NAV_COUNT" -ne 1 ]; then
+  echo "ERROR: Duplicate Tokenize wiring detected (imports=$TOKENIZE_IMPORT_COUNT, nav=$TOKENIZE_NAV_COUNT)" >&2
+  exit 1
+fi
 grep -q "Route::get('/tokenize/investments'" "$PROJECT_PATH/ahmed-api/routes/api.php" || {
   echo "ERROR: Tokenize API routes are missing" >&2
   exit 1
@@ -133,4 +139,4 @@ log "PID: $PID"
 log "URL: exp://$DOMAIN:$EXPO_PORT"
 tail -n 60 "$LOG_FILE" || true
 
-# Expo and APK share the Ta3meed, credit-card, and Tokenize source patch scripts.
+# Expo and APK share the Ta3meed, credit-card, and idempotent Tokenize source patch scripts.
