@@ -3,91 +3,80 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 app = root / 'ahmed-mobile' / 'AppShell.js'
+screen = root / 'ahmed-mobile' / 'TokenizeInvestmentsScreen.js'
 api = root / 'ahmed-api' / 'routes' / 'api.php'
+controller = root / 'ahmed-api' / 'app' / 'Http' / 'Controllers' / 'Api' / 'TokenizeInvestmentController.php'
 
-# Keep the mobile wiring canonical even when this patch is run repeatedly
-# by Expo restart, OTA publish, diagnostics, or APK build jobs.
+# Keep Tokenize wiring idempotent so repeated Expo/APK deploys never duplicate imports/routes.
 text = app.read_text()
-lines = text.splitlines()
-
-# Remove any previously injected Tokenize import/navigation lines first.
-lines = [
-    line for line in lines
-    if "import TokenizeInvestmentsScreen from './TokenizeInvestmentsScreen';" not in line
-    and "if (investmentScreen === 'tokenize') return <TokenizeInvestmentsScreen" not in line
-]
-text = '\n'.join(lines) + '\n'
-
-sulfa_import = "import SulfaInvestmentScreen from './SulfaInvestmentScreen';"
-tokenize_import = "import TokenizeInvestmentsScreen from './TokenizeInvestmentsScreen';"
-if sulfa_import not in text:
-    raise SystemExit('Missing Sulfa import anchor in AppShell.js')
-text = text.replace(sulfa_import, f"{sulfa_import}\n{tokenize_import}", 1)
-
-old_keys = "const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa'];"
-new_keys = "const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];"
-text = text.replace(old_keys, new_keys)
-
-text = text.replace(
-    "{ key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'قريبًا.' },",
-    "{ key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'صكوك ترميز والعوائد والتوزيعات.' },",
-)
-
-sulfa_nav = "      if (investmentScreen === 'sulfa') return <SulfaInvestmentScreen onBack={() => setInvestmentScreen('list')} />;"
-tokenize_nav = "      if (investmentScreen === 'tokenize') return <TokenizeInvestmentsScreen onBack={() => setInvestmentScreen('list')} />;"
-if sulfa_nav not in text:
-    raise SystemExit('Missing Sulfa navigation anchor in AppShell.js')
-text = text.replace(sulfa_nav, f"{sulfa_nav}\n{tokenize_nav}", 1)
+import_line = "import TokenizeInvestmentsScreen from './TokenizeInvestmentsScreen';"
+lines = [line for line in text.splitlines() if line.strip() != import_line]
+text = '\n'.join(lines) + ('\n' if text.endswith('\n') else '')
+text = text.replace("import SulfaInvestmentScreen from './SulfaInvestmentScreen';", "import SulfaInvestmentScreen from './SulfaInvestmentScreen';\n" + import_line)
+text = text.replace("const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa'];", "const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];")
+text = text.replace("{ key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'قريبًا.' },", "{ key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'صكوك ترميز والعوائد والتوزيعات.' },")
+nav_line = "      if (investmentScreen === 'tokenize') return <TokenizeInvestmentsScreen onBack={() => setInvestmentScreen('list')} />;"
+lines = [line for line in text.splitlines() if line.strip() != nav_line.strip()]
+text = '\n'.join(lines) + ('\n' if text.endswith('\n') else '')
+text = text.replace("      if (investmentScreen === 'sulfa') return <SulfaInvestmentScreen onBack={() => setInvestmentScreen('list')} />;", "      if (investmentScreen === 'sulfa') return <SulfaInvestmentScreen onBack={() => setInvestmentScreen('list')} />;\n" + nav_line)
 app.write_text(text)
 
-# Keep the API controller import canonical as well.
+# The actual cash distributions are the authoritative profit figures. ROI/APR/IRR stay informational.
+text = screen.read_text()
+text = text.replace("    const expectedByRoi = num(selected.investment_amount) * num(selected.roi) / 100;\n", "")
+text = text.replace(
+    '<View style={styles.profitCard}><Text style={styles.profitLabel}>الربح المتوقع حسب ROI</Text><Text style={styles.profitValue}>{money(expectedByRoi, 2)}</Text><Text style={styles.profitSub}>المجدول حاليًا {money(scheduledProfit, 2)} · المستلم {money(received, 2)}</Text></View>',
+    '<View style={styles.profitCard}><Text style={styles.profitLabel}>إجمالي أرباح جدول التوزيعات</Text><Text style={styles.profitValue}>{money(scheduledProfit, 2)}</Text><Text style={styles.profitSub}>المستلم {money(received, 2)} · المتبقي {money(Math.max(0, scheduledProfit - received), 2)}</Text></View>'
+)
+screen.write_text(text)
+
 text = api.read_text()
-api_lines = [
-    line for line in text.splitlines()
-    if "use App\\Http\\Controllers\\Api\\TokenizeInvestmentController;" not in line
+use_line = "use App\\Http\\Controllers\\Api\\TokenizeInvestmentController;"
+lines = [line for line in text.splitlines() if line.strip() != use_line]
+text = '\n'.join(lines) + ('\n' if text.endswith('\n') else '')
+text = text.replace("use App\\Http\\Controllers\\Api\\Ta3meedReceiptController;", "use App\\Http\\Controllers\\Api\\Ta3meedReceiptController;\n" + use_line)
+route_needles = [
+    "    Route::get('/tokenize/investments', [TokenizeInvestmentController::class, 'index']);",
+    "    Route::post('/tokenize/investments', [TokenizeInvestmentController::class, 'store']);",
+    "    Route::put('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'update']);",
+    "    Route::delete('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'destroy']);",
+    "    Route::post('/tokenize/investments/{investmentId}/payments', [TokenizeInvestmentController::class, 'storePayment']);",
+    "    Route::put('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'updatePayment']);",
+    "    Route::delete('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'destroyPayment']);",
+    "    Route::post('/tokenize/payments/{paymentId}/toggle-paid', [TokenizeInvestmentController::class, 'togglePayment']);",
 ]
-text = '\n'.join(api_lines) + '\n'
-receipt_import = "use App\\Http\\Controllers\\Api\\Ta3meedReceiptController;"
-tokenize_controller_import = "use App\\Http\\Controllers\\Api\\TokenizeInvestmentController;"
-if receipt_import not in text:
-    raise SystemExit('Missing Ta3meedReceiptController import anchor in api.php')
-text = text.replace(receipt_import, f"{receipt_import}\n{tokenize_controller_import}", 1)
-
+lines = [line for line in text.splitlines() if line not in route_needles]
+text = '\n'.join(lines) + ('\n' if text.endswith('\n') else '')
 anchor = "    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);"
-routes = """    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);
-
-    Route::get('/tokenize/investments', [TokenizeInvestmentController::class, 'index']);
-    Route::post('/tokenize/investments', [TokenizeInvestmentController::class, 'store']);
-    Route::put('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'update']);
-    Route::delete('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'destroy']);
-    Route::post('/tokenize/investments/{investmentId}/payments', [TokenizeInvestmentController::class, 'storePayment']);
-    Route::put('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'updatePayment']);
-    Route::delete('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'destroyPayment']);
-    Route::post('/tokenize/payments/{paymentId}/toggle-paid', [TokenizeInvestmentController::class, 'togglePayment']);"""
-if "Route::get('/tokenize/investments'" not in text:
-    if anchor not in text:
-        raise SystemExit('Missing Dinar route anchor in api.php')
-    text = text.replace(anchor, routes, 1)
+routes = anchor + "\n\n" + "\n".join(route_needles)
+text = text.replace(anchor, routes)
 api.write_text(text)
 
-app_text = app.read_text()
-api_text = api.read_text()
+text = controller.read_text()
+text = text.replace("            $expected += $amount * ((float) $item->roi / 100);\n", "")
+text = text.replace(
+    "            foreach ($item->payments as $payment) {\n                if ((bool) $payment->is_paid) $received += (float) $payment->profit_amount;\n            }",
+    "            foreach ($item->payments as $payment) {\n                $expected += (float) $payment->profit_amount;\n                if ((bool) $payment->is_paid) $received += (float) $payment->profit_amount;\n            }"
+)
+controller.write_text(text)
+
 checks = [
-    ("TokenizeInvestmentsScreen", app_text),
-    ("'tokenize'", app_text),
-    ("صكوك ترميز والعوائد والتوزيعات", app_text),
-    ("TokenizeInvestmentController", api_text),
-    ("Route::get('/tokenize/investments'", api_text),
+    (import_line, app),
+    ("'tokenize'", app),
+    ("صكوك ترميز والعوائد والتوزيعات", app),
+    (use_line, api),
+    ("Route::get('/tokenize/investments'", api),
+    ("إجمالي أرباح جدول التوزيعات", screen),
+    ("$expected += (float) $payment->profit_amount;", controller),
 ]
-for needle, haystack in checks:
-    if needle not in haystack:
-        raise SystemExit(f'Missing {needle}')
+for needle, path in checks:
+    if needle not in path.read_text():
+        raise SystemExit(f'Missing {needle} in {path}')
+if app.read_text().count(import_line) != 1:
+    raise SystemExit('Tokenize import must appear exactly once')
+if "expectedByRoi" in screen.read_text():
+    raise SystemExit('Tokenize screen still calculates expected profit from ROI')
+if "$expected += $amount * ((float) $item->roi / 100);" in controller.read_text():
+    raise SystemExit('Tokenize API still calculates expected profit from ROI')
 
-if app_text.count(tokenize_import) != 1:
-    raise SystemExit('Tokenize mobile import must exist exactly once')
-if app_text.count("if (investmentScreen === 'tokenize')") != 1:
-    raise SystemExit('Tokenize navigation must exist exactly once')
-if api_text.count(tokenize_controller_import) != 1:
-    raise SystemExit('Tokenize API controller import must exist exactly once')
-
-print('Tokenize platform patch applied idempotently and verified')
+print('Tokenize platform patch applied and verified')
