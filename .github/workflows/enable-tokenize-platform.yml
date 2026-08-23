@@ -2,20 +2,26 @@ name: Enable Tokenize Platform
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - '.github/workflows/enable-tokenize-platform.yml'
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   patch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Record start
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `🟣 Tokenize wiring started | run_id=${context.runId} | commit=${context.sha}`});
+
+      - uses: actions/checkout@v4
 
       - name: Wire Tokenize mobile and API
         run: |
@@ -66,4 +72,11 @@ jobs:
           git commit -m "Activate Tokenize investment platform"
           git push origin main
 
-# trigger 2026-08-23
+      - name: Record finish
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `🟣 Tokenize wiring finished with ${context.job} | run_id=${context.runId}`});
+
+# trigger diagnostics 2026-08-23
