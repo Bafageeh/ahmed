@@ -156,7 +156,6 @@ export default function TokenizeInvestmentsScreen({ onBack }) {
     const payments = selected.payments || [];
     const received = payments.filter((p) => Boolean(Number(p.is_paid))).reduce((s, p) => s + num(p.profit_amount), 0);
     const scheduledProfit = payments.reduce((s, p) => s + num(p.profit_amount), 0);
-    const expectedByRoi = num(selected.investment_amount) * num(selected.roi) / 100;
     return <SafeAreaView style={styles.safe}><StatusBar style="dark" />
       <View style={styles.topBar}><TouchableOpacity style={styles.backButton} onPress={() => setSelectedId(null)}><UiIcon name="back" size={24} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.topTitle} numberOfLines={1}>{selected.external_key}</Text><TouchableOpacity style={styles.editTop} onPress={() => openEdit(selected)}><Text style={styles.editTopText}>تعديل</Text></TouchableOpacity></View>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor="#7c3aed" />}>
@@ -164,7 +163,7 @@ export default function TokenizeInvestmentsScreen({ onBack }) {
         {!!message && <Text style={styles.message}>{message}</Text>}
         <View style={styles.statsGrid}><Stat title="الاستثمار" value={money(selected.investment_amount, 0)} /><Stat title="ROI" value={pct(selected.roi)} /><Stat title="APR" value={pct(selected.apr)} /><Stat title="IRR" value={pct(selected.irr)} /></View>
         <View style={styles.infoCard}><Info label="المدة" value={`${selected.duration_months} شهر`} /><Info label="عدد الصكوك" value={String(selected.units || 0)} /><Info label="التوزيع" value={selected.distribution_type || '-'} /><Info label="الحالة" value={statusLabel(selected.status)} /><Info label="بداية التوزيع" value={selected.start_date || '-'} /><Info label="نهاية التوزيع" value={selected.end_date || '-'} /></View>
-        <View style={styles.profitCard}><Text style={styles.profitLabel}>الربح المتوقع حسب ROI</Text><Text style={styles.profitValue}>{money(expectedByRoi, 2)}</Text><Text style={styles.profitSub}>المجدول حاليًا {money(scheduledProfit, 2)} · المستلم {money(received, 2)}</Text></View>
+        <View style={styles.profitCard}><Text style={styles.profitLabel}>إجمالي أرباح جدول التوزيعات</Text><Text style={styles.profitValue}>{money(scheduledProfit, 2)}</Text><Text style={styles.profitSub}>المستلم {money(received, 2)} · المتبقي {money(Math.max(0, scheduledProfit - received), 2)}</Text></View>
         <View style={styles.sectionRow}><Text style={styles.sectionTitle}>جدول التوزيعات</Text><TouchableOpacity style={styles.smallAdd} onPress={openAddPayment}><Text style={styles.smallAddText}>+ إضافة توزيع</Text></TouchableOpacity></View>
         {payments.length === 0 ? <Text style={styles.empty}>لا توجد توزيعات مسجلة.</Text> : payments.map((payment) => <View key={payment.id} style={[styles.paymentCard, Boolean(Number(payment.is_paid)) && styles.paymentPaid]}>
           <View style={styles.paymentHeader}><Text style={styles.paymentDate}>{payment.due_date}</Text><Text style={styles.paymentNo}>دفعة {payment.installment_no}</Text></View>

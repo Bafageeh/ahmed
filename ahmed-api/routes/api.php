@@ -89,6 +89,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'updatePayment']);
     Route::delete('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'destroyPayment']);
     Route::post('/tokenize/payments/{paymentId}/toggle-paid', [TokenizeInvestmentController::class, 'togglePayment']);
+
     Route::get('/sulfa/investment', [SulfaInvestmentController::class, 'show']);
     Route::put('/sulfa/investment', [SulfaInvestmentController::class, 'update']);
 

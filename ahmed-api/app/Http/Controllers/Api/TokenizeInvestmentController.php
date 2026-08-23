@@ -374,10 +374,10 @@ class TokenizeInvestmentController extends Controller
         foreach ($items as $item) {
             $amount = (float) $item->investment_amount;
             $total += $amount;
-            $expected += $amount * ((float) $item->roi / 100);
             $weightedApr += $amount * (float) $item->apr;
             if ($item->status === 'active') $active++;
             foreach ($item->payments as $payment) {
+                $expected += (float) $payment->profit_amount;
                 if ((bool) $payment->is_paid) $received += (float) $payment->profit_amount;
             }
         }
