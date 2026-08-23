@@ -1,0 +1,67 @@
+name: Enable Tokenize Platform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/enable-tokenize-platform.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wire Tokenize mobile and API
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('ahmed-mobile/AppShell.js')
+          text = app.read_text()
+          text = text.replace("import SulfaInvestmentScreen from './SulfaInvestmentScreen';", "import SulfaInvestmentScreen from './SulfaInvestmentScreen';\nimport TokenizeInvestmentsScreen from './TokenizeInvestmentsScreen';")
+          text = text.replace("const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa'];", "const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];")
+          text = text.replace("{ key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'قريبًا.' },", "{ key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'صكوك ترميز والعوائد والتوزيعات.' },")
+          text = text.replace("if (investmentScreen === 'sulfa') return <SulfaInvestmentScreen onBack={() => setInvestmentScreen('list')} />;", "if (investmentScreen === 'sulfa') return <SulfaInvestmentScreen onBack={() => setInvestmentScreen('list')} />;\n      if (investmentScreen === 'tokenize') return <TokenizeInvestmentsScreen onBack={() => setInvestmentScreen('list')} />;")
+          app.write_text(text)
+
+          api = Path('ahmed-api/routes/api.php')
+          text = api.read_text()
+          text = text.replace("use App\\Http\\Controllers\\Api\\Ta3meedReceiptController;", "use App\\Http\\Controllers\\Api\\Ta3meedReceiptController;\nuse App\\Http\\Controllers\\Api\\TokenizeInvestmentController;")
+          anchor = "    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);"
+          routes = """    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);
+
+    Route::get('/tokenize/investments', [TokenizeInvestmentController::class, 'index']);
+    Route::post('/tokenize/investments', [TokenizeInvestmentController::class, 'store']);
+    Route::put('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'update']);
+    Route::delete('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'destroy']);
+    Route::post('/tokenize/investments/{investmentId}/payments', [TokenizeInvestmentController::class, 'storePayment']);
+    Route::put('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'updatePayment']);
+    Route::delete('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'destroyPayment']);
+    Route::post('/tokenize/payments/{paymentId}/toggle-paid', [TokenizeInvestmentController::class, 'togglePayment']);"""
+          if "Route::get('/tokenize/investments'" not in text:
+              text = text.replace(anchor, routes)
+          api.write_text(text)
+
+          assert "TokenizeInvestmentsScreen" in app.read_text()
+          assert "'tokenize'" in app.read_text()
+          assert "TokenizeInvestmentController" in api.read_text()
+          assert "Route::get('/tokenize/investments'" in api.read_text()
+          PY
+
+      - name: Commit canonical wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/AppShell.js ahmed-api/routes/api.php
+          if git diff --cached --quiet; then
+            echo "Already wired"
+            exit 0
+          fi
+          git commit -m "Activate Tokenize investment platform"
+          git push origin main
