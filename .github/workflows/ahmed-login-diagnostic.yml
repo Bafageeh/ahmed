@@ -23,10 +23,10 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 1,
-              body: `🔎 Ahmed login diagnostic started | run_id=${context.runId} | commit=${context.sha}`,
+              body: `🔎 Ahmed Tokenize diagnostic started | run_id=${context.runId} | commit=${context.sha}`,
             });
 
-      - name: Sync and inspect Ahmed login on server
+      - name: Verify Tokenize on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -46,20 +46,22 @@ jobs:
             cd "$PROJECT"
             git fetch origin main
             git reset --hard origin/main
+            python3 scripts/patch-tokenize-platform.py
             echo "SERVER_HEAD=$(git rev-parse HEAD)"
-            grep -F "LOWER(username)" ahmed-api/app/Http/Controllers/Api/AhmedSessionController.php
+            grep -F 'TokenizeInvestmentsScreen' ahmed-mobile/AppShell.js
+            grep -F "Route::get('/tokenize/investments'" ahmed-api/routes/api.php
             cd "$PROJECT/ahmed-api"
             php artisan optimize:clear >/dev/null 2>&1 || true
+            php artisan route:list --path=tokenize
             php -r '
               require "vendor/autoload.php";
               $app = require "bootstrap/app.php";
               $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
               $kernel->bootstrap();
-              $cols = ["id","name","username","updated_at"];
-              if (Illuminate\Support\Facades\Schema::hasColumn("users", "is_admin")) $cols[] = "is_admin";
-              $users = Illuminate\Support\Facades\DB::table("users")->select($cols)->orderBy("id")->get();
-              echo "AHMED_USERS_START\n";
-              foreach ($users as $u) echo json_encode($u, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
-              echo "AHMED_USERS_END\n";
+              $request = Illuminate\Http\Request::create("/api/tokenize/investments", "GET");
+              $request->attributes->set("ahmed_user_id", 1);
+              $controller = app(App\Http\Controllers\Api\TokenizeInvestmentController::class);
+              $response = $controller->index($request);
+              echo "TOKENIZE_RESPONSE=".$response->getContent()."\n";
             '
             echo "HEALTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' https://ahmed.pm.sa/api/health)"
