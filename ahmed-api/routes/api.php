@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\Ta3meedImageImportController;
 use App\Http\Controllers\Api\Ta3meedInvestorAccountController;
 use App\Http\Controllers\Api\Ta3meedMutationController;
 use App\Http\Controllers\Api\Ta3meedReceiptController;
+use App\Http\Controllers\Api\TokenizeInvestmentController;
 use App\Http\Controllers\Api\WhatsAppController;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Api\MonthlyIncomeController;
@@ -79,6 +80,15 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonTenantController::class, 'receive']);
     Route::get('/dinar/investments', [DinarInvestmentController::class, 'index']);
     Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);
+
+    Route::get('/tokenize/investments', [TokenizeInvestmentController::class, 'index']);
+    Route::post('/tokenize/investments', [TokenizeInvestmentController::class, 'store']);
+    Route::put('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'update']);
+    Route::delete('/tokenize/investments/{id}', [TokenizeInvestmentController::class, 'destroy']);
+    Route::post('/tokenize/investments/{investmentId}/payments', [TokenizeInvestmentController::class, 'storePayment']);
+    Route::put('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'updatePayment']);
+    Route::delete('/tokenize/investments/{investmentId}/payments/{paymentId}', [TokenizeInvestmentController::class, 'destroyPayment']);
+    Route::post('/tokenize/payments/{paymentId}/toggle-paid', [TokenizeInvestmentController::class, 'togglePayment']);
     Route::get('/sulfa/investment', [SulfaInvestmentController::class, 'show']);
     Route::put('/sulfa/investment', [SulfaInvestmentController::class, 'update']);
 

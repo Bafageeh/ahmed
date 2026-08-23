@@ -8,6 +8,7 @@ import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
 import MoneyMoonScreen from './MoneyMoonActiveOnlyScreen';
 import DinarInvestmentsScreen from './DinarInvestmentsScreen';
 import SulfaInvestmentScreen from './SulfaInvestmentScreen';
+import TokenizeInvestmentsScreen from './TokenizeInvestmentsScreen';
 import WealthScreen from './WealthScreen';
 import AhmedUsersManagerPanel from './AhmedUsersManagerPanel';
 import SecureVaultScreen from './SecureVaultScreen';
@@ -32,7 +33,7 @@ const tabs = [
   { key: 'more', label: 'مزيد', icon: 'more' },
 ];
 
-const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa'];
+const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
 const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'debts', 'financeImports', 'stats'];
 
 const platforms = [
@@ -40,7 +41,7 @@ const platforms = [
   { key: 'moneymoon', name: 'موني مون', icon: 'moneymoon', text: 'إدارة استثمارات موني مون.' },
   { key: 'dinar', name: 'دينار', icon: 'dinar', text: 'شركات دينار والتوزيعات والإحصائيات.' },
   { key: 'sulfa', name: 'سلفة', icon: 'sulfa', text: 'تسجيل المبلغ المستثمر وحساب الربح الشهري.' },
-  { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'قريبًا.' },
+  { key: 'tokenize', name: 'ترميز', icon: 'tokenize', text: 'صكوك ترميز والعوائد والتوزيعات.' },
 ];
 
 export default function AppShell({ currentUser, onLogout }) {
@@ -83,6 +84,7 @@ export default function AppShell({ currentUser, onLogout }) {
       if (investmentScreen === 'moneymoon') return <MoneyMoonScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'dinar') return <DinarInvestmentsScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'sulfa') return <SulfaInvestmentScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'tokenize') return <TokenizeInvestmentsScreen onBack={() => setInvestmentScreen('list')} />;
       return <InvestmentsScreen openPlatform={setInvestmentScreen} />;
     }
     return <WealthScreen openInvestments={openInvestments} />;
