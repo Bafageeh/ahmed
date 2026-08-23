@@ -92,11 +92,6 @@ Route::middleware('ahmed.auth')->group(function () {
 
     Route::get('/sulfa/investment', [SulfaInvestmentController::class, 'show']);
     Route::put('/sulfa/investment', [SulfaInvestmentController::class, 'update']);
-    Route::get('/sulfa/investments', [SulfaInvestmentController::class, 'index']);
-    Route::post('/sulfa/investments', [SulfaInvestmentController::class, 'storeEntry']);
-    Route::put('/sulfa/investments/{id}', [SulfaInvestmentController::class, 'updateEntry']);
-    Route::delete('/sulfa/investments/{id}', [SulfaInvestmentController::class, 'destroyEntry']);
-    Route::post('/sulfa/investments/{id}/toggle-active', [SulfaInvestmentController::class, 'toggleEntry']);
 
     Route::get('/ta3meed/investments', [Ta3meedController::class, 'index']);
     Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);

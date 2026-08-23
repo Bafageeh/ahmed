@@ -393,6 +393,21 @@ class TokenizeInvestmentController extends Controller
         $item->platform_fee_total = round($feeBeforeVat + $feeVat, 2);
         $item->net_profit_calculated = round($grossProfit - $feeBeforeVat - $feeVat, 2);
         $item->scheduled_profit = round($scheduledProfit, 2);
+
+        // متوسط الربح الشهري للفرصة مع مراعاة مدة كل استثمار.
+        // نستخدم جدول التوزيعات عند توفره لأنه الأقرب للربح المتوقع الفعلي،
+        // وإلا نرجع لصافي الربح المحسوب بعد عمولة ترميز والضريبة.
+        $profitForMonthlyAverage = $scheduledProfit > 0
+            ? $scheduledProfit
+            : max(0, $grossProfit - $feeBeforeVat - $feeVat);
+        $monthsForAverage = max(1, $durationMonths);
+        $monthlyProfitAverage = $profitForMonthlyAverage / $monthsForAverage;
+
+        $item->profit_for_monthly_average = round($profitForMonthlyAverage, 2);
+        $item->monthly_profit_average = round($monthlyProfitAverage, 2);
+        $item->annualized_profit_rate = $amount > 0
+            ? round((($monthlyProfitAverage * 12) / $amount) * 100, 2)
+            : 0;
         return $item;
     }
 
@@ -405,6 +420,8 @@ class TokenizeInvestmentController extends Controller
         $platformFees = 0.0;
         $weightedApr = 0.0;
         $active = 0;
+        $activeInvestment = 0.0;
+        $monthlyProfitAverage = 0.0;
 
         foreach ($items as $item) {
             $amount = (float) $item->investment_amount;
@@ -412,22 +429,37 @@ class TokenizeInvestmentController extends Controller
             $grossExpected += (float) ($item->gross_profit ?? 0);
             $platformFees += (float) ($item->platform_fee_total ?? 0);
             $weightedApr += $amount * (float) $item->apr;
-            if ($item->status === 'active') $active++;
+
+            if ($item->status === 'active') {
+                $active++;
+                $activeInvestment += $amount;
+                $monthlyProfitAverage += (float) ($item->monthly_profit_average ?? 0);
+            }
+
             foreach ($item->payments as $payment) {
                 $expected += (float) $payment->profit_amount;
-                if ((bool) $payment->is_paid) $received += (float) $payment->profit_amount;
+                if ((bool) $payment->is_paid) {
+                    $received += (float) $payment->profit_amount;
+                }
             }
         }
+
+        $annualizedProfitRate = $activeInvestment > 0
+            ? (($monthlyProfitAverage * 12) / $activeInvestment) * 100
+            : 0;
 
         return [
             'count' => $items->count(),
             'active_count' => $active,
             'total_investment' => round($total, 2),
+            'active_investment' => round($activeInvestment, 2),
             'gross_expected_profit' => round($grossExpected, 2),
             'platform_fee_total' => round($platformFees, 2),
             'expected_profit' => round($expected, 2),
             'received_profit' => round($received, 2),
             'weighted_apr' => $total > 0 ? round($weightedApr / $total, 2) : 0,
+            'monthly_profit_average' => round($monthlyProfitAverage, 2),
+            'annualized_profit_rate' => round($annualizedProfitRate, 2),
         ];
     }
 
