@@ -1,4 +1,4 @@
-name: Ahmed Tokenize Profit Verify
+name: Ahmed Login Diagnostic
 
 on:
   push:
@@ -12,16 +12,21 @@ permissions:
   issues: write
 
 jobs:
-  verify:
+  inspect-login:
     runs-on: ubuntu-latest
     steps:
-      - name: Record verify start
+      - name: Record diagnostic start
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `🧾 Tokenize profit verification started | run_id=${context.runId}`});
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `🔎 Ahmed login diagnostic started | run_id=${context.runId} | commit=${context.sha}`,
+            });
 
-      - name: Verify Tokenize totals on server
+      - name: Sync and inspect Ahmed login on server
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -41,7 +46,8 @@ jobs:
             cd "$PROJECT"
             git fetch origin main
             git reset --hard origin/main
-            python3 scripts/patch-tokenize-platform.py
+            echo "SERVER_HEAD=$(git rev-parse HEAD)"
+            grep -F "LOWER(username)" ahmed-api/app/Http/Controllers/Api/AhmedSessionController.php
             cd "$PROJECT/ahmed-api"
             php artisan optimize:clear >/dev/null 2>&1 || true
             php -r '
@@ -49,16 +55,11 @@ jobs:
               $app = require "bootstrap/app.php";
               $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
               $kernel->bootstrap();
-              $request = Illuminate\Http\Request::create("/api/tokenize/investments", "GET");
-              $request->attributes->set("ahmed_user_id", 1);
-              $controller = app(App\Http\Controllers\Api\TokenizeInvestmentController::class);
-              $response = $controller->index($request);
-              $json = json_decode($response->getContent(), true);
-              echo "EXPECTED_PROFIT=".$json["summary"]["expected_profit"]."\n";
-              foreach ($json["data"] as $item) {
-                $sum = 0;
-                foreach ($item["payments"] as $p) $sum += (float)$p["profit_amount"];
-                echo "OPPORTUNITY=".$item["external_key"]." PROFIT=".number_format($sum,2,".","")."\n";
-                foreach ($item["payments"] as $p) echo "  ".$p["due_date"]." => ".number_format((float)$p["profit_amount"],2,".","")."\n";
-              }
+              $cols = ["id","name","username","updated_at"];
+              if (Illuminate\Support\Facades\Schema::hasColumn("users", "is_admin")) $cols[] = "is_admin";
+              $users = Illuminate\Support\Facades\DB::table("users")->select($cols)->orderBy("id")->get();
+              echo "AHMED_USERS_START\n";
+              foreach ($users as $u) echo json_encode($u, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
+              echo "AHMED_USERS_END\n";
             '
+            echo "HEALTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' https://ahmed.pm.sa/api/health)"
