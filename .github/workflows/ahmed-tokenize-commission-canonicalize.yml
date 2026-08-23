@@ -1,0 +1,37 @@
+name: Ahmed Tokenize Commission Canonicalize
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/ahmed-tokenize-commission-canonicalize.yml'
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  canonicalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record start
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `💰 Tokenize commission accounting started | run_id=${context.runId}`});
+
+      - uses: actions/checkout@v4
+
+      - name: Apply and commit Tokenize commission accounting
+        run: |
+          python3 scripts/patch-tokenize-platform.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/AppShell.js ahmed-mobile/TokenizeInvestmentsScreen.js ahmed-api/routes/api.php ahmed-api/app/Http/Controllers/Api/TokenizeInvestmentController.php
+          if git diff --cached --quiet; then
+            echo "Tokenize commission accounting already canonical"
+            exit 0
+          fi
+          git commit -m "Show Tokenize commission and net profit"
+          git push origin main
