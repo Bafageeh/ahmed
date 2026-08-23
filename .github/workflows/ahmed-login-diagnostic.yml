@@ -8,30 +8,58 @@ on:
       - '.github/workflows/ahmed-login-diagnostic.yml'
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
   inspect-login:
     runs-on: ubuntu-latest
     steps:
-      - name: Record canonicalization start
+      - name: Record diagnostic start
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `🧩 Tokenize canonicalization started | run_id=${context.runId}`});
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: `🔎 Ahmed login diagnostic started | run_id=${context.runId} | commit=${context.sha}`,
+            });
 
-      - uses: actions/checkout@v4
-
-      - name: Apply and commit Tokenize wiring
-        run: |
-          python3 scripts/patch-tokenize-platform.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ahmed-mobile/AppShell.js ahmed-api/routes/api.php
-          if git diff --cached --quiet; then
-            echo "Tokenize wiring already canonical"
-            exit 0
-          fi
-          git commit -m "Activate Tokenize investment platform"
-          git push origin main
+      - name: Sync and inspect Ahmed login on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then
+                PROJECT="/home/pmsa/apps/ahmed"
+              else
+                PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"
+              fi
+            fi
+            cd "$PROJECT"
+            git fetch origin main
+            git reset --hard origin/main
+            echo "SERVER_HEAD=$(git rev-parse HEAD)"
+            grep -F "LOWER(username)" ahmed-api/app/Http/Controllers/Api/AhmedSessionController.php
+            cd "$PROJECT/ahmed-api"
+            php artisan optimize:clear >/dev/null 2>&1 || true
+            php -r '
+              require "vendor/autoload.php";
+              $app = require "bootstrap/app.php";
+              $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+              $kernel->bootstrap();
+              $cols = ["id","name","username","updated_at"];
+              if (Illuminate\Support\Facades\Schema::hasColumn("users", "is_admin")) $cols[] = "is_admin";
+              $users = Illuminate\Support\Facades\DB::table("users")->select($cols)->orderBy("id")->get();
+              echo "AHMED_USERS_START\n";
+              foreach ($users as $u) echo json_encode($u, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES)."\n";
+              echo "AHMED_USERS_END\n";
+            '
+            echo "HEALTH_STATUS=$(curl -s -o /dev/null -w '%{http_code}' https://ahmed.pm.sa/api/health)"
