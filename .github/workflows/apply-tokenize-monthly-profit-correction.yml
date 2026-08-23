@@ -1,0 +1,56 @@
+name: Apply Tokenize monthly profit correction
+
+on:
+  push:
+    branches:
+      - feature/tokenize-monthly-profit-correction
+    paths:
+      - "scripts/patch-tokenize-monthly-profit-and-restore-sulfa.js"
+      - ".github/workflows/apply-tokenize-monthly-profit-correction.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Apply correction
+        run: node scripts/patch-tokenize-monthly-profit-and-restore-sulfa.js
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check ahmed-mobile/SulfaInvestmentScreen.js
+          node --check ahmed-mobile/TokenizeInvestmentsScreen.js
+          node --check ahmed-mobile/AppShell.js
+
+      - name: Validate PHP syntax
+        run: |
+          php -l ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php
+          php -l ahmed-api/app/Http/Controllers/Api/TokenizeInvestmentController.php
+          php -l ahmed-api/routes/api.php
+
+      - name: Commit corrected files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add \
+            ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php \
+            ahmed-api/app/Http/Controllers/Api/TokenizeInvestmentController.php \
+            ahmed-api/routes/api.php \
+            ahmed-mobile/SulfaInvestmentScreen.js \
+            ahmed-mobile/TokenizeInvestmentsScreen.js \
+            ahmed-mobile/AppShell.js
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Move duration-based monthly profit to Tokenize"
+            git push
+          fi
