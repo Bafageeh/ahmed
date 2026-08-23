@@ -25,6 +25,9 @@ log "Fetching latest main"
 git fetch origin main
 git reset --hard origin/main
 
+log "Applying Tokenize platform wiring"
+python3 scripts/patch-tokenize-platform.py
+
 if [ -d "$API_DIR" ]; then
   log "Updating Laravel database and caches"
   cd "$API_DIR"
@@ -99,6 +102,14 @@ grep -n "الموقع" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
 }
 grep -n "modalOverlay" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
   echo "ERROR: Secure vault floating form patch is missing." >&2
+  exit 1
+}
+grep -n "TokenizeInvestmentsScreen" "$MOBILE_DIR/AppShell.js" >/dev/null || {
+  echo "ERROR: Tokenize mobile wiring is missing." >&2
+  exit 1
+}
+grep -n "Route::get('/tokenize/investments'" "$API_DIR/routes/api.php" >/dev/null || {
+  echo "ERROR: Tokenize API routes are missing." >&2
   exit 1
 }
 
