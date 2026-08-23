@@ -43,6 +43,7 @@ jobs:
             export AHMED_PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
             export AHMED_DOMAIN="ahmed.pm.sa"
             export AHMED_EXPO_PORT="8082"
+            export AHMED_TARGET_SHA="${{ github.sha }}"
 
             if [ -z "$AHMED_PROJECT_PATH" ] || [ ! -d "$AHMED_PROJECT_PATH" ]; then
               if [ -d "/home/pmsa/apps/ahmed" ]; then
@@ -56,8 +57,30 @@ jobs:
             fi
 
             cd "$AHMED_PROJECT_PATH"
-            git fetch origin main
-            git reset --hard origin/main
+
+            # Multiple deploys can overlap for a few seconds. Retry fetch instead of
+            # failing on a transient origin/main ref-lock race, then deploy the exact
+            # GitHub commit that triggered this workflow.
+            FETCH_OK=0
+            for ATTEMPT in 1 2 3 4 5; do
+              if git fetch origin main; then
+                FETCH_OK=1
+                break
+              fi
+              echo "git fetch attempt $ATTEMPT failed; retrying after concurrent deploy..."
+              sleep 2
+            done
+
+            if ! git cat-file -e "${AHMED_TARGET_SHA}^{commit}" 2>/dev/null; then
+              echo "Target commit not present locally yet; fetching exact commit"
+              git fetch origin "$AHMED_TARGET_SHA"
+            fi
+
+            if [ "$FETCH_OK" -ne 1 ]; then
+              echo "origin/main fetch did not complete cleanly, but target commit is available; continuing with exact SHA"
+            fi
+
+            git reset --hard "$AHMED_TARGET_SHA"
             chmod +x scripts/restart-ahmed-expo-fast.sh
             bash scripts/restart-ahmed-expo-fast.sh
 
@@ -81,3 +104,4 @@ jobs:
 # Automatic OTA publishing enabled 2026-08-22
 # Tokenize profit schedule correction deployment 2026-08-23
 # Tokenize commission and VAT accounting deployment 2026-08-23
+# Concurrent deploy ref-lock retry added 2026-08-23
