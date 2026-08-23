@@ -1,4 +1,4 @@
-name: Ahmed Tokenize Commission Canonicalize
+name: Ahmed Tokenize Commission Verify
 
 on:
   push:
@@ -8,30 +8,56 @@ on:
       - '.github/workflows/ahmed-tokenize-commission-canonicalize.yml'
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
-  canonicalize:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - name: Record start
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `💰 Tokenize commission accounting started | run_id=${context.runId}`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: 1, body: `🧾 Tokenize commission verification started | run_id=${context.runId}`});
 
-      - uses: actions/checkout@v4
-
-      - name: Apply and commit Tokenize commission accounting
-        run: |
-          python3 scripts/patch-tokenize-platform.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ahmed-mobile/AppShell.js ahmed-mobile/TokenizeInvestmentsScreen.js ahmed-api/routes/api.php ahmed-api/app/Http/Controllers/Api/TokenizeInvestmentController.php
-          if git diff --cached --quiet; then
-            echo "Tokenize commission accounting already canonical"
-            exit 0
-          fi
-          git commit -m "Show Tokenize commission and net profit"
-          git push origin main
+      - name: Verify on Ahmed server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then
+                PROJECT="/home/pmsa/apps/ahmed"
+              else
+                PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"
+              fi
+            fi
+            cd "$PROJECT"
+            git fetch origin main
+            git reset --hard origin/main
+            python3 scripts/patch-tokenize-platform.py
+            cd "$PROJECT/ahmed-api"
+            php artisan optimize:clear >/dev/null 2>&1 || true
+            php -r '
+              require "vendor/autoload.php";
+              $app = require "bootstrap/app.php";
+              $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+              $kernel->bootstrap();
+              $request = Illuminate\Http\Request::create("/api/tokenize/investments", "GET");
+              $request->attributes->set("ahmed_user_id", 1);
+              $controller = app(App\Http\Controllers\Api\TokenizeInvestmentController::class);
+              $response = $controller->index($request);
+              $json = json_decode($response->getContent(), true);
+              echo "SUMMARY_GROSS=".$json["summary"]["gross_expected_profit"]."\n";
+              echo "SUMMARY_FEES=".$json["summary"]["platform_fee_total"]."\n";
+              echo "SUMMARY_NET=".$json["summary"]["expected_profit"]."\n";
+              foreach ($json["data"] as $item) {
+                echo "OPPORTUNITY=".$item["external_key"]." GROSS=".$item["gross_profit"]." FEE=".$item["platform_fee_before_vat"]." VAT=".$item["platform_fee_vat"]." TOTAL_FEE=".$item["platform_fee_total"]." NET_CALC=".$item["net_profit_calculated"]." SCHEDULED=".$item["scheduled_profit"]."\n";
+              }
+            '
