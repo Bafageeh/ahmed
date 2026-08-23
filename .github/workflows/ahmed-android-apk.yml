@@ -2,12 +2,6 @@ name: Ahmed Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'ahmed-mobile/**'
-      - '.github/workflows/ahmed-android-apk.yml'
 
 permissions:
   contents: read
@@ -141,4 +135,4 @@ jobs:
               body: `📦 Ahmed APK ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk`,
             });
 
-# build trigger 2026-08-23 - Expo/APK include Tokenize shared patch
+# APK builds are manual only; normal app changes are delivered through OTA.
