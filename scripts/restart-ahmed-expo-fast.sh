@@ -24,6 +24,7 @@ git reset --hard origin/main
 log "Applying the same source patches used by Android APK"
 python3 scripts/patch-ta3meed-quick-menu.py
 python3 scripts/patch-credit-card-no-cents.py
+python3 scripts/patch-tokenize-platform.py
 
 # Verify the compact credit-card UI is committed directly in source.
 grep -q "creditCardSummary={creditCardSummary}" "$MOBILE_DIR/DebtsScreen.js" || {
@@ -56,6 +57,14 @@ grep -q "onOpenInvestorAccounts" "$MOBILE_DIR/AppShell.js" || {
 }
 grep -q "minimumFractionDigits: 0" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {
   echo "ERROR: Credit-card no-halalas display patch is missing" >&2
+  exit 1
+}
+grep -q "TokenizeInvestmentsScreen" "$MOBILE_DIR/AppShell.js" || {
+  echo "ERROR: Tokenize platform is not wired into AppShell.js" >&2
+  exit 1
+}
+grep -q "Route::get('/tokenize/investments'" "$PROJECT_PATH/ahmed-api/routes/api.php" || {
+  echo "ERROR: Tokenize API routes are missing" >&2
   exit 1
 }
 if grep -q "babel-plugin-credit-card-bank-logos" "$MOBILE_DIR/babel.config.js"; then
@@ -124,4 +133,4 @@ log "PID: $PID"
 log "URL: exp://$DOMAIN:$EXPO_PORT"
 tail -n 60 "$LOG_FILE" || true
 
-# Expo and APK now share scripts/patch-ta3meed-quick-menu.py and patch-credit-card-no-cents.py
+# Expo and APK share the Ta3meed, credit-card, and Tokenize source patch scripts.
