@@ -43,9 +43,12 @@ jobs:
           cd ..
           python3 scripts/patch-ta3meed-quick-menu.py
           python3 scripts/patch-credit-card-no-cents.py
+          python3 scripts/patch-tokenize-platform.py
           grep -F 'اختصارات تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
           grep -F "onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')}" ahmed-mobile/AppShell.js
           grep -F 'minimumFractionDigits: 0' ahmed-mobile/CreditCardDebtsScreen.js
+          grep -F 'TokenizeInvestmentsScreen' ahmed-mobile/AppShell.js
+          grep -F "Route::get('/tokenize/investments'" ahmed-api/routes/api.php
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -141,4 +144,4 @@ jobs:
               body: `📦 Ahmed APK recovery ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk-recovery`,
             });
 
-# recovery trigger 2026-08-22T19:04+03:00 - PNG CRC fix
+# recovery trigger 2026-08-23 - include Tokenize shared patch
