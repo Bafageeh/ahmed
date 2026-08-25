@@ -2,86 +2,30 @@ name: Fix Ta3meed Source Screen
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/fix-ta3meed-screen-source.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  fix:
+  verify-fix:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Apply current Expo source to committed app
+      - name: Repair Ta3meed source safely
         run: |
+          python3 scripts/patch-ta3meed-navigation-callbacks.py
           python3 scripts/patch-ta3meed-quick-menu.py
           python3 scripts/patch-credit-card-no-cents.py
 
-      - name: Restore normal Android identity and stop runtime source mutation
-        run: |
-          python3 <<'PY'
-          from pathlib import Path
-          import json
-
-          app = Path('ahmed-mobile/app.json')
-          data = json.loads(app.read_text(encoding='utf-8'))
-          expo = data['expo']
-          expo['name'] = 'Ahmed'
-          expo['version'] = '1.0.18'
-          expo['scheme'] = 'ahmed'
-          expo['android']['package'] = 'sa.pm.ahmed'
-          expo['android']['versionCode'] = 19
-          expo.setdefault('extra', {})['buildLabel'] = '2026-08-22-source-synced'
-          app.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-
-          restart = Path('scripts/restart-ahmed-expo-fast.sh')
-          text = restart.read_text(encoding='utf-8')
-          text = text.replace('log "Removing halala decimals from credit-card amounts"\npython3 scripts/patch-credit-card-no-cents.py\n\n', '')
-
-          marker = 'grep -q "SAUDI_BANKS" "$MOBILE_DIR/CreditCardDebtsScreen.js" || {\n  echo "ERROR: Saudi bank dropdown source is missing" >&2\n  exit 1\n}\n'
-          quick = '''grep -q "اختصارات تعميد" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" || {
-  echo "ERROR: Ta3meed floating quick menu is missing from source" >&2
-  exit 1
-}
-grep -q "onOpenInvestorAccounts" "$MOBILE_DIR/AppShell.js" || {
-  echo "ERROR: Ta3meed quick-menu navigation callbacks are missing" >&2
-  exit 1
-}
-'''
-          if quick not in text:
-              if marker not in text:
-                  raise SystemExit('Restart verification marker not found')
-              text = text.replace(marker, marker + quick, 1)
-          restart.write_text(text, encoding='utf-8')
-          PY
-
-      - name: Verify committed UI
+      - name: Verify repaired source
         run: |
           grep -F 'اختصارات تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
           grep -F 'إضافة واعتماد دفعة تعميد' ahmed-mobile/Ta3meedCompactFiltersScreen.js
           grep -F "onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')}" ahmed-mobile/AppShell.js
           grep -F "onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')}" ahmed-mobile/AppShell.js
           grep -F 'minimumFractionDigits: 0' ahmed-mobile/CreditCardDebtsScreen.js
-          ! grep -F 'python3 scripts/patch-credit-card-no-cents.py' scripts/restart-ahmed-expo-fast.sh
-          grep -F '"package": "sa.pm.ahmed"' ahmed-mobile/app.json
-          grep -F '"versionCode": 19' ahmed-mobile/app.json
 
-      - name: Commit fixed source
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ahmed-mobile/Ta3meedCompactFiltersScreen.js ahmed-mobile/AppShell.js ahmed-mobile/CreditCardDebtsScreen.js ahmed-mobile/app.json scripts/restart-ahmed-expo-fast.sh
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "Commit Ta3meed floating quick menu into app source"
-            git push
-          fi
+# This is a manual recovery/verification workflow only. Normal mobile changes
+# are delivered by Ahmed Expo Hot Deploy and must not mutate source in a loop.
