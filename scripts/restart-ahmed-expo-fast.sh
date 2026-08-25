@@ -4,6 +4,7 @@ set -euo pipefail
 PROJECT_PATH="${AHMED_PROJECT_PATH:-/home/pmsa/apps/ahmed}"
 DOMAIN="${AHMED_DOMAIN:-ahmed.pm.sa}"
 EXPO_PORT="${AHMED_EXPO_PORT:-8082}"
+TARGET_SHA="${AHMED_TARGET_SHA:-}"
 RUNTIME_BASE="/home/pmsa/apps"
 MOBILE_DIR="$PROJECT_PATH/ahmed-mobile"
 LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
@@ -19,9 +20,25 @@ fi
 cd "$PROJECT_PATH"
 log "Syncing latest main"
 git fetch origin main
-git reset --hard origin/main
+
+# The hot-deploy workflow passes the exact triggering commit. Respect it so
+# overlapping pushes cannot silently deploy a newer or different revision.
+if [ -n "$TARGET_SHA" ]; then
+  if ! git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
+    log "Fetching exact target commit $TARGET_SHA"
+    git fetch origin "$TARGET_SHA"
+  fi
+  log "Resetting to exact target commit $TARGET_SHA"
+  git reset --hard "$TARGET_SHA"
+else
+  log "No target SHA supplied; resetting to origin/main"
+  git reset --hard origin/main
+fi
 
 log "Applying the same source patches used by Android APK"
+# Repair AppShell navigation first. This makes the older quick-menu patch
+# idempotent even when AppShell formatting or previous patches have changed.
+python3 scripts/patch-ta3meed-navigation-callbacks.py
 python3 scripts/patch-ta3meed-quick-menu.py
 python3 scripts/patch-credit-card-no-cents.py
 python3 scripts/patch-tokenize-platform.py
