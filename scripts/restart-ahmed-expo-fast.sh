@@ -5,6 +5,7 @@ PROJECT_PATH="${AHMED_PROJECT_PATH:-/home/pmsa/apps/ahmed}"
 DOMAIN="${AHMED_DOMAIN:-ahmed.pm.sa}"
 EXPO_PORT="${AHMED_EXPO_PORT:-8082}"
 TARGET_SHA="${AHMED_TARGET_SHA:-}"
+STARTUP_TIMEOUT="${AHMED_EXPO_STARTUP_TIMEOUT:-45}"
 RUNTIME_BASE="/home/pmsa/apps"
 MOBILE_DIR="$PROJECT_PATH/ahmed-mobile"
 LOG_FILE="$RUNTIME_BASE/ahmed-expo-$EXPO_PORT.log"
@@ -133,27 +134,48 @@ export TEMP="$RUNTIME_BASE/.tmp"
 
 nohup npx expo start --clear --go --host lan --port "$EXPO_PORT" > "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"
-
-sleep 12
 PID="$(cat "$PID_FILE")"
-if ! kill -0 "$PID" 2>/dev/null; then
-  echo "ERROR: Expo process exited during startup." >&2
-  tail -n 120 "$LOG_FILE" || true
-  exit 1
-fi
 
-if command -v ss >/dev/null 2>&1; then
-  if ! ss -ltn | grep -q ":$EXPO_PORT "; then
-    echo "ERROR: Expo process is alive but port $EXPO_PORT is not listening." >&2
-    tail -n 120 "$LOG_FILE" || true
+READY=0
+for ((SECOND=1; SECOND<=STARTUP_TIMEOUT; SECOND++)); do
+  if ! kill -0 "$PID" 2>/dev/null; then
+    echo "ERROR: Expo process exited during startup." >&2
+    tail -n 160 "$LOG_FILE" || true
     exit 1
   fi
+
+  if command -v ss >/dev/null 2>&1; then
+    if ss -ltn 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)$EXPO_PORT$"; then
+      READY=1
+      break
+    fi
+  elif command -v curl >/dev/null 2>&1; then
+    if curl -fsS --max-time 2 "http://127.0.0.1:$EXPO_PORT" >/dev/null 2>&1; then
+      READY=1
+      break
+    fi
+  else
+    # No socket inspection tool is available. A live process after 12 seconds
+    # is sufficient to continue, matching the previous clean-restart behavior.
+    if [ "$SECOND" -ge 12 ]; then
+      READY=1
+      break
+    fi
+  fi
+
+  sleep 1
+done
+
+if [ "$READY" -ne 1 ]; then
+  echo "ERROR: Expo process is alive but port $EXPO_PORT did not become ready within ${STARTUP_TIMEOUT}s." >&2
+  tail -n 160 "$LOG_FILE" || true
+  exit 1
 fi
 
 log "Expo restarted successfully"
 log "Commit: $(git rev-parse HEAD)"
 log "PID: $PID"
 log "URL: exp://$DOMAIN:$EXPO_PORT"
-tail -n 60 "$LOG_FILE" || true
+tail -n 80 "$LOG_FILE" || true
 
 # Expo and APK share the Ta3meed, credit-card, and idempotent Tokenize source patch scripts.
