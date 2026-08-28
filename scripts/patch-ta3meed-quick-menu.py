@@ -4,21 +4,55 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TA3MEED = ROOT / 'ahmed-mobile' / 'Ta3meedCompactFiltersScreen.js'
 APP_SHELL = ROOT / 'ahmed-mobile' / 'AppShell.js'
+API_ROUTES = ROOT / 'ahmed-api' / 'routes' / 'api.php'
 
 
 def patch_ta3meed():
     text = TA3MEED.read_text(encoding='utf-8')
 
+    if "  Linking,\n" not in text:
+        text = text.replace("  Alert,\n  Modal,", "  Alert,\n  Linking,\n  Modal,", 1)
+
     old_sig = "export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onEditOpportunity }) {"
-    new_sig = "export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onEditOpportunity }) {"
+    old_patched_sig = "export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onEditOpportunity }) {"
+    new_sig = "export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onOpenBackup, onEditOpportunity }) {"
     if old_sig in text:
         text = text.replace(old_sig, new_sig, 1)
+    elif old_patched_sig in text:
+        text = text.replace(old_patched_sig, new_sig, 1)
 
     state_anchor = "  const [receiptOpen, setReceiptOpen] = useState(false);\n"
     if "const [quickMenuOpen, setQuickMenuOpen]" not in text:
         if state_anchor not in text:
             raise RuntimeError('Ta3meed receiptOpen state anchor not found')
-        text = text.replace(state_anchor, state_anchor + "  const [quickMenuOpen, setQuickMenuOpen] = useState(false);\n", 1)
+        text = text.replace(state_anchor, state_anchor + "  const [quickMenuOpen, setQuickMenuOpen] = useState(false);\n  const [exportingExcel, setExportingExcel] = useState(false);\n", 1)
+    elif "const [exportingExcel, setExportingExcel]" not in text:
+        text = text.replace("  const [quickMenuOpen, setQuickMenuOpen] = useState(false);\n", "  const [quickMenuOpen, setQuickMenuOpen] = useState(false);\n  const [exportingExcel, setExportingExcel] = useState(false);\n", 1)
+
+    export_anchor = "  const [exportingExcel, setExportingExcel] = useState(false);\n"
+    if "const exportTa3meedExcel = async () =>" not in text:
+        export_handler = '''
+  const exportTa3meedExcel = async () => {
+    if (exportingExcel) return;
+    setExportingExcel(true);
+    try {
+      const json = await apiJson('/ta3meed/export-link', { method: 'POST' });
+      const url = json?.data?.url;
+      if (!url) throw new Error('لم يتم إنشاء رابط ملف Excel');
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) throw new Error('تعذر فتح رابط تنزيل ملف Excel');
+      setQuickMenuOpen(false);
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('تعذر تصدير Excel', error?.message || 'حدث خطأ أثناء تجهيز الملف.');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+'''
+        if export_anchor not in text:
+            raise RuntimeError('Ta3meed Excel export state anchor not found')
+        text = text.replace(export_anchor, export_anchor + export_handler, 1)
 
     pay_block = '''      <TouchableOpacity style={styles.floatingPayButton} onPress={() => setReceiptOpen(true)} activeOpacity={0.88}>
         <Text style={styles.payText}>سداد</Text>
@@ -85,6 +119,18 @@ def patch_ta3meed():
                 <Text style={styles.quickMenuItemTitle}>استيراد صورة تعميد</Text>
                 <Text style={styles.quickMenuItemText}>قراءة بيانات الفرصة من الصورة</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity disabled={exportingExcel} activeOpacity={0.86} style={[styles.quickMenuItem, exportingExcel && { opacity: 0.65 }]} onPress={exportTa3meedExcel}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#ecfeff' }]}><UiIcon name="reports" size={26} color="#0e7490" /></View>
+                <Text style={styles.quickMenuItemTitle}>{exportingExcel ? 'جاري تجهيز Excel...' : 'تصدير Excel'}</Text>
+                <Text style={styles.quickMenuItemText}>كل الفرص والمستثمرين وجميع التفاصيل</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenBackup || onOpenMore)?.(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f0fdf4' }]}><UiIcon name="save" size={26} color="#15803d" /></View>
+                <Text style={styles.quickMenuItemTitle}>نسخة احتياطية</Text>
+                <Text style={styles.quickMenuItemText}>إنشاء نسخة واسترجاع البيانات عند الحاجة</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
@@ -92,6 +138,30 @@ def patch_ta3meed():
 '''
     if old_more in text:
         text = text.replace(old_more, new_more, 1)
+    elif 'اختصارات تعميد' in text and 'تصدير Excel' not in text:
+        # Upgrade an already-patched working tree without duplicating the modal.
+        image_block = '''              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenImageImport || onOpenMore)?.(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#fff7ed' }]}><UiIcon name="ta3meed" size={26} color="#c2410c" /></View>
+                <Text style={styles.quickMenuItemTitle}>استيراد صورة تعميد</Text>
+                <Text style={styles.quickMenuItemText}>قراءة بيانات الفرصة من الصورة</Text>
+              </TouchableOpacity>
+'''
+        extra_items = image_block + '''
+              <TouchableOpacity disabled={exportingExcel} activeOpacity={0.86} style={[styles.quickMenuItem, exportingExcel && { opacity: 0.65 }]} onPress={exportTa3meedExcel}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#ecfeff' }]}><UiIcon name="reports" size={26} color="#0e7490" /></View>
+                <Text style={styles.quickMenuItemTitle}>{exportingExcel ? 'جاري تجهيز Excel...' : 'تصدير Excel'}</Text>
+                <Text style={styles.quickMenuItemText}>كل الفرص والمستثمرين وجميع التفاصيل</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenBackup || onOpenMore)?.(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f0fdf4' }]}><UiIcon name="save" size={26} color="#15803d" /></View>
+                <Text style={styles.quickMenuItemTitle}>نسخة احتياطية</Text>
+                <Text style={styles.quickMenuItemText}>إنشاء نسخة واسترجاع البيانات عند الحاجة</Text>
+              </TouchableOpacity>
+'''
+        if image_block not in text:
+            raise RuntimeError('Ta3meed quick menu image-import anchor not found')
+        text = text.replace(image_block, extra_items, 1)
 
     if 'quickMenuOverlay:' not in text:
         style_anchor = "const styles = StyleSheet.create({\n\n  moreFloatingButton: {"
@@ -142,8 +212,9 @@ def patch_ta3meed():
     text = text.replace("  searchHeaderButton: { left: 92 },", "  searchHeaderButton: { right: 22 },", 1)
     text = text.replace("  searchHeaderButton: { left: 22 },", "  searchHeaderButton: { right: 22 },", 1)
 
-    if 'اختصارات تعميد' not in text:
-        raise RuntimeError('Ta3meed quick menu was not inserted')
+    for required in ['اختصارات تعميد', 'تصدير Excel', 'نسخة احتياطية', 'exportTa3meedExcel', 'onOpenBackup']:
+        if required not in text:
+            raise RuntimeError(f'Ta3meed quick menu missing: {required}')
     if 'floatingPayButton} onPress={() => setReceiptOpen(true)' in text:
         raise RuntimeError('Old top payment button still exists')
     if "backHeaderButton: { left: 22 }" not in text:
@@ -157,23 +228,90 @@ def patch_ta3meed():
 def patch_app_shell():
     text = APP_SHELL.read_text(encoding='utf-8')
 
+    import_anchor = "import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';\n"
+    backup_import = "import Ta3meedBackupScreen from './Ta3meedBackupScreen';\n"
+    if backup_import not in text:
+        if import_anchor not in text:
+            raise RuntimeError('Ta3meed backup import anchor not found')
+        text = text.replace(import_anchor, import_anchor + backup_import, 1)
+
+    old_keys = "const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];"
+    new_keys = "const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];"
+    if old_keys in text:
+        text = text.replace(old_keys, new_keys, 1)
+
     old_route = "      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenMore={() => openTab('more')} />;"
-    new_route = "      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} />;"
+    older_patched_route = "      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} />;"
+    new_route = "      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} />;"
     if old_route in text:
         text = text.replace(old_route, new_route, 1)
+    elif older_patched_route in text:
+        text = text.replace(older_patched_route, new_route, 1)
+
+    image_route = "      if (investmentScreen === 'ta3meedImageImport') return <Ta3meedImageImportScreen onBack={() => setInvestmentScreen('list')} />;"
+    backup_route = "      if (investmentScreen === 'ta3meedBackup') return <Ta3meedBackupScreen onBack={() => setInvestmentScreen('ta3meed')} />;"
+    if backup_route not in text:
+        if image_route not in text:
+            raise RuntimeError('Ta3meed image route anchor not found')
+        text = text.replace(image_route, image_route + "\n" + backup_route, 1)
 
     moved_rows = '<MenuRow title="استيراد صورة تعميد" text="قراءة صورة الفرصة" icon="ta3meed" onPress={() => openInvestment(\'ta3meedImageImport\')} /><MenuRow title="حسابات المستثمرين" text="حركات وأرصدة المستثمرين" icon="users" onPress={() => openInvestment(\'ta3meedAccounts\')} />'
     text = text.replace(moved_rows, '', 1)
 
-    if 'onOpenInvestorAccounts' not in text or 'onOpenImageImport' not in text:
+    if 'onOpenInvestorAccounts' not in text or 'onOpenImageImport' not in text or 'onOpenBackup' not in text:
         raise RuntimeError('Ta3meed navigation callbacks were not inserted')
+    if backup_import not in text or backup_route not in text or "'ta3meedBackup'" not in text:
+        raise RuntimeError('Ta3meed backup screen wiring was not inserted')
     if '<MenuRow title="استيراد صورة تعميد"' in text or '<MenuRow title="حسابات المستثمرين"' in text:
         raise RuntimeError('Moved Ta3meed rows still exist in More screen')
 
     APP_SHELL.write_text(text, encoding='utf-8')
 
 
+def patch_api_routes():
+    text = API_ROUTES.read_text(encoding='utf-8')
+
+    import_anchor = "use App\\Http\\Controllers\\Api\\Ta3meedController;\n"
+    tools_import = "use App\\Http\\Controllers\\Api\\Ta3meedDataToolsController;\n"
+    if tools_import not in text:
+        if import_anchor not in text:
+            raise RuntimeError('Ta3meedDataToolsController import anchor not found')
+        text = text.replace(import_anchor, import_anchor + tools_import, 1)
+
+    webhook_anchor = "Route::post('/wa/webhook', [WhatsAppController::class, 'webhook']);\n"
+    public_download = "Route::get('/ta3meed/export-download/{token}', [Ta3meedDataToolsController::class, 'downloadExport']);\n"
+    if public_download not in text:
+        if webhook_anchor not in text:
+            raise RuntimeError('Ta3meed public export route anchor not found')
+        text = text.replace(webhook_anchor, webhook_anchor + public_download, 1)
+
+    summary_anchor = "    Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);\n"
+    protected_routes = (
+        "    Route::post('/ta3meed/export-link', [Ta3meedDataToolsController::class, 'exportLink']);\n"
+        "    Route::get('/ta3meed/backups', [Ta3meedDataToolsController::class, 'backups']);\n"
+        "    Route::post('/ta3meed/backups', [Ta3meedDataToolsController::class, 'createBackup']);\n"
+        "    Route::post('/ta3meed/backups/{id}/restore', [Ta3meedDataToolsController::class, 'restoreBackup']);\n"
+    )
+    if "Route::post('/ta3meed/export-link'" not in text:
+        if summary_anchor not in text:
+            raise RuntimeError('Ta3meed protected data-tools route anchor not found')
+        text = text.replace(summary_anchor, summary_anchor + protected_routes, 1)
+
+    for required in [
+        'Ta3meedDataToolsController',
+        "Route::get('/ta3meed/export-download/{token}'",
+        "Route::post('/ta3meed/export-link'",
+        "Route::get('/ta3meed/backups'",
+        "Route::post('/ta3meed/backups/{id}/restore'",
+    ]:
+        if required not in text:
+            raise RuntimeError(f'Ta3meed data-tools route missing: {required}')
+
+    API_ROUTES.write_text(text, encoding='utf-8')
+
+
 if __name__ == '__main__':
     patch_ta3meed()
     patch_app_shell()
-    print('Ta3meed quick menu patch applied and verified')
+    patch_api_routes()
+    print('Ta3meed quick menu, Excel export, backup, and API routes applied and verified')
