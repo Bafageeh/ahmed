@@ -112,6 +112,15 @@ class SecureVaultController extends Controller
         }
 
         $data = $this->validated($request);
+
+        // A bank record must never be converted into a website/login record when
+        // only its encrypted credentials are edited from the mobile app.
+        if (($item->category ?? null) === 'banks') {
+            $data['category'] = 'banks';
+            $data['record_type'] = 'subscription';
+            $data['owner_group'] = null;
+        }
+
         $this->validateBankLoginRule($data);
         $this->validateCardLink($request, $data);
         $cardDigits = $this->onlyDigits($data['card_number'] ?? '');
