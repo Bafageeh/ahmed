@@ -106,3 +106,4 @@ jobs:
 # Tokenize commission and VAT accounting deployment 2026-08-23
 # Concurrent deploy ref-lock retry added 2026-08-23
 # Secure vault account rows compacted 2026-08-29
+# Secure vault account number always plaintext and visible 2026-08-29
