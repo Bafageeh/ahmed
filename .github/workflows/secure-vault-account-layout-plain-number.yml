@@ -20,24 +20,25 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Patch secure vault account layout
+      - name: Patch secure vault account number behavior
         run: python3 scripts/patch-vault-account-layout-plain-number.py
 
       - name: Validate source
         run: |
           grep -q 'رقم الحساب' ahmed-mobile/SecureVaultScreen.js
-          grep -q 'bankAccountCompactCard' ahmed-mobile/SecureVaultScreen.js
-          grep -q 'فك الآيبان' ahmed-mobile/SecureVaultScreen.js
+          grep -q 'item.account_number' ahmed-mobile/SecureVaultScreen.js
+          grep -q "'account_number' =>" ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
+          php -l ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
           git diff --check
 
       - name: Commit source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ahmed-mobile/SecureVaultScreen.js
+          git add ahmed-mobile/SecureVaultScreen.js ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
           if git diff --cached --quiet; then
             echo "No source changes"
           else
-            git commit -m "Simplify vault bank accounts layout"
+            git commit -m "Keep bank account numbers plaintext and always visible"
             git push
           fi
