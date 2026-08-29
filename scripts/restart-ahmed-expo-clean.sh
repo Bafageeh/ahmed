@@ -50,10 +50,26 @@ log "Applying Ta3meed quick menu patch"
 python3 scripts/patch-ta3meed-quick-menu.py
 log "Applying COM S-121 fixed card patch"
 python3 scripts/patch-com-monthly-person-net-income.py
-log "Applying secure vault bank/site patch"
-python3 scripts/patch-secure-vault-bank-site-lite.py
-log "Applying secure vault floating form patch"
-python3 scripts/patch-secure-vault-floating-form.py
+
+# SecureVaultScreen is now maintained directly in source. Older patch scripts
+# predate the bank/card hierarchy and would overwrite the new secure-vault UI.
+log "Verifying committed secure vault implementation"
+grep -n "BankLogo bankName={group.displayName}" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
+  echo "ERROR: Secure vault bank-logo implementation is missing." >&2
+  exit 1
+}
+grep -n "expo-notifications" "$MOBILE_DIR/package.json" >/dev/null || {
+  echo "ERROR: Secure vault notification dependency is missing." >&2
+  exit 1
+}
+grep -n "credit_card_debt_id" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
+  echo "ERROR: Secure vault credit-limit debt link is missing." >&2
+  exit 1
+}
+grep -n "sadad_number" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
+  echo "ERROR: Secure vault Sadad field is missing." >&2
+  exit 1
+}
 
 log "Verifying Ta3meed normalized screen"
 if grep -n "resetButtonText" "$MOBILE_DIR/Ta3meedCompactFiltersScreen.js" | grep -q "hasFilters"; then
@@ -94,14 +110,6 @@ grep -n "import Ta3meedScreen from './Ta3meedNoResetFilterScreen'" "$MOBILE_DIR/
 }
 grep -n "COM: com_monthly_person_net" "$MOBILE_DIR/AppShell.js" >/dev/null || {
   echo "ERROR: COM S-121 fixed card patch is missing." >&2
-  exit 1
-}
-grep -n "الموقع" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
-  echo "ERROR: Secure vault site patch is missing." >&2
-  exit 1
-}
-grep -n "modalOverlay" "$MOBILE_DIR/SecureVaultScreen.js" >/dev/null || {
-  echo "ERROR: Secure vault floating form patch is missing." >&2
   exit 1
 }
 grep -n "TokenizeInvestmentsScreen" "$MOBILE_DIR/AppShell.js" >/dev/null || {
