@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class SecureVaultController extends Controller
 {
@@ -26,7 +27,6 @@ class SecureVaultController extends Controller
             ->when($category && in_array($category, $this->categories, true), fn ($q) => $q->where('category', $category))
             ->when($search !== '', fn ($q) => $q->where(function ($nested) use ($search) {
                 $nested->where('title', 'like', "%{$search}%")
-                    ->orWhere('username', 'like', "%{$search}%")
                     ->orWhere('url', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
@@ -62,7 +62,9 @@ class SecureVaultController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $this->validateCardLink($request, $data);
         $cardDigits = $this->onlyDigits($data['card_number'] ?? '');
+        $cardType = $data['card_type'] ?? null;
 
         $id = DB::table('secure_vault_items')->insertGetId([
             'user_id' => $this->userId($request),
@@ -71,7 +73,8 @@ class SecureVaultController extends Controller
             'record_type' => $data['record_type'],
             'is_favorite' => (bool) ($data['is_favorite'] ?? false),
             'title' => $data['title'],
-            'username' => $data['username'] ?? null,
+            'username' => null,
+            'username_encrypted' => $this->encryptNullable($data['username'] ?? null),
             'password_encrypted' => $this->encryptNullable($data['password'] ?? null),
             'url' => $data['url'] ?? null,
             'email' => $data['email'] ?? null,
@@ -79,12 +82,16 @@ class SecureVaultController extends Controller
             'purpose' => $data['purpose'] ?? null,
             'tags' => $data['tags'] ?? null,
             'cardholder_name' => $data['cardholder_name'] ?? null,
-            'card_brand' => $data['card_brand'] ?? null,
+            'card_brand' => $cardType === 'mada' ? 'mada' : ($data['card_brand'] ?? null),
+            'card_type' => $cardType,
             'card_number_encrypted' => $this->encryptNullable($cardDigits ?: ($data['card_number'] ?? null)),
             'card_last_four' => $cardDigits ? substr($cardDigits, -4) : ($data['card_last_four'] ?? null),
             'card_cvv_encrypted' => $this->encryptNullable($data['card_cvv'] ?? null),
             'expiry_month' => $data['expiry_month'] ?? null,
             'expiry_year' => $data['expiry_year'] ?? null,
+            'statement_day' => $data['statement_day'] ?? null,
+            'credit_card_debt_id' => $cardType === 'credit' ? ($data['credit_card_debt_id'] ?? null) : null,
+            'sadad_number_encrypted' => $this->encryptNullable($data['sadad_number'] ?? null),
             'security_question_encrypted' => $this->encryptNullable($data['security_question'] ?? null),
             'security_answer_encrypted' => $this->encryptNullable($data['security_answer'] ?? null),
             'backup_codes_encrypted' => $this->encryptNullable($data['backup_codes'] ?? null),
@@ -104,7 +111,9 @@ class SecureVaultController extends Controller
         }
 
         $data = $this->validated($request);
+        $this->validateCardLink($request, $data);
         $cardDigits = $this->onlyDigits($data['card_number'] ?? '');
+        $cardType = $data['card_type'] ?? null;
 
         DB::table('secure_vault_items')->where('id', $id)->update([
             'owner_group' => $data['owner_group'] ?? null,
@@ -112,7 +121,8 @@ class SecureVaultController extends Controller
             'record_type' => $data['record_type'],
             'is_favorite' => (bool) ($data['is_favorite'] ?? false),
             'title' => $data['title'],
-            'username' => $data['username'] ?? null,
+            'username' => null,
+            'username_encrypted' => $this->encryptNullable($data['username'] ?? null),
             'password_encrypted' => $this->encryptNullable($data['password'] ?? null),
             'url' => $data['url'] ?? null,
             'email' => $data['email'] ?? null,
@@ -120,12 +130,16 @@ class SecureVaultController extends Controller
             'purpose' => $data['purpose'] ?? null,
             'tags' => $data['tags'] ?? null,
             'cardholder_name' => $data['cardholder_name'] ?? null,
-            'card_brand' => $data['card_brand'] ?? null,
+            'card_brand' => $cardType === 'mada' ? 'mada' : ($data['card_brand'] ?? null),
+            'card_type' => $cardType,
             'card_number_encrypted' => $this->encryptNullable($cardDigits ?: ($data['card_number'] ?? null)),
             'card_last_four' => $cardDigits ? substr($cardDigits, -4) : ($data['card_last_four'] ?? null),
             'card_cvv_encrypted' => $this->encryptNullable($data['card_cvv'] ?? null),
             'expiry_month' => $data['expiry_month'] ?? null,
             'expiry_year' => $data['expiry_year'] ?? null,
+            'statement_day' => $data['statement_day'] ?? null,
+            'credit_card_debt_id' => $cardType === 'credit' ? ($data['credit_card_debt_id'] ?? null) : null,
+            'sadad_number_encrypted' => $this->encryptNullable($data['sadad_number'] ?? null),
             'security_question_encrypted' => $this->encryptNullable($data['security_question'] ?? null),
             'security_answer_encrypted' => $this->encryptNullable($data['security_answer'] ?? null),
             'backup_codes_encrypted' => $this->encryptNullable($data['backup_codes'] ?? null),
@@ -164,17 +178,48 @@ class SecureVaultController extends Controller
             'purpose' => ['nullable', 'string', 'max:255'],
             'tags' => ['nullable', 'string', 'max:255'],
             'cardholder_name' => ['nullable', 'string', 'max:255'],
-            'card_brand' => ['nullable', 'string', 'max:255'],
+            'card_brand' => ['nullable', Rule::in(['visa', 'mastercard', 'mada'])],
+            'card_type' => ['nullable', Rule::in(['mada', 'credit'])],
             'card_number' => ['nullable', 'string', 'max:40'],
             'card_last_four' => ['nullable', 'string', 'max:4'],
             'card_cvv' => ['nullable', 'string', 'max:10'],
             'expiry_month' => ['nullable', 'integer', 'between:1,12'],
             'expiry_year' => ['nullable', 'integer', 'between:2024,2100'],
+            'statement_day' => ['nullable', 'integer', 'between:1,31'],
+            'credit_card_debt_id' => ['nullable', 'integer', 'min:1'],
+            'sadad_number' => ['nullable', 'string', 'max:255'],
             'security_question' => ['nullable', 'string', 'max:1000'],
             'security_answer' => ['nullable', 'string', 'max:1000'],
             'backup_codes' => ['nullable', 'string', 'max:4000'],
             'notes' => ['nullable', 'string', 'max:4000'],
         ]);
+    }
+
+    private function validateCardLink(Request $request, array $data): void
+    {
+        if (($data['record_type'] ?? null) !== 'card' && ($data['category'] ?? null) !== 'cards') {
+            return;
+        }
+
+        if (empty($data['card_type'])) {
+            throw ValidationException::withMessages(['card_type' => ['حدد نوع البطاقة: مدى أو ائتمانية.']]);
+        }
+        if (empty($data['statement_day'])) {
+            throw ValidationException::withMessages(['statement_day' => ['حدد تاريخ كشف البطاقة.']]);
+        }
+        if (($data['card_type'] ?? null) === 'credit') {
+            if (! in_array($data['card_brand'] ?? null, ['visa', 'mastercard'], true)) {
+                throw ValidationException::withMessages(['card_brand' => ['حدد Visa أو Mastercard.']]);
+            }
+            $debtId = (int) ($data['credit_card_debt_id'] ?? 0);
+            $exists = $debtId > 0 && DB::table('credit_card_debts')
+                ->where('id', $debtId)
+                ->where('user_id', $this->userId($request))
+                ->exists();
+            if (! $exists) {
+                throw ValidationException::withMessages(['credit_card_debt_id' => ['اربط البطاقة بسجلها في مديونية بطائق الائتمان.']]);
+            }
+        }
     }
 
     private function findItem(Request $request, int $id): ?object
@@ -195,6 +240,9 @@ class SecureVaultController extends Controller
             return null;
         }
 
+        $encryptedUsername = $item->username_encrypted ?? null;
+        $legacyUsername = $item->username ?? null;
+
         return [
             'id' => $item->id,
             'user_id' => $item->user_id,
@@ -205,7 +253,8 @@ class SecureVaultController extends Controller
             'record_type_label' => $this->typeLabel($item->record_type),
             'is_favorite' => (bool) $item->is_favorite,
             'title' => $item->title,
-            'username' => $item->username,
+            'username' => $revealSecrets ? ($this->decryptNullable($encryptedUsername) ?: $legacyUsername) : null,
+            'has_username' => ! empty($encryptedUsername) || ! empty($legacyUsername),
             'password' => $revealSecrets ? $this->decryptNullable($item->password_encrypted) : null,
             'has_password' => ! empty($item->password_encrypted),
             'url' => $item->url,
@@ -215,6 +264,7 @@ class SecureVaultController extends Controller
             'tags' => $item->tags,
             'cardholder_name' => $item->cardholder_name,
             'card_brand' => $item->card_brand,
+            'card_type' => $item->card_type ?? null,
             'card_number' => $revealSecrets ? $this->decryptNullable($item->card_number_encrypted) : null,
             'has_card_number' => ! empty($item->card_number_encrypted),
             'card_last_four' => $item->card_last_four,
@@ -222,6 +272,10 @@ class SecureVaultController extends Controller
             'has_card_cvv' => ! empty($item->card_cvv_encrypted),
             'expiry_month' => $item->expiry_month,
             'expiry_year' => $item->expiry_year,
+            'statement_day' => $item->statement_day ?? null,
+            'credit_card_debt_id' => $item->credit_card_debt_id ?? null,
+            'sadad_number' => $revealSecrets ? $this->decryptNullable($item->sadad_number_encrypted ?? null) : null,
+            'has_sadad_number' => ! empty($item->sadad_number_encrypted ?? null),
             'security_question' => $revealSecrets ? $this->decryptNullable($item->security_question_encrypted) : null,
             'security_answer' => $revealSecrets ? $this->decryptNullable($item->security_answer_encrypted) : null,
             'backup_codes' => $revealSecrets ? $this->decryptNullable($item->backup_codes_encrypted) : null,
