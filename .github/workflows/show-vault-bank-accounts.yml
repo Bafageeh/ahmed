@@ -1,0 +1,118 @@
+name: Show vault bank accounts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/show-vault-bank-accounts.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Add bank account section to bank details
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('ahmed-mobile/SecureVaultScreen.js')
+          s = p.read_text()
+
+          old = "function buildVault(items) {\n  const banks = items.filter((item) => getMode(item) === 'bank'); const cards = items.filter((item) => getMode(item) === 'card'); const logins = items.filter((item) => getMode(item) === 'login');\n  const groups = banks.map((bank) => ({ key: bankRef(bank), bank, displayName: bank.title || 'بنك', cards: [], logins: [] })); const byKey = new Map(groups.map((group) => [group.key, group]));"
+          new = "function buildVault(items) {\n  const banks = items.filter((item) => getMode(item) === 'bank'); const cards = items.filter((item) => getMode(item) === 'card'); const logins = items.filter((item) => getMode(item) === 'login'); const accounts = items.filter((item) => getMode(item) === 'account');\n  const groups = banks.map((bank) => ({ key: bankRef(bank), bank, displayName: bank.title || 'بنك', cards: [], accounts: [], logins: [] })); const byKey = new Map(groups.map((group) => [group.key, group]));"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "const accounts = items.filter((item) => getMode(item) === 'account')" not in s:
+              raise SystemExit('buildVault header pattern not found')
+
+          old = "  cards.forEach((item) => { const group = findGroup(item); if (group) group.cards.push(item); }); const siteLogins = [];"
+          new = "  cards.forEach((item) => { const group = findGroup(item); if (group) group.cards.push(item); }); accounts.forEach((item) => { const group = findGroup(item); if (group) group.accounts.push(item); }); const siteLogins = [];"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "group.accounts.push(item)" not in s:
+              raise SystemExit('buildVault account attach pattern not found')
+
+          old = "function getMode(item) { if (item?.record_type === 'card' || item?.category === 'cards') return 'card'; if (item?.category === 'banks') return 'bank'; if (isKnownBankRecord(item)) return 'bank'; if (item?.record_type === 'login' || item?.category === 'websites') return 'login'; return 'other'; }"
+          new = "function getMode(item) { if (item?.record_type === 'card' || item?.category === 'cards') return 'card'; if (item?.category === 'banks') return 'bank'; if (isKnownBankRecord(item)) return 'bank'; if (item?.category === 'accounts') return 'account'; if (item?.record_type === 'login' || item?.category === 'websites') return 'login'; return 'other'; }"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "item?.category === 'accounts'" not in s:
+              raise SystemExit('getMode account pattern not found')
+
+          old = "    {bank ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} /> : <EmptyCard text=\"لا يوجد سجل أساسي لهذا البنك.\" />}\n    <SectionHeader title=\"البطاقات\" action=\"إضافة بطاقة\" onAction={onAddCard} />"
+          new = "    {bank ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} /> : <EmptyCard text=\"لا يوجد سجل أساسي لهذا البنك.\" />}\n    {group.accounts.length ? <><SectionHeader title=\"الحسابات البنكية\" />{group.accounts.map((account) => <BankAccountCard key={account.id} item={account} revealed={revealedId === account.id} onReveal={() => onReveal(account)} />)}</> : null}\n    <SectionHeader title=\"البطاقات\" action=\"إضافة بطاقة\" onAction={onAddCard} />"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'title="الحسابات البنكية"' not in s:
+              raise SystemExit('BankDetails insertion pattern not found')
+
+          anchor = "function SitesView({ items, revealedId, onReveal, onEdit, onDelete }) {"
+          component = """function BankAccountCard({ item, revealed, onReveal }) {
+  return <View style={styles.bankAccountCard}><View style={styles.bankAccountHeader}><View style={styles.bankAccountIcon}><Text style={styles.bankAccountIconText}>🏦</Text></View><View style={styles.bankAccountTitleBlock}><Text style={styles.bankAccountTitle}>{item.title || 'حساب بنكي'}</Text><Text style={styles.bankAccountSubtitle}>آيبان / رقم حساب محفوظ</Text></View></View><SecretRow label=\"الآيبان\" value={revealed ? (item.username || '—') : (item.has_username ? '•••• •••• •••• ••••' : '—')} />{item.purpose ? <Text style={styles.bankAccountPurpose}>{item.purpose}</Text> : null}<TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك التشفير'}</Text></TouchableOpacity></View>;
+}
+"""
+          if component.strip() not in s:
+              if anchor not in s:
+                  raise SystemExit('SitesView anchor not found')
+              s = s.replace(anchor, component + anchor, 1)
+
+          style_anchor = "  siteCard: { backgroundColor: '#fff', borderRadius: 26, padding: 17, marginBottom: 14, borderWidth: 1, borderColor: '#edf2f7', elevation: 2 },"
+          style_new = "  bankAccountCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#edf2f7' }, bankAccountHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 6 }, bankAccountIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }, bankAccountIconText: { fontSize: 22 }, bankAccountTitleBlock: { flex: 1 }, bankAccountTitle: { color: '#0f172a', fontSize: 17, fontWeight: '900', textAlign: 'right' }, bankAccountSubtitle: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 3 }, bankAccountPurpose: { color: '#64748b', fontSize: 12, textAlign: 'right', marginTop: 8 },\n" + style_anchor
+          if "bankAccountCard:" not in s:
+              if style_anchor not in s:
+                  raise SystemExit('style anchor not found')
+              s = s.replace(style_anchor, style_new, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Validate source
+        run: |
+          grep -q "title=\"الحسابات البنكية\"" ahmed-mobile/SecureVaultScreen.js
+          grep -q "function BankAccountCard" ahmed-mobile/SecureVaultScreen.js
+          grep -q "item?.category === 'accounts'" ahmed-mobile/SecureVaultScreen.js
+          git diff --check
+
+      - name: Commit source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/SecureVaultScreen.js
+          git commit -m "Show legacy bank accounts inside each bank"
+          git push
+
+      - name: Remove duplicated IBANs from bank login fields
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"; if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi; fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $db=\Illuminate\Support\Facades\DB::table("secure_vault_items");
+              foreach ([[2,4],[3,6]] as [$bankId,$accountId]) {
+                $b=$db->where("id",$bankId)->first(); $a=$db->where("id",$accountId)->first();
+                if(!$b||!$a) continue;
+                $bv="";$av="";
+                try{$bv=strtoupper(preg_replace("/\\s+/u","",\Illuminate\Support\Facades\Crypt::decryptString($b->username_encrypted)));}catch(\Throwable $e){}
+                try{$av=strtoupper(preg_replace("/\\s+/u","",\Illuminate\Support\Facades\Crypt::decryptString($a->username_encrypted)));}catch(\Throwable $e){}
+                if($bv!=="" && $av!=="" && hash_equals($bv,$av) && str_starts_with($bv,"SA") && strlen($bv)===24 && empty($b->password_encrypted)) {
+                  \Illuminate\Support\Facades\DB::table("secure_vault_items")->where("id",$bankId)->update(["username"=>null,"username_encrypted"=>null,"updated_at"=>now()]);
+                  echo "cleared duplicated IBAN from bank login field id={$bankId}; preserved in account id={$accountId}\n";
+                }
+              }
+              echo "bank accounts remain stored separately and will be displayed under their banks\n";
+            '
