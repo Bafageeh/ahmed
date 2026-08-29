@@ -1,0 +1,78 @@
+name: Secure vault accounts dropdown
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/secure-vault-accounts-dropdown.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Convert bank accounts to dropdown
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('ahmed-mobile/SecureVaultScreen.js')
+          s = p.read_text()
+
+          old = "function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onEditCredentials }) {\n  const bank = group.bank;\n  const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password));"
+          new = "function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onEditCredentials }) {\n  const [accountsOpen, setAccountsOpen] = useState(false);\n  const bank = group.bank;\n  const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password));"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "const [accountsOpen, setAccountsOpen] = useState(false);" not in s:
+              raise SystemExit('BankDetails state anchor not found')
+
+          old = "    {group.accounts.length ? <><SectionHeader title=\"الحسابات البنكية\" />{group.accounts.map((account) => <BankAccountCard key={account.id} item={account} revealed={revealedId === account.id} onReveal={() => onReveal(account)} />)}</> : null}"
+          new = "    {group.accounts.length ? <BankAccountsDropdown accounts={group.accounts} open={accountsOpen} onToggle={() => setAccountsOpen((value) => !value)} revealedId={revealedId} onReveal={onReveal} /> : null}"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "<BankAccountsDropdown accounts={group.accounts}" not in s:
+              raise SystemExit('accounts render anchor not found')
+
+          old = "function BankAccountCard({ item, revealed, onReveal }) {\n  return <View style={styles.bankAccountCard}><View style={styles.bankAccountHeader}><View style={styles.bankAccountIcon}><Text style={styles.bankAccountIconText}>🏦</Text></View><View style={styles.bankAccountTitleBlock}><Text style={styles.bankAccountTitle}>{item.title || 'حساب بنكي'}</Text><Text style={styles.bankAccountSubtitle}>آيبان / رقم حساب محفوظ</Text></View></View><SecretRow label=\"الآيبان\" value={revealed ? (item.username || '—') : (item.has_username ? '•••• •••• •••• ••••' : '—')} />{item.purpose ? <Text style={styles.bankAccountPurpose}>{item.purpose}</Text> : null}<TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك التشفير'}</Text></TouchableOpacity></View>;\n}"
+          new = "function BankAccountsDropdown({ accounts, open, onToggle, revealedId, onReveal }) {\n  const countLabel = accounts.length === 1 ? 'حساب واحد' : `${accounts.length} حسابات`;\n  return <><SectionHeader title=\"الحسابات البنكية\" /><View style={styles.accountsDropdown}><TouchableOpacity style={styles.accountsDropdownHeader} activeOpacity={0.84} onPress={onToggle}><View style={styles.accountsDropdownIcon}><Text style={styles.accountsDropdownIconText}>🏦</Text></View><View style={styles.accountsDropdownText}><Text style={styles.accountsDropdownTitle}>الحسابات البنكية</Text><Text style={styles.accountsDropdownSubtitle}>{open ? 'اضغط لإخفاء الحسابات' : 'اضغط لعرض الحسابات'}</Text></View><View style={styles.accountsDropdownMeta}><View style={styles.accountsCountBadge}><Text style={styles.accountsCountText}>{countLabel}</Text></View><Text style={styles.accountsChevron}>{open ? '⌃' : '⌄'}</Text></View></TouchableOpacity>{open ? <View style={styles.accountsDropdownBody}>{accounts.map((account) => <BankAccountCard key={account.id} item={account} revealed={revealedId === account.id} onReveal={() => onReveal(account)} nested />)}</View> : null}</View></>;\n}\nfunction BankAccountCard({ item, revealed, onReveal, nested = false }) {\n  return <View style={[styles.bankAccountCard, nested && styles.bankAccountNestedCard]}><View style={styles.bankAccountHeader}><View style={styles.bankAccountIcon}><Text style={styles.bankAccountIconText}>🏦</Text></View><View style={styles.bankAccountTitleBlock}><Text style={styles.bankAccountTitle}>{item.title || 'حساب بنكي'}</Text><Text style={styles.bankAccountSubtitle}>آيبان / رقم حساب محفوظ</Text></View></View><SecretRow label=\"الآيبان\" value={revealed ? (item.username || '—') : (item.has_username ? '•••• •••• •••• ••••' : '—')} />{item.purpose ? <Text style={styles.bankAccountPurpose}>{item.purpose}</Text> : null}<TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك التشفير'}</Text></TouchableOpacity></View>;\n}"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "function BankAccountsDropdown" not in s:
+              raise SystemExit('BankAccountCard anchor not found')
+
+          old = "  bankAccountCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#edf2f7' }, bankAccountHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 6 }, bankAccountIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }, bankAccountIconText: { fontSize: 22 }, bankAccountTitleBlock: { flex: 1 }, bankAccountTitle: { color: '#0f172a', fontSize: 17, fontWeight: '900', textAlign: 'right' }, bankAccountSubtitle: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 3 }, bankAccountPurpose: { color: '#64748b', fontSize: 12, textAlign: 'right', marginTop: 8 },"
+          new = "  accountsDropdown: { backgroundColor: '#fff', borderRadius: 26, borderWidth: 1, borderColor: '#e6edf5', overflow: 'hidden', elevation: 2 }, accountsDropdownHeader: { minHeight: 94, padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }, accountsDropdownIcon: { width: 54, height: 54, borderRadius: 17, backgroundColor: '#eef5ff', alignItems: 'center', justifyContent: 'center' }, accountsDropdownIconText: { fontSize: 27 }, accountsDropdownText: { flex: 1 }, accountsDropdownTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' }, accountsDropdownSubtitle: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 5 }, accountsDropdownMeta: { alignItems: 'center', gap: 7 }, accountsCountBadge: { backgroundColor: '#eef6ff', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }, accountsCountText: { color: '#315b8a', fontSize: 12, fontWeight: '900' }, accountsChevron: { color: '#0f172a', fontSize: 23, fontWeight: '900', lineHeight: 24 }, accountsDropdownBody: { paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },\n  bankAccountCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#edf2f7' }, bankAccountNestedCard: { backgroundColor: '#fbfdff', borderColor: '#e2e8f0', borderRadius: 20, elevation: 0 }, bankAccountHeader: { flexDirection: 'row-reverse', alignItems: 'center', gap: 10, marginBottom: 6 }, bankAccountIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }, bankAccountIconText: { fontSize: 22 }, bankAccountTitleBlock: { flex: 1 }, bankAccountTitle: { color: '#0f172a', fontSize: 17, fontWeight: '900', textAlign: 'right' }, bankAccountSubtitle: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 3 }, bankAccountPurpose: { color: '#64748b', fontSize: 12, textAlign: 'right', marginTop: 8 },"
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif "accountsDropdown:" not in s:
+              raise SystemExit('styles anchor not found')
+
+          p.write_text(s)
+          PY
+
+      - name: Validate source
+        run: |
+          grep -q "function BankAccountsDropdown" ahmed-mobile/SecureVaultScreen.js
+          grep -q "accountsOpen" ahmed-mobile/SecureVaultScreen.js
+          grep -q "accountsDropdownHeader" ahmed-mobile/SecureVaultScreen.js
+          git diff --check
+
+      - name: Commit source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/SecureVaultScreen.js
+          if git diff --cached --quiet; then
+            echo "No source changes"
+          else
+            git commit -m "Make vault bank accounts collapsible dropdown"
+            git push
+          fi
