@@ -62,6 +62,7 @@ class SecureVaultController extends Controller
     public function store(Request $request)
     {
         $data = $this->validated($request);
+        $this->validateBankLoginRule($data);
         $this->validateCardLink($request, $data);
         $cardDigits = $this->onlyDigits($data['card_number'] ?? '');
         $cardType = $data['card_type'] ?? null;
@@ -111,6 +112,7 @@ class SecureVaultController extends Controller
         }
 
         $data = $this->validated($request);
+        $this->validateBankLoginRule($data);
         $this->validateCardLink($request, $data);
         $cardDigits = $this->onlyDigits($data['card_number'] ?? '');
         $cardType = $data['card_type'] ?? null;
@@ -193,6 +195,20 @@ class SecureVaultController extends Controller
             'backup_codes' => ['nullable', 'string', 'max:4000'],
             'notes' => ['nullable', 'string', 'max:4000'],
         ]);
+    }
+
+    private function validateBankLoginRule(array $data): void
+    {
+        if (($data['record_type'] ?? null) !== 'login' || ($data['category'] ?? null) !== 'websites') {
+            return;
+        }
+
+        $ownerGroup = trim((string) ($data['owner_group'] ?? ''));
+        if ($ownerGroup !== '' && $ownerGroup !== 'sites') {
+            throw ValidationException::withMessages([
+                'owner_group' => ['لكل بنك بيانات دخول واحدة فقط. عدّل بيانات دخول البنك الأساسية بدل إضافة دخول آخر.'],
+            ]);
+        }
     }
 
     private function validateCardLink(Request $request, array $data): void

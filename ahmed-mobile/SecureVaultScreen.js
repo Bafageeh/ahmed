@@ -151,7 +151,20 @@ export default function SecureVaultScreen({ onBack }) {
   const openForm = (mode, nextForm, id = null) => { setMenuOpen(false); setFormMode(mode); setEditingId(id); setForm({ ...emptyForm, ...nextForm }); setFormOpen(true); setMessage(''); };
   const startAddBank = () => openForm('bank', { category: 'banks', record_type: 'subscription' });
   const startAddSite = () => openForm('login', { category: 'websites', record_type: 'login', owner_group: SITE_GROUP });
-  const startAddBankLogin = () => selectedGroup && openForm('login', { category: 'websites', record_type: 'login', owner_group: groupRef(selectedGroup) });
+  const startBankCredentials = async () => {
+    if (!selectedGroup?.bank) return;
+    let full = selectedGroup.bank;
+    try {
+      const response = await fetch(`${API_URL}/secure-vault/${selectedGroup.bank.id}`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
+      const json = await response.json();
+      if (response.ok) full = json.data;
+    } catch (error) {}
+    openForm('bankLogin', {
+      category: 'banks', record_type: 'subscription', owner_group: '',
+      title: full.title || selectedGroup.displayName || 'بنك',
+      username: full.username || '', password: full.password || '',
+    }, selectedGroup.bank.id);
+  };
   const startAddCard = () => selectedGroup && openForm('card', { category: 'cards', record_type: 'card', owner_group: groupRef(selectedGroup), card_type: 'credit', card_brand: 'visa' });
 
   const startEdit = async (item) => {
@@ -162,7 +175,7 @@ export default function SecureVaultScreen({ onBack }) {
     } catch (error) {}
     const mode = getMode(full);
     openForm(mode, {
-      owner_group: full.owner_group || '', category: mode === 'bank' ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: mode === 'bank' ? 'subscription' : mode === 'card' ? 'card' : 'login',
+      owner_group: full.owner_group || '', category: (mode === 'bank' || mode === 'bankLogin') ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: (mode === 'bank' || mode === 'bankLogin') ? 'subscription' : mode === 'card' ? 'card' : 'login',
       title: full.title || '', username: full.username || '', password: full.password || '', url: full.url || '', notes: full.notes || '',
       cardholder_name: full.cardholder_name || '', card_brand: full.card_brand || (full.card_type === 'mada' ? 'mada' : 'visa'), card_number: full.card_number || '', expiry_month: full.expiry_month ? String(full.expiry_month) : '', expiry_year: full.expiry_year ? String(full.expiry_year) : '',
       card_type: full.card_type || 'credit', statement_day: full.statement_day ? String(full.statement_day) : '', credit_card_debt_id: full.credit_card_debt_id ? String(full.credit_card_debt_id) : '', sadad_number: full.sadad_number || '',
@@ -208,7 +221,7 @@ export default function SecureVaultScreen({ onBack }) {
     onBack();
   };
   const openBank = (group) => { setSelectedBankKey(group.key); setView('bank'); setSearch(''); setSearchOpen(false); };
-  const menuItems = getMenuItems(view, selectedGroup, startAddBank, startAddSite, startAddCard, startAddBankLogin, () => selectedGroup?.bank && startEdit(selectedGroup.bank));
+  const menuItems = getMenuItems(view, selectedGroup, startAddBank, startAddSite, startAddCard, startBankCredentials, () => selectedGroup?.bank && startEdit(selectedGroup.bank));
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -227,7 +240,7 @@ export default function SecureVaultScreen({ onBack }) {
           {loading ? <Text style={styles.loadingText}>جاري تحميل الخزنة...</Text> : null}
           {view === 'home' ? <HomeView bankCount={vault.groups.length} siteCount={vault.siteLogins.length} onBanks={() => setView('banks')} onSites={() => setView('sites')} /> : null}
           {view === 'banks' ? <BanksView groups={bankGroups} onBank={openBank} /> : null}
-          {view === 'bank' && selectedGroup ? <BankDetails group={selectedGroup} creditDebts={creditDebts} revealedId={revealedId} onReveal={revealItem} onEdit={startEdit} onDelete={deleteItem} onAddCard={startAddCard} onAddLogin={startAddBankLogin} /> : null}
+          {view === 'bank' && selectedGroup ? <BankDetails group={selectedGroup} creditDebts={creditDebts} revealedId={revealedId} onReveal={revealItem} onEdit={startEdit} onDelete={deleteItem} onAddCard={startAddCard} onEditCredentials={startBankCredentials} /> : null}
           {view === 'sites' ? <SitesView items={siteItems} revealedId={revealedId} onReveal={revealItem} onEdit={startEdit} onDelete={deleteItem} /> : null}
         </ScrollView>
         <VaultFormModal open={formOpen} form={form} formMode={formMode} setField={setField} saving={saving} message={message} saveItem={saveItem} cancel={() => { setFormOpen(false); setEditingId(null); setForm(emptyForm); setMessage(''); }} selectedGroup={selectedGroup} groups={vault.groups} creditDebts={creditDebts} editingId={editingId} />
@@ -245,13 +258,13 @@ function HomeView({ bankCount, siteCount, onBanks, onSites }) {
 function BanksView({ groups, onBank }) {
   return <><Text style={styles.pageTitle}>البنوك</Text><Text style={styles.pageSubtitle}>اختر بنكًا لعرض حساب الدخول والبطاقات</Text>{groups.length ? <View style={styles.bankGrid}>{groups.map((group) => <TouchableOpacity key={group.key} style={styles.bankTile} activeOpacity={0.84} onPress={() => onBank(group)}><View style={styles.bankLogoBox}><BankLogo bankName={group.displayName} size={66} /></View><Text style={styles.bankTileName}>{cleanBankName(group.displayName)}</Text></TouchableOpacity>)}</View> : <EmptyCard text="لا توجد بنوك محفوظة." />}</>;
 }
-function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onAddLogin }) {
+function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onEditCredentials }) {
   const bank = group.bank;
+  const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password));
   return <>
     <View style={styles.bankHero}><View style={styles.bankHeroLogo}><BankLogo bankName={group.displayName} size={62} /></View><View style={styles.bankHeroText}><Text style={styles.bankHeroName}>{cleanBankName(group.displayName)}</Text><Text style={styles.bankHeroSub}>حساب الدخول والبطاقات</Text></View>{bank ? <TouchableOpacity style={styles.editPill} onPress={() => onEdit(bank)}><Text style={styles.editPillText}>تعديل</Text></TouchableOpacity> : null}</View>
-    <SectionHeader title="بيانات الدخول" action={bank ? 'تعديل' : ''} onAction={bank ? () => onEdit(bank) : undefined} />
+    <SectionHeader title="بيانات الدخول" action={bank ? (hasCredentials ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onEditCredentials : undefined} />
     {bank ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} /> : <EmptyCard text="لا يوجد سجل أساسي لهذا البنك." />}
-    {group.logins.length ? <><SectionHeader title="دخول إضافي" action="إضافة" onAction={onAddLogin} />{group.logins.map((login) => <SiteLoginCard key={login.id} item={login} revealed={revealedId === login.id} onReveal={() => onReveal(login)} onEdit={() => onEdit(login)} onDelete={() => onDelete(login)} compact />)}</> : null}
     <SectionHeader title="البطاقات" action="إضافة بطاقة" onAction={onAddCard} />
     {group.cards.length ? group.cards.map((card) => <BankCard key={card.id} item={card} creditDebts={creditDebts} revealed={revealedId === card.id} onReveal={() => onReveal(card)} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />) : <EmptyCard text="لا توجد بطاقات محفوظة لهذا البنك." />}
     {bank ? <TouchableOpacity style={styles.deleteBankButton} onPress={() => onDelete(bank)}><Text style={styles.deleteBankText}>حذف البنك</Text></TouchableOpacity> : null}
@@ -280,17 +293,18 @@ function EmptyCard({ text }) { return <View style={styles.emptyCard}><Text style
 function SectionHeader({ title, action, onAction }) { return <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>{title}</Text>{action && onAction ? <TouchableOpacity style={styles.sectionAction} onPress={onAction}><Text style={styles.sectionActionText}>{action}</Text></TouchableOpacity> : <View />}</View>; }
 
 function VaultFormModal({ open, form, formMode, setField, saving, message, saveItem, cancel, selectedGroup, groups, creditDebts, editingId }) {
-  const isBank = formMode === 'bank'; const isCard = formMode === 'card'; const isLogin = formMode === 'login';
+  const isBank = formMode === 'bank'; const isBankLogin = formMode === 'bankLogin'; const isCard = formMode === 'card'; const isLogin = formMode === 'login';
   const ownerGroup = groups.find((group) => groupRef(group) === form.owner_group) || selectedGroup;
   const matchingDebts = creditDebts.filter((debt) => bankNamesMatch(ownerGroup?.displayName, debt.bank_name));
   let debtOptions = matchingDebts.length ? matchingDebts : creditDebts;
   const selectedDebt = creditDebts.find((debt) => String(debt.id) === String(form.credit_card_debt_id));
   if (selectedDebt && !debtOptions.some((debt) => debt.id === selectedDebt.id)) debtOptions = [selectedDebt, ...debtOptions];
   const siteMode = isLogin && form.owner_group === SITE_GROUP;
-  const title = editingId ? 'تعديل السجل' : isBank ? 'إضافة بنك' : isCard ? 'إضافة بطاقة' : siteMode ? 'إضافة موقع أو تطبيق' : 'إضافة دخول للبنك';
+  const title = isBankLogin ? 'بيانات دخول البنك' : editingId ? 'تعديل السجل' : isBank ? 'إضافة بنك' : isCard ? 'إضافة بطاقة' : 'إضافة موقع أو تطبيق';
   return <Modal visible={open} transparent animationType="slide" onRequestClose={cancel}><KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><View style={styles.modalSheet}><View style={styles.modalHandle} /><ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}><Text style={styles.formTitle}>{title}</Text>
-    {isBank ? <><FormInput label="اسم البنك" value={form.title} onChangeText={(value) => setField('title', value)} placeholder="مثال: بنك الجزيرة" /><FormInput label="اسم المستخدم" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize="none" /><FormInput label="كلمة المرور" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize="none" /><Text style={styles.securityHint}>اسم المستخدم وكلمة المرور يُحفظان مشفرين في الخادم.</Text><FormInput label="ملاحظة" value={form.notes} onChangeText={(value) => setField('notes', value)} multiline /></> : null}
-    {isLogin ? <>{!siteMode && ownerGroup ? <View style={styles.fixedBankBox}><BankLogo bankName={ownerGroup.displayName} size={34} /><Text style={styles.fixedBankText}>{cleanBankName(ownerGroup.displayName)}</Text></View> : null}<FormInput label={siteMode ? 'اسم الموقع أو التطبيق' : 'اسم الدخول'} value={form.title} onChangeText={(value) => setField('title', value)} placeholder={siteMode ? 'مثال: Gmail' : 'مثال: دخول الأعمال'} /><FormInput label="اسم المستخدم" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize="none" /><FormInput label="كلمة المرور" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize="none" /><FormInput label="الرابط (اختياري)" value={form.url} onChangeText={(value) => setField('url', value)} autoCapitalize="none" /><FormInput label="ملاحظة" value={form.notes} onChangeText={(value) => setField('notes', value)} multiline /></> : null}
+    {isBank ? <><FormInput label="اسم البنك" value={form.title} onChangeText={(value) => setField('title', value)} placeholder="مثال: بنك الجزيرة" /><Text style={styles.securityHint}>بيانات الدخول تُدار من داخل صفحة البنك، ويسمح بسجل دخول واحد فقط لكل بنك.</Text></> : null}
+    {isBankLogin ? <>{ownerGroup ? <View style={styles.fixedBankBox}><BankLogo bankName={ownerGroup.displayName} size={34} /><Text style={styles.fixedBankText}>{cleanBankName(ownerGroup.displayName)}</Text></View> : null}<FormInput label="اسم المستخدم" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize="none" /><FormInput label="كلمة المرور" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize="none" /><Text style={styles.securityHint}>اسم المستخدم وكلمة المرور فقط، وتُحفظ البيانات مشفرة. لا يمكن إضافة دخول ثانٍ لنفس البنك.</Text></> : null}
+    {isLogin ? <><FormInput label="اسم الموقع أو التطبيق" value={form.title} onChangeText={(value) => setField('title', value)} placeholder="مثال: Gmail" /><FormInput label="اسم المستخدم" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize="none" /><FormInput label="كلمة المرور" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize="none" /></> : null}
     {isCard ? <>{ownerGroup ? <View style={styles.fixedBankBox}><BankLogo bankName={ownerGroup.displayName} size={34} /><Text style={styles.fixedBankText}>{cleanBankName(ownerGroup.displayName)}</Text></View> : null}<FormInput label="اسم البطاقة" value={form.title} onChangeText={(value) => setField('title', value)} placeholder="مثال: أجواء إنفينيت" /><Text style={styles.inputLabel}>نوع البطاقة</Text><PickerRow options={[{ value: 'mada', label: 'مدى' }, { value: 'credit', label: 'ائتمانية' }]} value={form.card_type} onChange={(value) => { setField('card_type', value); if (value === 'mada') { setField('card_brand', 'mada'); setField('credit_card_debt_id', ''); } else if (form.card_brand === 'mada') setField('card_brand', 'visa'); }} />{form.card_type === 'credit' ? <><Text style={styles.inputLabel}>الشبكة</Text><PickerRow options={[{ value: 'visa', label: 'Visa' }, { value: 'mastercard', label: 'Mastercard' }]} value={form.card_brand} onChange={(value) => setField('card_brand', value)} /><Text style={styles.inputLabel}>الحد الائتماني من شاشة المديونية</Text>{debtOptions.length ? <PickerRow options={debtOptions.map((debt) => ({ value: String(debt.id), label: `${debt.card_name || 'بطاقة'} • ${money(debt.credit_limit)}` }))} value={String(form.credit_card_debt_id || '')} onChange={(value) => setField('credit_card_debt_id', value)} /> : <Text style={styles.securityHint}>لا توجد بطاقة في شاشة مديونية بطائق الائتمان لربط الحد.</Text>}{selectedDebt ? <View style={styles.readOnlyBox}><Text style={styles.readOnlyLabel}>الحد الائتماني</Text><Text style={styles.readOnlyValue}>{money(selectedDebt.credit_limit)}</Text></View> : null}</> : null}<FormInput label="رقم البطاقة (اختياري)" value={form.card_number} onChangeText={(value) => setField('card_number', digitsOnly(value, 19))} keyboardType="number-pad" /><View style={styles.twoColumns}><View style={styles.half}><FormInput label="سنة الانتهاء" value={String(form.expiry_year || '')} onChangeText={(value) => setField('expiry_year', digitsOnly(value, 4))} keyboardType="number-pad" /></View><View style={styles.half}><FormInput label="شهر الانتهاء" value={String(form.expiry_month || '')} onChangeText={(value) => setField('expiry_month', digitsOnly(value, 2))} keyboardType="number-pad" /></View></View><FormInput label="تاريخ الكشف (يوم الشهر)" value={String(form.statement_day || '')} onChangeText={(value) => setField('statement_day', digitsOnly(value, 2))} keyboardType="number-pad" placeholder="مثال: 25" /><Text style={styles.securityHint}>سيتم جدولة تنبيه الساعة 9 صباحًا في يوم الكشف عند استخدام نسخة التطبيق الداعمة للإشعارات.</Text><FormInput label="رقم سداد" value={form.sadad_number} onChangeText={(value) => setField('sadad_number', value)} keyboardType="number-pad" /><Text style={styles.securityHint}>رقم البطاقة ورقم سداد يحفظان مشفرين.</Text><FormInput label="ملاحظة" value={form.notes} onChangeText={(value) => setField('notes', value)} multiline /></> : null}
     {!!message ? <Text style={styles.message}>{message}</Text> : null}<TouchableOpacity style={styles.saveButton} onPress={saveItem} disabled={saving}><Text style={styles.saveText}>{saving ? 'جاري الحفظ...' : 'حفظ'}</Text></TouchableOpacity><TouchableOpacity style={styles.cancelButton} onPress={cancel}><Text style={styles.cancelText}>إلغاء</Text></TouchableOpacity>
   </ScrollView></View></KeyboardAvoidingView></Modal>;
@@ -323,6 +337,7 @@ function preparePayload(form, mode, creditDebts) {
   const payload = { ...emptyForm, ...form, is_favorite: false, category: mode === 'bank' ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: mode === 'bank' ? 'subscription' : mode === 'card' ? 'card' : 'login', expiry_month: form.expiry_month ? Number(form.expiry_month) : null, expiry_year: form.expiry_year ? Number(form.expiry_year) : null, statement_day: form.statement_day ? Number(form.statement_day) : null, credit_card_debt_id: form.credit_card_debt_id ? Number(form.credit_card_debt_id) : null };
   if (!String(payload.title || '').trim()) return { error: mode === 'bank' ? 'اكتب اسم البنك.' : mode === 'card' ? 'اكتب اسم البطاقة.' : 'اكتب اسم الموقع أو الدخول.' };
   if (mode === 'bank') { payload.owner_group = null; payload.card_type = null; payload.card_brand = null; payload.statement_day = null; payload.credit_card_debt_id = null; payload.sadad_number = ''; }
+  if (mode === 'bankLogin') { if (!String(payload.username || '').trim()) return { error: 'اكتب اسم المستخدم.' }; if (!String(payload.password || '').trim()) return { error: 'اكتب كلمة المرور.' }; payload.owner_group = null; payload.card_type = null; payload.card_brand = null; payload.statement_day = null; payload.credit_card_debt_id = null; payload.sadad_number = ''; payload.url = ''; payload.notes = ''; }
   if (mode === 'login') { payload.card_type = null; payload.card_brand = null; payload.statement_day = null; payload.credit_card_debt_id = null; payload.sadad_number = ''; }
   if (mode === 'card') {
     if (!payload.owner_group) return { error: 'تعذر تحديد البنك.' }; if (!['mada', 'credit'].includes(payload.card_type)) return { error: 'حدد نوع البطاقة.' }; if (!validStatementDay(payload.statement_day)) return { error: 'حدد يوم الكشف من 1 إلى 31.' };
@@ -331,7 +346,7 @@ function preparePayload(form, mode, creditDebts) {
   }
   return { payload };
 }
-function getMenuItems(view, selectedGroup, addBank, addSite, addCard, addBankLogin, editBank) { if (view === 'home') return [{ label: 'إضافة بنك', onPress: addBank }, { label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'banks') return [{ label: 'إضافة بنك', onPress: addBank }]; if (view === 'sites') return [{ label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'bank' && selectedGroup) return [{ label: 'إضافة بطاقة', onPress: addCard }, { label: 'إضافة دخول للبنك', onPress: addBankLogin }, ...(selectedGroup.bank ? [{ label: 'تعديل البنك', onPress: editBank }] : [])]; return []; }
+function getMenuItems(view, selectedGroup, addBank, addSite, addCard, editCredentials, editBank) { if (view === 'home') return [{ label: 'إضافة بنك', onPress: addBank }, { label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'banks') return [{ label: 'إضافة بنك', onPress: addBank }]; if (view === 'sites') return [{ label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'bank' && selectedGroup) { const bank = selectedGroup.bank; const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password)); return [{ label: 'إضافة بطاقة', onPress: addCard }, ...(bank ? [{ label: hasCredentials ? 'تعديل بيانات الدخول' : 'إضافة بيانات الدخول', onPress: editCredentials }, { label: 'تعديل البنك', onPress: editBank }] : [])]; } return []; }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f7fb', paddingTop: STATUS_TOP }, screen: { flex: 1, backgroundColor: '#f4f7fb' },
