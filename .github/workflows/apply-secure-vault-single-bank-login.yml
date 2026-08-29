@@ -1,0 +1,182 @@
+name: Apply secure vault single bank login
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-secure-vault-single-bank-login.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch secure vault bank login behavior
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          mobile_path = Path('ahmed-mobile/SecureVaultScreen.js')
+          s = mobile_path.read_text()
+
+          def repl(old, new, label):
+              global s
+              if old in s:
+                  s = s.replace(old, new)
+                  print('patched:', label)
+              elif new in s:
+                  print('already patched:', label)
+              else:
+                  raise SystemExit(f'pattern not found: {label}')
+
+          repl(
+              "  const startAddBankLogin = () => selectedGroup && openForm('login', { category: 'websites', record_type: 'login', owner_group: groupRef(selectedGroup) });",
+              """  const startBankCredentials = async () => {
+    if (!selectedGroup?.bank) return;
+    let full = selectedGroup.bank;
+    try {
+      const response = await fetch(`${API_URL}/secure-vault/${selectedGroup.bank.id}`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
+      const json = await response.json();
+      if (response.ok) full = json.data;
+    } catch (error) {}
+    openForm('bankLogin', {
+      category: 'banks', record_type: 'subscription', owner_group: '',
+      title: full.title || selectedGroup.displayName || 'بنك',
+      username: full.username || '', password: full.password || '',
+    }, selectedGroup.bank.id);
+  };""",
+              'replace additional bank login creator',
+          )
+
+          repl(
+              "  const menuItems = getMenuItems(view, selectedGroup, startAddBank, startAddSite, startAddCard, startAddBankLogin, () => selectedGroup?.bank && startEdit(selectedGroup.bank));",
+              "  const menuItems = getMenuItems(view, selectedGroup, startAddBank, startAddSite, startAddCard, startBankCredentials, () => selectedGroup?.bank && startEdit(selectedGroup.bank));",
+              'menu credentials action',
+          )
+
+          repl(
+              "onAddLogin={startAddBankLogin}",
+              "onEditCredentials={startBankCredentials}",
+              'bank details credentials prop',
+          )
+
+          repl(
+              "function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onAddLogin }) {\n  const bank = group.bank;",
+              "function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onEditCredentials }) {\n  const bank = group.bank;\n  const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password));",
+              'bank details signature',
+          )
+
+          repl(
+              "    <SectionHeader title=\"بيانات الدخول\" action={bank ? 'تعديل' : ''} onAction={bank ? () => onEdit(bank) : undefined} />",
+              "    <SectionHeader title=\"بيانات الدخول\" action={bank ? (hasCredentials ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onEditCredentials : undefined} />",
+              'single credentials section action',
+          )
+
+          old_extra = "    {group.logins.length ? <><SectionHeader title=\"دخول إضافي\" action=\"إضافة\" onAction={onAddLogin} />{group.logins.map((login) => <SiteLoginCard key={login.id} item={login} revealed={revealedId === login.id} onReveal={() => onReveal(login)} onEdit={() => onEdit(login)} onDelete={() => onDelete(login)} compact />)}</> : null}\n"
+          if old_extra in s:
+              s = s.replace(old_extra, '')
+              print('patched: remove additional bank login UI')
+          elif 'title="دخول إضافي"' not in s:
+              print('already patched: remove additional bank login UI')
+          else:
+              raise SystemExit('pattern not found: remove additional bank login UI')
+
+          repl(
+              "  const isBank = formMode === 'bank'; const isCard = formMode === 'card'; const isLogin = formMode === 'login';",
+              "  const isBank = formMode === 'bank'; const isBankLogin = formMode === 'bankLogin'; const isCard = formMode === 'card'; const isLogin = formMode === 'login';",
+              'bank login form mode',
+          )
+
+          repl(
+              "  const title = editingId ? 'تعديل السجل' : isBank ? 'إضافة بنك' : isCard ? 'إضافة بطاقة' : siteMode ? 'إضافة موقع أو تطبيق' : 'إضافة دخول للبنك';",
+              "  const title = isBankLogin ? 'بيانات دخول البنك' : editingId ? 'تعديل السجل' : isBank ? 'إضافة بنك' : isCard ? 'إضافة بطاقة' : 'إضافة موقع أو تطبيق';",
+              'form title',
+          )
+
+          old_bank_form = "    {isBank ? <><FormInput label=\"اسم البنك\" value={form.title} onChangeText={(value) => setField('title', value)} placeholder=\"مثال: بنك الجزيرة\" /><FormInput label=\"اسم المستخدم\" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize=\"none\" /><FormInput label=\"كلمة المرور\" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize=\"none\" /><Text style={styles.securityHint}>اسم المستخدم وكلمة المرور يُحفظان مشفرين في الخادم.</Text><FormInput label=\"ملاحظة\" value={form.notes} onChangeText={(value) => setField('notes', value)} multiline /></> : null}"
+          new_bank_form = """    {isBank ? <><FormInput label=\"اسم البنك\" value={form.title} onChangeText={(value) => setField('title', value)} placeholder=\"مثال: بنك الجزيرة\" /><Text style={styles.securityHint}>بيانات الدخول تُدار من داخل صفحة البنك، ويسمح بسجل دخول واحد فقط لكل بنك.</Text></> : null}
+    {isBankLogin ? <>{ownerGroup ? <View style={styles.fixedBankBox}><BankLogo bankName={ownerGroup.displayName} size={34} /><Text style={styles.fixedBankText}>{cleanBankName(ownerGroup.displayName)}</Text></View> : null}<FormInput label=\"اسم المستخدم\" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize=\"none\" /><FormInput label=\"كلمة المرور\" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize=\"none\" /><Text style={styles.securityHint}>اسم المستخدم وكلمة المرور فقط، وتُحفظ البيانات مشفرة. لا يمكن إضافة دخول ثانٍ لنفس البنك.</Text></> : null}"""
+          repl(old_bank_form, new_bank_form, 'bank and bank-login forms')
+
+          old_login_form = "    {isLogin ? <>{!siteMode && ownerGroup ? <View style={styles.fixedBankBox}><BankLogo bankName={ownerGroup.displayName} size={34} /><Text style={styles.fixedBankText}>{cleanBankName(ownerGroup.displayName)}</Text></View> : null}<FormInput label={siteMode ? 'اسم الموقع أو التطبيق' : 'اسم الدخول'} value={form.title} onChangeText={(value) => setField('title', value)} placeholder={siteMode ? 'مثال: Gmail' : 'مثال: دخول الأعمال'} /><FormInput label=\"اسم المستخدم\" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize=\"none\" /><FormInput label=\"كلمة المرور\" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize=\"none\" /><FormInput label=\"الرابط (اختياري)\" value={form.url} onChangeText={(value) => setField('url', value)} autoCapitalize=\"none\" /><FormInput label=\"ملاحظة\" value={form.notes} onChangeText={(value) => setField('notes', value)} multiline /></> : null}"
+          new_login_form = "    {isLogin ? <><FormInput label=\"اسم الموقع أو التطبيق\" value={form.title} onChangeText={(value) => setField('title', value)} placeholder=\"مثال: Gmail\" /><FormInput label=\"اسم المستخدم\" value={form.username} onChangeText={(value) => setField('username', value)} autoCapitalize=\"none\" /><FormInput label=\"كلمة المرور\" value={form.password} onChangeText={(value) => setField('password', value)} secureTextEntry autoCapitalize=\"none\" /></> : null}"
+          repl(old_login_form, new_login_form, 'sites/apps credentials only')
+
+          repl(
+              "category: mode === 'bank' ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: mode === 'bank' ? 'subscription' : mode === 'card' ? 'card' : 'login'",
+              "category: (mode === 'bank' || mode === 'bankLogin') ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: (mode === 'bank' || mode === 'bankLogin') ? 'subscription' : mode === 'card' ? 'card' : 'login'",
+              'bank-login payload type',
+          )
+
+          bank_payload_line = "  if (mode === 'bank') { payload.owner_group = null; payload.card_type = null; payload.card_brand = null; payload.statement_day = null; payload.credit_card_debt_id = null; payload.sadad_number = ''; }"
+          bank_login_payload = bank_payload_line + "\n  if (mode === 'bankLogin') { if (!String(payload.username || '').trim()) return { error: 'اكتب اسم المستخدم.' }; if (!String(payload.password || '').trim()) return { error: 'اكتب كلمة المرور.' }; payload.owner_group = null; payload.card_type = null; payload.card_brand = null; payload.statement_day = null; payload.credit_card_debt_id = null; payload.sadad_number = ''; payload.url = ''; payload.notes = ''; }"
+          repl(bank_payload_line, bank_login_payload, 'bank login payload validation')
+
+          old_menu = "function getMenuItems(view, selectedGroup, addBank, addSite, addCard, addBankLogin, editBank) { if (view === 'home') return [{ label: 'إضافة بنك', onPress: addBank }, { label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'banks') return [{ label: 'إضافة بنك', onPress: addBank }]; if (view === 'sites') return [{ label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'bank' && selectedGroup) return [{ label: 'إضافة بطاقة', onPress: addCard }, { label: 'إضافة دخول للبنك', onPress: addBankLogin }, ...(selectedGroup.bank ? [{ label: 'تعديل البنك', onPress: editBank }] : [])]; return []; }"
+          new_menu = "function getMenuItems(view, selectedGroup, addBank, addSite, addCard, editCredentials, editBank) { if (view === 'home') return [{ label: 'إضافة بنك', onPress: addBank }, { label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'banks') return [{ label: 'إضافة بنك', onPress: addBank }]; if (view === 'sites') return [{ label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'bank' && selectedGroup) { const bank = selectedGroup.bank; const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password)); return [{ label: 'إضافة بطاقة', onPress: addCard }, ...(bank ? [{ label: hasCredentials ? 'تعديل بيانات الدخول' : 'إضافة بيانات الدخول', onPress: editCredentials }, { label: 'تعديل البنك', onPress: editBank }] : [])]; } return []; }"
+          repl(old_menu, new_menu, 'bank menu single credentials action')
+
+          # Hide any legacy additional bank-login records. They remain in storage but are no longer exposed as a second login.
+          s = s.replace("const groups = banks.map((bank) => ({ key: bankRef(bank), bank, displayName: bank.title || 'بنك', cards: [], logins: [] }))", "const groups = banks.map((bank) => ({ key: bankRef(bank), bank, displayName: bank.title || 'بنك', cards: [], logins: [] }))")
+
+          mobile_path.write_text(s)
+
+          api_path = Path('ahmed-api/app/Http/Controllers/Api/SecureVaultController.php')
+          a = api_path.read_text()
+          marker = '$this->validateBankLoginRule($data);'
+          if marker not in a:
+              target = "        $data = $this->validated($request);\n        $this->validateCardLink($request, $data);"
+              if a.count(target) != 2:
+                  raise SystemExit(f'expected 2 store/update validation blocks, got {a.count(target)}')
+              a = a.replace(target, "        $data = $this->validated($request);\n        $this->validateBankLoginRule($data);\n        $this->validateCardLink($request, $data);")
+
+              method_anchor = "    private function validateCardLink(Request $request, array $data): void\n    {"
+              method = """    private function validateBankLoginRule(array $data): void
+    {
+        if (($data['record_type'] ?? null) !== 'login' || ($data['category'] ?? null) !== 'websites') {
+            return;
+        }
+
+        $ownerGroup = trim((string) ($data['owner_group'] ?? ''));
+        if ($ownerGroup !== '' && $ownerGroup !== 'sites') {
+            throw ValidationException::withMessages([
+                'owner_group' => ['لكل بنك بيانات دخول واحدة فقط. عدّل بيانات دخول البنك الأساسية بدل إضافة دخول آخر.'],
+            ]);
+        }
+    }
+
+"""
+              if method_anchor not in a:
+                  raise SystemExit('API method anchor not found')
+              a = a.replace(method_anchor, method + method_anchor)
+              api_path.write_text(a)
+              print('patched: API rejects additional bank login records')
+          else:
+              print('already patched: API single bank login rule')
+          PY
+
+      - name: Validate changed sources
+        run: |
+          grep -q "formMode === 'bankLogin'" ahmed-mobile/SecureVaultScreen.js
+          grep -q "لكل بنك بيانات دخول واحدة فقط" ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
+          ! grep -q "إضافة دخول للبنك" ahmed-mobile/SecureVaultScreen.js
+          git diff --check
+
+      - name: Commit patch
+        run: |
+          if git diff --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "Bafageeh"
+          git config user.email "a.baf@live.com"
+          git add ahmed-mobile/SecureVaultScreen.js ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
+          git commit -m "Enforce one bank login per bank"
+          git push origin main
