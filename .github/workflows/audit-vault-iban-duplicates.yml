@@ -1,0 +1,29 @@
+name: Audit vault IBAN duplicates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-vault-iban-duplicates.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"; if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi; fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $get=function($id){$r=\Illuminate\Support\Facades\DB::table("secure_vault_items")->where("id",$id)->first();if(!$r)return "";try{return strtoupper(preg_replace("/\\s+/u","",\Illuminate\Support\Facades\Crypt::decryptString($r->username_encrypted)));}catch(\Throwable $e){return "";}};
+              $v2=$get(2);$v3=$get(3);$v4=$get(4);$v5=$get(5);$v6=$get(6);$v7=$get(7);
+              echo "ahli bank-vs-account same=".(hash_equals($v2,$v4)?"yes":"no")."\n";
+              echo "riyadh bank-vs-account same=".(hash_equals($v3,$v6)?"yes":"no")."\n";
+              echo "rajhi account5-vs-account7 same=".(hash_equals($v5,$v7)?"yes":"no")."\n";
+            '
