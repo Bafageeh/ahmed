@@ -2,12 +2,6 @@ name: Build Ahmed APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "ahmed-mobile/**"
-      - ".github/workflows/build-ahmed-apk.yml"
 
 jobs:
   android-apk:
