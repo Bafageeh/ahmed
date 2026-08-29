@@ -1,0 +1,43 @@
+name: Secure vault account layout plain number
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/patch-vault-account-layout-plain-number.py'
+      - '.github/workflows/secure-vault-account-layout-plain-number.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Patch secure vault account layout
+        run: python3 scripts/patch-vault-account-layout-plain-number.py
+
+      - name: Validate source
+        run: |
+          grep -q 'رقم الحساب' ahmed-mobile/SecureVaultScreen.js
+          grep -q 'bankAccountCompactCard' ahmed-mobile/SecureVaultScreen.js
+          grep -q 'فك الآيبان' ahmed-mobile/SecureVaultScreen.js
+          git diff --check
+
+      - name: Commit source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/SecureVaultScreen.js
+          if git diff --cached --quiet; then
+            echo "No source changes"
+          else
+            git commit -m "Simplify vault bank accounts layout"
+            git push
+          fi
