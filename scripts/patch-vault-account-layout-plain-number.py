@@ -6,7 +6,8 @@ s = p.read_text()
 
 old_pattern = re.compile(r"function BankAccountCard\(\{ item, revealed, onReveal, nested = false \}\) \{.*?\n\}\nfunction SitesView", re.S)
 new_component = '''function BankAccountCard({ item, revealed, onReveal, nested = false }) {
-  const accountNumber = String(item.purpose || '').trim();
+  // Account number is deliberately plain and always visible. Only IBAN is reveal-protected.
+  const accountNumber = String(item.account_number || item.purpose || '').trim();
   return <View style={[styles.bankAccountCompactCard, nested && styles.bankAccountCompactNested]}>
     <View style={styles.bankAccountCompactRow}><Text style={styles.bankAccountCompactValue}>{revealed ? (item.username || '—') : (item.has_username ? '•••• •••• •••• ••••' : '—')}</Text><Text style={styles.bankAccountCompactLabel}>الآيبان</Text></View>
     <View style={styles.bankAccountCompactDivider} />
@@ -29,4 +30,16 @@ if 'bankAccountCompactCard:' not in s:
     s = s.replace(style_anchor, styles + style_anchor, 1)
 
 p.write_text(s)
-print('patched compact account layout and plaintext account-number display')
+
+api_path = Path('ahmed-api/app/Http/Controllers/Api/SecureVaultController.php')
+api = api_path.read_text()
+# purpose is a normal plaintext DB column. Expose it explicitly as account_number for account rows,
+# independent of revealSecrets, so it never enters the encryption/decryption path.
+if "'account_number' =>" not in api:
+    anchor = "            'purpose' => $item->purpose,\n"
+    if anchor not in api:
+        raise SystemExit('SecureVaultController purpose anchor not found')
+    api = api.replace(anchor, anchor + "            'account_number' => $item->category === 'accounts' ? $item->purpose : null,\n", 1)
+api_path.write_text(api)
+
+print('patched plaintext always-visible account number behavior')
