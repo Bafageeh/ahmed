@@ -105,3 +105,4 @@ jobs:
 # Tokenize profit schedule correction deployment 2026-08-23
 # Tokenize commission and VAT accounting deployment 2026-08-23
 # Concurrent deploy ref-lock retry added 2026-08-23
+# Secure vault account rows compacted 2026-08-29
