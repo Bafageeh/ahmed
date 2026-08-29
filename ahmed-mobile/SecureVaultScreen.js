@@ -321,7 +321,8 @@ function buildVault(items) {
 }
 function filterBankGroups(groups, search) { const q = normalizeText(search); return groups.filter((group) => !q || normalizeText(group.displayName).includes(q)); }
 function filterSites(items, search) { const q = normalizeText(search); return items.filter((item) => !q || normalizeText([item.title, item.url].filter(Boolean).join(' ')).includes(q)); }
-function getMode(item) { if (item?.record_type === 'card' || item?.category === 'cards') return 'card'; if (item?.record_type === 'login' || item?.category === 'websites') return 'login'; if (item?.category === 'banks') return 'bank'; return 'other'; }
+function getMode(item) { if (item?.record_type === 'card' || item?.category === 'cards') return 'card'; if (item?.category === 'banks') return 'bank'; if (isKnownBankRecord(item)) return 'bank'; if (item?.record_type === 'login' || item?.category === 'websites') return 'login'; return 'other'; }
+function isKnownBankRecord(item) { const owner = String(item?.owner_group || '').trim(); if (owner) return false; const n = normalizeText(cleanBankName(item?.title || '')); const known = ['الجزيره','الجزيرة','الانماء','الإنماء','البلاد','d360','د360','الرياض','الاهلي','الأهلي','الراجحي']; return known.some((name) => n === normalizeText(name)); }
 function bankRef(bank) { return bank?.id ? `bank:${bank.id}` : String(bank?.title || ''); }
 function groupRef(group) { return group?.bank ? bankRef(group.bank) : ''; }
 function cleanBankName(value) { const raw = String(value || '').trim().replace(/\s+\d+\s*$/, '').trim(); return raw.replace(/^بنك\s+/, '').replace(/^البنك\s+/, '') || raw; }
