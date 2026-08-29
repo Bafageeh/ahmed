@@ -96,10 +96,26 @@ if grep -q "babel-plugin-credit-card-bank-logos" "$MOBILE_DIR/babel.config.js"; 
   exit 1
 fi
 
+# Verify the new secure-vault implementation before restarting Expo.
+grep -q "BankLogo bankName={group.displayName}" "$MOBILE_DIR/SecureVaultScreen.js" || {
+  echo "ERROR: Secure-vault bank logos are missing" >&2
+  exit 1
+}
+grep -q "credit_card_debt_id" "$MOBILE_DIR/SecureVaultScreen.js" || {
+  echo "ERROR: Secure-vault credit-limit link is missing" >&2
+  exit 1
+}
+grep -q "sadad_number" "$MOBILE_DIR/SecureVaultScreen.js" || {
+  echo "ERROR: Secure-vault Sadad field is missing" >&2
+  exit 1
+}
+
 cd "$MOBILE_DIR"
 echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 
-if [ ! -d node_modules ] || [ ! -d node_modules/expo-updates ]; then
+# New native/local Expo modules can be added while node_modules already exists.
+# Check the modules required by the current package.json, not only expo-updates.
+if [ ! -d node_modules ] || [ ! -d node_modules/expo-updates ] || [ ! -d node_modules/expo-notifications ]; then
   log "Installing mobile dependencies"
   npm install --legacy-peer-deps --no-audit --no-fund
 fi
