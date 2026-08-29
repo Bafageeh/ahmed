@@ -1,0 +1,88 @@
+name: Fix secure vault bank disappearing
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-secure-vault-bank-disappear.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Patch mobile and API
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          mobile = Path('ahmed-mobile/SecureVaultScreen.js')
+          s = mobile.read_text()
+
+          old = "const payload = { ...emptyForm, ...form, is_favorite: false, category: mode === 'bank' ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: mode === 'bank' ? 'subscription' : mode === 'card' ? 'card' : 'login', expiry_month: form.expiry_month ? Number(form.expiry_month) : null, expiry_year: form.expiry_year ? Number(form.expiry_year) : null, statement_day: form.statement_day ? Number(form.statement_day) : null, credit_card_debt_id: form.credit_card_debt_id ? Number(form.credit_card_debt_id) : null };"
+          new = "const payload = { ...emptyForm, ...form, is_favorite: false, category: (mode === 'bank' || mode === 'bankLogin') ? 'banks' : mode === 'card' ? 'cards' : 'websites', record_type: (mode === 'bank' || mode === 'bankLogin') ? 'subscription' : mode === 'card' ? 'card' : 'login', expiry_month: form.expiry_month ? Number(form.expiry_month) : null, expiry_year: form.expiry_year ? Number(form.expiry_year) : null, statement_day: form.statement_day ? Number(form.statement_day) : null, credit_card_debt_id: form.credit_card_debt_id ? Number(form.credit_card_debt_id) : null };"
+          if old in s:
+              s = s.replace(old, new, 1)
+              print('patched mobile bankLogin payload classification')
+          elif new in s:
+              print('mobile payload already fixed')
+          else:
+              raise SystemExit('mobile payload pattern not found')
+          mobile.write_text(s)
+
+          api = Path('ahmed-api/app/Http/Controllers/Api/SecureVaultController.php')
+          a = api.read_text()
+          old_api = """        $data = $this->validated($request);\n        $this->validateBankLoginRule($data);\n        $this->validateCardLink($request, $data);\n        $cardDigits = $this->onlyDigits($data['card_number'] ?? '');\n        $cardType = $data['card_type'] ?? null;\n\n        DB::table('secure_vault_items')->where('id', $id)->update(["""
+          new_api = """        $data = $this->validated($request);\n\n        // A bank record must never be converted into a website/login record when\n        // only its encrypted credentials are edited from the mobile app.\n        if (($item->category ?? null) === 'banks') {\n            $data['category'] = 'banks';\n            $data['record_type'] = 'subscription';\n            $data['owner_group'] = null;\n        }\n\n        $this->validateBankLoginRule($data);\n        $this->validateCardLink($request, $data);\n        $cardDigits = $this->onlyDigits($data['card_number'] ?? '');\n        $cardType = $data['card_type'] ?? null;\n\n        DB::table('secure_vault_items')->where('id', $id)->update(["""
+          if old_api in a:
+              a = a.replace(old_api, new_api, 1)
+              print('patched API bank record type guard')
+          elif "A bank record must never be converted into a website/login record" in a:
+              print('API guard already fixed')
+          else:
+              raise SystemExit('API update pattern not found')
+          api.write_text(a)
+          PY
+
+      - name: Validate fixes
+        run: |
+          grep -q "(mode === 'bank' || mode === 'bankLogin') ? 'banks'" ahmed-mobile/SecureVaultScreen.js
+          grep -q "A bank record must never be converted" ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
+          git diff --check
+
+      - name: Commit fixed sources
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/SecureVaultScreen.js ahmed-api/app/Http/Controllers/Api/SecureVaultController.php
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+          else
+            git commit -m "Prevent bank record disappearing after credential edit"
+            git push
+          fi
+
+      - name: Restore Alinma bank record on server
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi
+            fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='$count = \Illuminate\Support\Facades\DB::table("secure_vault_items")->where("category", "websites")->where("record_type", "login")->where(function ($q) { $q->where("title", "like", "%الانماء%")->orWhere("title", "like", "%الإنماء%"); })->update(["category" => "banks", "record_type" => "subscription", "owner_group" => null, "url" => null, "updated_at" => now()]); echo "Restored Alinma bank rows: {$count}\n";'
