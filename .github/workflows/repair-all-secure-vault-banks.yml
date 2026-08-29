@@ -1,0 +1,98 @@
+name: Repair all secure vault banks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/repair-all-secure-vault-banks.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Add defensive bank classification in mobile
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('ahmed-mobile/SecureVaultScreen.js')
+          s = p.read_text()
+          old = "function getMode(item) { if (item?.record_type === 'card' || item?.category === 'cards') return 'card'; if (item?.record_type === 'login' || item?.category === 'websites') return 'login'; if (item?.category === 'banks') return 'bank'; return 'other'; }"
+          new = "function getMode(item) { if (item?.record_type === 'card' || item?.category === 'cards') return 'card'; if (item?.category === 'banks') return 'bank'; if (isKnownBankRecord(item)) return 'bank'; if (item?.record_type === 'login' || item?.category === 'websites') return 'login'; return 'other'; }\nfunction isKnownBankRecord(item) { const owner = String(item?.owner_group || '').trim(); if (owner) return false; const n = normalizeText(cleanBankName(item?.title || '')); const known = ['الجزيره','الجزيرة','الانماء','الإنماء','البلاد','d360','د360','الرياض','الاهلي','الأهلي','الراجحي']; return known.some((name) => n === normalizeText(name)); }"
+          if old in s:
+              s = s.replace(old, new, 1)
+              print('added defensive bank classification')
+          elif 'function isKnownBankRecord(item)' in s:
+              print('defensive classification already present')
+          else:
+              raise SystemExit('getMode pattern not found')
+          p.write_text(s)
+          PY
+
+      - name: Validate mobile patch
+        run: |
+          grep -q "function isKnownBankRecord(item)" ahmed-mobile/SecureVaultScreen.js
+          git diff --check
+
+      - name: Commit mobile safeguard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/SecureVaultScreen.js
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+          else
+            git commit -m "Keep known banks visible if legacy category is wrong"
+            git push
+          fi
+
+      - name: Repair all known bank rows and audit vault metadata
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi
+            fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $names = ["الجزيرة","الجزيره","الإنماء","الانماء","البلاد","D360","د360","الرياض","الأهلي","الاهلي","الراجحي"];
+              $q = \Illuminate\Support\Facades\DB::table("secure_vault_items")
+                ->where(function($outer) use ($names) {
+                  foreach ($names as $name) { $outer->orWhere("title", "like", "%{$name}%"); }
+                })
+                ->where(function($w){ $w->where("category","websites")->orWhere("record_type","login"); })
+                ->where(function($w){ $w->whereNull("owner_group")->orWhere("owner_group",""); });
+              $before = $q->get(["id","title","category","record_type","owner_group"]);
+              echo "Misclassified known banks before repair: ".$before->count()."\n";
+              foreach ($before as $row) { echo "repair id={$row->id} title={$row->title} from={$row->category}/{$row->record_type}\n"; }
+              $ids = $before->pluck("id")->all();
+              if (count($ids)) {
+                \Illuminate\Support\Facades\DB::table("secure_vault_items")->whereIn("id",$ids)->update([
+                  "category"=>"banks", "record_type"=>"subscription", "owner_group"=>null, "url"=>null, "updated_at"=>now()
+                ]);
+              }
+              $remaining = \Illuminate\Support\Facades\DB::table("secure_vault_items")
+                ->where(function($outer) use ($names) { foreach ($names as $name) { $outer->orWhere("title","like","%{$name}%"); } })
+                ->where(function($w){ $w->where("category","websites")->orWhere("record_type","login"); })
+                ->where(function($w){ $w->whereNull("owner_group")->orWhere("owner_group",""); })
+                ->count();
+              echo "Misclassified known banks after repair: {$remaining}\n";
+              $banks = \Illuminate\Support\Facades\DB::table("secure_vault_items")->where("category","banks")->orderBy("id")->get(["id","title","category","record_type"]);
+              echo "Visible bank records now: ".$banks->count()."\n";
+              foreach ($banks as $row) { echo "bank id={$row->id} title={$row->title} type={$row->record_type}\n"; }
+            '
