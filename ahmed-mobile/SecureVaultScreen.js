@@ -277,7 +277,8 @@ function BankAccountsDropdown({ accounts, open, onToggle, revealedId, onReveal }
   return <><SectionHeader title="الحسابات البنكية" /><View style={styles.accountsDropdown}><TouchableOpacity style={styles.accountsDropdownHeader} activeOpacity={0.84} onPress={onToggle}><View style={styles.accountsDropdownIcon}><Text style={styles.accountsDropdownIconText}>🏦</Text></View><View style={styles.accountsDropdownText}><Text style={styles.accountsDropdownTitle}>الحسابات البنكية</Text><Text style={styles.accountsDropdownSubtitle}>{open ? 'اضغط لإخفاء الحسابات' : 'اضغط لعرض الحسابات'}</Text></View><View style={styles.accountsDropdownMeta}><View style={styles.accountsCountBadge}><Text style={styles.accountsCountText}>{countLabel}</Text></View><Text style={styles.accountsChevron}>{open ? '⌃' : '⌄'}</Text></View></TouchableOpacity>{open ? <View style={styles.accountsDropdownBody}>{accounts.map((account) => <BankAccountCard key={account.id} item={account} revealed={revealedId === account.id} onReveal={() => onReveal(account)} nested />)}</View> : null}</View></>;
 }
 function BankAccountCard({ item, revealed, onReveal, nested = false }) {
-  const accountNumber = String(item.purpose || '').trim();
+  // Account number is deliberately plain and always visible. Only IBAN is reveal-protected.
+  const accountNumber = String(item.account_number || item.purpose || '').trim();
   return <View style={[styles.bankAccountCompactCard, nested && styles.bankAccountCompactNested]}>
     <View style={styles.bankAccountCompactRow}><Text style={styles.bankAccountCompactValue}>{revealed ? (item.username || '—') : (item.has_username ? '•••• •••• •••• ••••' : '—')}</Text><Text style={styles.bankAccountCompactLabel}>الآيبان</Text></View>
     <View style={styles.bankAccountCompactDivider} />

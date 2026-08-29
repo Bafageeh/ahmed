@@ -286,6 +286,7 @@ class SecureVaultController extends Controller
             'email' => $item->email,
             'phone' => $item->phone,
             'purpose' => $item->purpose,
+            'account_number' => $item->category === 'accounts' ? $item->purpose : null,
             'tags' => $item->tags,
             'cardholder_name' => $item->cardholder_name,
             'card_brand' => $item->card_brand,
