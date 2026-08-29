@@ -1,0 +1,26 @@
+name: Audit vault bank account identifier shapes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-vault-account-identifiers.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"; if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi; fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $rows=\Illuminate\Support\Facades\DB::table("secure_vault_items")->whereIn("id",[2,3,4,5,6,7])->get();
+              foreach($rows as $r){$v="";try{if(!empty($r->username_encrypted))$v=(string)\Illuminate\Support\Facades\Crypt::decryptString($r->username_encrypted);else$v=(string)($r->username??"");}catch(\Throwable $e){}$c=strtoupper(preg_replace("/\\s+/u","",$v));echo "id={$r->id} cat={$r->category} title={$r->title} compact_len=".strlen($c)." starts_SA=".(str_starts_with($c,"SA")?"yes":"no")." alnum=".(ctype_alnum($c)?"yes":"no")."\n";}
+            '
