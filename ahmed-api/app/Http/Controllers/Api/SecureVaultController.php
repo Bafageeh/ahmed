@@ -278,7 +278,10 @@ class SecureVaultController extends Controller
             'record_type_label' => $this->typeLabel($item->record_type),
             'is_favorite' => (bool) $item->is_favorite,
             'title' => $item->title,
-            'username' => $revealSecrets ? ($this->decryptNullable($encryptedUsername) ?: $legacyUsername) : null,
+            'username' => $item->category === 'accounts'
+                ? ($this->decryptNullable($encryptedUsername) ?: $legacyUsername)
+                : ($revealSecrets ? ($this->decryptNullable($encryptedUsername) ?: $legacyUsername) : null),
+            'iban' => $item->category === 'accounts' ? ($this->decryptNullable($encryptedUsername) ?: $legacyUsername) : null,
             'has_username' => ! empty($encryptedUsername) || ! empty($legacyUsername),
             'password' => $revealSecrets ? $this->decryptNullable($item->password_encrypted) : null,
             'has_password' => ! empty($item->password_encrypted),

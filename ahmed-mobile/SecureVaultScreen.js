@@ -277,13 +277,14 @@ function BankAccountsDropdown({ accounts, open, onToggle, revealedId, onReveal }
   return <><SectionHeader title="الحسابات البنكية" /><View style={styles.accountsDropdown}><TouchableOpacity style={styles.accountsDropdownHeader} activeOpacity={0.84} onPress={onToggle}><View style={styles.accountsDropdownIcon}><Text style={styles.accountsDropdownIconText}>🏦</Text></View><View style={styles.accountsDropdownText}><Text style={styles.accountsDropdownTitle}>الحسابات البنكية</Text><Text style={styles.accountsDropdownSubtitle}>{open ? 'اضغط لإخفاء الحسابات' : 'اضغط لعرض الحسابات'}</Text></View><View style={styles.accountsDropdownMeta}><View style={styles.accountsCountBadge}><Text style={styles.accountsCountText}>{countLabel}</Text></View><Text style={styles.accountsChevron}>{open ? '⌃' : '⌄'}</Text></View></TouchableOpacity>{open ? <View style={styles.accountsDropdownBody}>{accounts.map((account) => <BankAccountCard key={account.id} item={account} revealed={revealedId === account.id} onReveal={() => onReveal(account)} nested />)}</View> : null}</View></>;
 }
 function BankAccountCard({ item, revealed, onReveal, nested = false }) {
-  // Account number is deliberately plain and always visible. Only IBAN is reveal-protected.
+  // Bank account identifiers are always visible in account cards.
+  // Login usernames/passwords for the bank itself remain protected elsewhere.
+  const iban = String(item.iban || item.username || '').trim();
   const accountNumber = String(item.account_number || item.purpose || '').trim();
   return <View style={[styles.bankAccountCompactCard, nested && styles.bankAccountCompactNested]}>
-    <View style={styles.bankAccountCompactRow}><Text style={styles.bankAccountCompactValue}>{revealed ? (item.username || '—') : (item.has_username ? '•••• •••• •••• ••••' : '—')}</Text><Text style={styles.bankAccountCompactLabel}>الآيبان</Text></View>
+    <View style={styles.bankAccountCompactRow}><Text style={styles.bankAccountCompactValue} selectable>{iban || '—'}</Text><Text style={styles.bankAccountCompactLabel}>الآيبان</Text></View>
     <View style={styles.bankAccountCompactDivider} />
     <View style={styles.bankAccountCompactRow}><Text style={styles.bankAccountNumberValue} selectable>{accountNumber || '—'}</Text><Text style={styles.bankAccountCompactLabel}>رقم الحساب</Text></View>
-    {item.has_username || item.username ? <TouchableOpacity style={styles.accountRevealButton} onPress={onReveal}><Text style={styles.accountRevealText}>{revealed ? 'إخفاء الآيبان' : 'فك الآيبان'}</Text></TouchableOpacity> : null}
   </View>;
 }
 function SitesView({ items, revealedId, onReveal, onEdit, onDelete }) {
