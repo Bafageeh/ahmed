@@ -1,0 +1,41 @@
+name: Audit vault legacy username shapes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-vault-legacy-username-shape.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Classify legacy usernames without exposing values
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi
+            fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $rows = \Illuminate\Support\Facades\DB::table("secure_vault_items")->where("category","accounts")->orderBy("id")->get();
+              foreach ($rows as $r) {
+                $v = "";
+                try { if (!empty($r->username_encrypted)) $v = (string) \Illuminate\Support\Facades\Crypt::decryptString($r->username_encrypted); else $v=(string)($r->username ?? ""); } catch (\Throwable $e) { $v=""; }
+                $compact = preg_replace("/\\s+/u", "", $v);
+                $digits = preg_replace("/\\D/u", "", $compact);
+                $numeric = ($compact !== "" && $digits === $compact);
+                echo "legacy id={$r->id} title={$r->title} owner=".($r->owner_group ?? "NULL")." username_len=".mb_strlen($v)." numeric=".($numeric?"yes":"no")."\n";
+              }
+              $banks = \Illuminate\Support\Facades\DB::table("secure_vault_items")->where("category","banks")->orderBy("id")->get();
+              foreach ($banks as $r) {
+                echo "bank id={$r->id} title={$r->title} has_username=".((!empty($r->username_encrypted)||!empty($r->username))?"yes":"no")." has_password=".(!empty($r->password_encrypted)?"yes":"no")."\n";
+              }
+            '
