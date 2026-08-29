@@ -1,0 +1,45 @@
+name: Audit legacy vault bank account fields
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-legacy-bank-account-fields.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Audit legacy account field presence
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi
+            fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $rows = \Illuminate\Support\Facades\DB::table("secure_vault_items")->where("category","accounts")->orderBy("id")->get();
+              echo "legacy account rows=".$rows->count()."\n";
+              foreach ($rows as $r) {
+                $flags = [
+                  "username" => !empty($r->username_encrypted) || !empty($r->username),
+                  "password" => !empty($r->password_encrypted),
+                  "notes" => !empty($r->notes_encrypted),
+                  "email" => !empty($r->email),
+                  "phone" => !empty($r->phone),
+                  "purpose" => !empty($r->purpose),
+                  "tags" => !empty($r->tags),
+                  "card" => !empty($r->card_number_encrypted),
+                  "security" => !empty($r->security_question_encrypted) || !empty($r->security_answer_encrypted),
+                  "backup" => !empty($r->backup_codes_encrypted),
+                ];
+                echo "id={$r->id} title={$r->title} owner=".($r->owner_group ?? "NULL")." flags=".json_encode($flags, JSON_UNESCAPED_UNICODE)."\n";
+              }
+            '
