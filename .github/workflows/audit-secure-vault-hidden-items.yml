@@ -1,0 +1,40 @@
+name: Audit secure vault hidden items
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/audit-secure-vault-hidden-items.yml'
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Audit non-visible vault records
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -e
+            PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT" ] || [ ! -d "$PROJECT" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then PROJECT="/home/pmsa/apps/ahmed"; else PROJECT="/mnt/home-storage/home/pmsa/apps/ahmed"; fi
+            fi
+            cd "$PROJECT/ahmed-api"
+            php artisan tinker --execute='
+              $rows = \Illuminate\Support\Facades\DB::table("secure_vault_items")
+                ->whereNotIn("category", ["banks","cards","websites"])
+                ->orderBy("id")
+                ->get(["id","title","category","record_type","owner_group"]);
+              echo "Non-visible category rows: ".$rows->count()."\n";
+              foreach ($rows as $r) {
+                echo "hidden id={$r->id} title={$r->title} category={$r->category} type={$r->record_type} owner=".($r->owner_group ?? "NULL")."\n";
+              }
+              $visible = \Illuminate\Support\Facades\DB::table("secure_vault_items")
+                ->whereIn("category", ["banks","cards","websites"])->count();
+              $total = \Illuminate\Support\Facades\DB::table("secure_vault_items")->count();
+              echo "Visible-category rows={$visible}; total={$total}\n";
+            '
