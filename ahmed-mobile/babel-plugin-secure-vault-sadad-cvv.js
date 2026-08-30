@@ -40,9 +40,24 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
         const filename = String(state.filename || '');
         if (!filename.endsWith('SecureVaultScreen.js')) return;
 
+        const hasClipboardImport = programPath.node.body.some((node) =>
+          t.isImportDeclaration(node) && node.source.value === 'expo-clipboard'
+        );
+        if (!hasClipboardImport) {
+          programPath.unshiftContainer(
+            'body',
+            t.importDeclaration(
+              [t.importNamespaceSpecifier(t.identifier('Clipboard'))],
+              t.stringLiteral('expo-clipboard')
+            )
+          );
+        }
+
         let hydratedInserted = false;
         let cvvFormInserted = false;
         let cvvSpecInserted = false;
+        let copyButtonsInserted = false;
+        let bankCardHelpersInserted = false;
 
         programPath.traverse({
           VariableDeclarator(path) {
@@ -120,6 +135,61 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
             }
           },
 
+          FunctionDeclaration(path) {
+            if (!t.isIdentifier(path.node.id, { name: 'BankCard' }) || bankCardHelpersInserted) return;
+            const returnPath = path.get('body.body').find((statementPath) => statementPath.isReturnStatement());
+            if (!returnPath) return;
+
+            const helpers = template.statements.ast(`
+              const fetchFullVaultCard = async () => {
+                try {
+                  const response = await fetch(\`\${API_URL}/secure-vault/\${item.id}\`, {
+                    headers: ahmedUserHeaders({ Accept: 'application/json' }),
+                  });
+                  const json = await response.json();
+                  if (response.ok && json && json.data) return json.data;
+                } catch (error) {}
+                return item;
+              };
+
+              const copySadadNumber = async () => {
+                const full = item.sadad_number ? item : await fetchFullVaultCard();
+                const value = String(full && full.sadad_number ? full.sadad_number : '').trim();
+                if (!value) {
+                  Alert.alert('رقم سداد', 'لا يوجد رقم سداد محفوظ لهذه البطاقة.');
+                  return;
+                }
+                await Clipboard.setStringAsync(value);
+                Alert.alert('تم النسخ', 'تم نسخ رقم السداد.');
+              };
+
+              const copyCardNumber = async () => {
+                const full = item.card_number ? item : await fetchFullVaultCard();
+                const value = String(full && full.card_number ? full.card_number : '').trim();
+                if (!value) {
+                  Alert.alert('رقم البطاقة', 'لا يوجد رقم بطاقة محفوظ لهذه البطاقة.');
+                  return;
+                }
+                Alert.alert(
+                  'تنبيه',
+                  'هذا رقم البطاقة وليس رقم السداد.',
+                  [
+                    { text: 'إلغاء', style: 'cancel' },
+                    {
+                      text: 'نسخ رقم البطاقة',
+                      onPress: async () => {
+                        await Clipboard.setStringAsync(value);
+                        Alert.alert('تم النسخ', 'تم نسخ رقم البطاقة.');
+                      },
+                    },
+                  ]
+                );
+              };
+            `);
+            returnPath.insertBefore(helpers);
+            bankCardHelpersInserted = true;
+          },
+
           JSXElement(path) {
             const opening = path.node.openingElement;
 
@@ -142,12 +212,33 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
               return;
             }
 
-            if (styleNameOf(opening) === 'specGrid' && inFunction(path, 'BankCard') && !cvvSpecInserted) {
-              const cvvSpec = template.expression.ast(`
-                <Spec label="CVV" value={revealed ? (item.card_cvv || '—') : (item.has_card_cvv ? '•••' : '—')} />
-              `, { plugins: ['jsx'] });
-              path.node.children.push(cvvSpec);
-              cvvSpecInserted = true;
+            if (styleNameOf(opening) === 'specGrid' && inFunction(path, 'BankCard')) {
+              if (!cvvSpecInserted) {
+                const cvvSpec = template.expression.ast(`
+                  <Spec label="CVV" value={revealed ? (item.card_cvv || '—') : (item.has_card_cvv ? '•••' : '—')} />
+                `, { plugins: ['jsx'] });
+                path.node.children.push(cvvSpec);
+                cvvSpecInserted = true;
+              }
+
+              if (!copyButtonsInserted) {
+                const copyRow = template.expression.ast(`
+                  <View style={{ flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
+                    {(item.has_card_number || item.card_number) ? (
+                      <TouchableOpacity style={styles.revealButton} onPress={copyCardNumber}>
+                        <Text style={styles.revealText}>نسخ رقم البطاقة</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {credit && (item.has_sadad_number || item.sadad_number) ? (
+                      <TouchableOpacity style={styles.revealButton} onPress={copySadadNumber}>
+                        <Text style={styles.revealText}>نسخ رقم سداد</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                `, { plugins: ['jsx'] });
+                path.insertAfter(copyRow);
+                copyButtonsInserted = true;
+              }
             }
           },
 
