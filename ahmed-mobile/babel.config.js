@@ -10,6 +10,7 @@ module.exports = function (api) {
       './babel-plugin-debt-last-payment-stat',
       './babel-plugin-credit-card-summary-card',
       './babel-plugin-mercedes-finance-analysis',
+      './babel-plugin-secure-vault-optional-sadad',
     ],
   };
 };
