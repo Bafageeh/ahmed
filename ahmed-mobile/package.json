@@ -13,6 +13,7 @@
     "@expo/metro-runtime": "^57.0.0",
     "@expo/vector-icons": "^15.0.3",
     "expo": "~57.0.9",
+    "expo-clipboard": "~57.0.1",
     "expo-image-manipulator": "~57.0.5",
     "expo-image-picker": "~57.0.5",
     "expo-local-authentication": "~57.0.1",
