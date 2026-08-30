@@ -9,6 +9,7 @@ on:
       - 'public/**'
       - 'scripts/deploy-ahmed.sh'
       - 'scripts/restart-ahmed-expo-clean.sh'
+      - 'scripts/patch-secure-vault-mada-rules.py'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
@@ -56,6 +57,9 @@ jobs:
             echo "[Ahmed Deploy] Bootstrap latest files from GitHub"
             git fetch origin main
             git reset --hard origin/main
+
+            echo "[Ahmed Deploy] Apply secure-vault Mada rules"
+            python3 scripts/patch-secure-vault-mada-rules.py
 
             chmod +x scripts/restart-ahmed-expo-clean.sh scripts/deploy-ahmed.sh 2>/dev/null || true
 
