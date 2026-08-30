@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# Kept as an idempotent compatibility patch during Ahmed deployments.
 path = Path('ahmed-api/app/Http/Controllers/Api/SecureVaultController.php')
 text = path.read_text(encoding='utf-8')
 original = text
