@@ -11,6 +11,8 @@ class CreditCardDebtController extends Controller
 {
     public function index(Request $request)
     {
+        $this->syncAllDebtsToVault($request);
+
         $items = DB::table('credit_card_debts')
             ->where('user_id', $this->userId($request))
             ->orderBy('bank_name')
@@ -53,6 +55,7 @@ class CreditCardDebtController extends Controller
         }
 
         $id = DB::table('credit_card_debts')->insertGetId($values);
+        $this->syncVaultCardFromDebt($request, $id, $data);
 
         return response()->json([
             'data' => $this->normalize(DB::table('credit_card_debts')->where('id', $id)->first()),
@@ -114,6 +117,26 @@ class CreditCardDebtController extends Controller
         ];
     }
 
+    private function syncAllDebtsToVault(Request $request): void
+    {
+        if (! Schema::hasTable('credit_card_debts') || ! Schema::hasTable('secure_vault_items')) {
+            return;
+        }
+
+        $debts = DB::table('credit_card_debts')
+            ->where('user_id', $this->userId($request))
+            ->where('credit_limit', '>', 0)
+            ->get();
+
+        foreach ($debts as $debt) {
+            $this->syncVaultCardFromDebt($request, (int) $debt->id, [
+                'bank_name' => (string) $debt->bank_name,
+                'card_name' => (string) $debt->card_name,
+                'credit_limit' => round((float) $debt->credit_limit, 2),
+            ]);
+        }
+    }
+
     private function syncVaultCardFromDebt(Request $request, int $debtId, array $data): void
     {
         if (! Schema::hasTable('secure_vault_items')) {
@@ -121,42 +144,89 @@ class CreditCardDebtController extends Controller
         }
 
         $userId = $this->userId($request);
-        $debt = DB::table('credit_card_debts')->where('id', $debtId)->first();
-        $vaultId = $this->hasVaultLinkColumn() ? (int) ($debt->secure_vault_item_id ?? 0) : 0;
+        $debt = DB::table('credit_card_debts')
+            ->where('id', $debtId)
+            ->where('user_id', $userId)
+            ->first();
 
-        $vaultQuery = DB::table('secure_vault_items')
-            ->where(function ($query) use ($debtId, $vaultId) {
-                $query->where('credit_card_debt_id', $debtId);
-                if ($vaultId > 0) {
-                    $query->orWhere('id', $vaultId);
-                }
-            })
-            ->where(function ($query) use ($userId) {
-                $query->whereNull('user_id')->orWhere('user_id', $userId);
-            });
-
-        $vault = $vaultQuery->first();
-        if (! $vault) {
+        if (! $debt) {
             return;
         }
 
+        $vaultId = $this->hasVaultLinkColumn() ? (int) ($debt->secure_vault_item_id ?? 0) : 0;
+        $bankRef = $this->findOrCreateBankRef($userId, $data['bank_name']);
+        $bankId = $bankRef ? (int) preg_replace('/\D+/', '', $bankRef) : 0;
+
+        $vault = null;
+        if ($vaultId > 0) {
+            $vault = DB::table('secure_vault_items')
+                ->where('id', $vaultId)
+                ->where(function ($query) use ($userId) {
+                    $query->whereNull('user_id')->orWhere('user_id', $userId);
+                })
+                ->first();
+        }
+
+        if (! $vault && Schema::hasColumn('secure_vault_items', 'credit_card_debt_id')) {
+            $vault = DB::table('secure_vault_items')
+                ->where('credit_card_debt_id', $debtId)
+                ->where(function ($query) use ($userId) {
+                    $query->whereNull('user_id')->orWhere('user_id', $userId);
+                })
+                ->first();
+        }
+
+        if (! $vault && $bankRef) {
+            $candidateQuery = DB::table('secure_vault_items')
+                ->where('category', 'cards')
+                ->where('owner_group', $bankRef)
+                ->where('title', $data['card_name'])
+                ->where(function ($query) use ($userId) {
+                    $query->whereNull('user_id')->orWhere('user_id', $userId);
+                });
+
+            if (Schema::hasColumn('secure_vault_items', 'card_type')) {
+                $candidateQuery->where(function ($query) {
+                    $query->whereNull('card_type')->orWhere('card_type', 'credit');
+                });
+            }
+
+            $vault = $candidateQuery->first();
+        }
+
         $updates = [
+            'owner_group' => $bankRef,
+            'category' => 'cards',
+            'record_type' => 'card',
             'title' => $data['card_name'],
-            'credit_card_debt_id' => $debtId,
-            'card_type' => 'credit',
             'updated_at' => now(),
         ];
 
-        $bankRef = $this->findBankRef($userId, $data['bank_name']);
-        if ($bankRef) {
-            $updates['owner_group'] = $bankRef;
+        if (Schema::hasColumn('secure_vault_items', 'card_type')) {
+            $updates['card_type'] = 'credit';
+        }
+        if (Schema::hasColumn('secure_vault_items', 'credit_card_debt_id')) {
+            $updates['credit_card_debt_id'] = $debtId;
+        }
+        if ($bankId > 0 && Schema::hasColumn('secure_vault_items', 'parent_bank_id')) {
+            $updates['parent_bank_id'] = $bankId;
         }
 
-        DB::table('secure_vault_items')->where('id', $vault->id)->update($updates);
+        if ($vault) {
+            DB::table('secure_vault_items')->where('id', $vault->id)->update($updates);
+            $vaultId = (int) $vault->id;
+        } else {
+            $create = array_merge($updates, [
+                'user_id' => $userId,
+                'is_favorite' => false,
+                'created_at' => now(),
+            ]);
+            $vaultId = DB::table('secure_vault_items')->insertGetId($create);
+        }
 
-        if ($this->hasVaultLinkColumn() && (int) ($debt->secure_vault_item_id ?? 0) !== (int) $vault->id) {
+        if ($this->hasVaultLinkColumn() && (int) ($debt->secure_vault_item_id ?? 0) !== $vaultId) {
             DB::table('credit_card_debts')->where('id', $debtId)->update([
-                'secure_vault_item_id' => $vault->id,
+                'secure_vault_item_id' => $vaultId,
                 'updated_at' => now(),
             ]);
         }
@@ -185,6 +255,28 @@ class CreditCardDebtController extends Controller
                 'credit_card_debt_id' => null,
                 'updated_at' => now(),
             ]);
+    }
+
+    private function findOrCreateBankRef(int $userId, string $bankName): string
+    {
+        $existing = $this->findBankRef($userId, $bankName);
+        if ($existing) {
+            return $existing;
+        }
+
+        $values = [
+            'user_id' => $userId,
+            'owner_group' => null,
+            'category' => 'banks',
+            'record_type' => 'subscription',
+            'is_favorite' => false,
+            'title' => trim($bankName),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+
+        $bankId = DB::table('secure_vault_items')->insertGetId($values);
+        return 'bank:'.$bankId;
     }
 
     private function findBankRef(int $userId, string $bankName): ?string
