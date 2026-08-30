@@ -2,8 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { SNB_LOGO_DATA_URI } from './snbLogoData';
 import { ANB_LOGO_DATA_URI } from './anbLogoData';
+import { ALBILAD_LOGO_DATA_URI } from './albiladLogoData';
 
-// Embedded brand assets are always preferred for SNB and ANB.
+// Embedded brand assets are always preferred for SNB, ANB and Bank Albilad.
 const BANKS = [
   { aliases: ['الانماء', 'الإنماء', 'بنك الانماء', 'بنك الإنماء', 'مصرف الانماء', 'مصرف الإنماء', 'alinma'], domain: 'alinma.com' },
   { aliases: ['الراجحي', 'بنك الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'], domain: 'alrajhibank.com.sa' },
@@ -25,6 +26,7 @@ const BANKS = [
 
 const SNB_ALIASES = ['الاهلي', 'الأهلي', 'البنك الاهلي', 'البنك الأهلي', 'البنك الاهلي السعودي', 'البنك الأهلي السعودي', 'snb', 'saudi national bank'];
 const ANB_ALIASES = ['العربي', 'البنك العربي', 'البنك العربي الوطني', 'anb', 'arab national bank'];
+const ALBILAD_ALIASES = ['البلاد', 'بنك البلاد', 'bank albilad', 'albilad'];
 
 function normalize(value) {
   return String(value || '')
@@ -49,19 +51,22 @@ export default function BankLogo({ bankName, size = 40 }) {
   const [failed, setFailed] = useState(false);
   const snb = useMemo(() => matchesAliases(bankName, SNB_ALIASES), [bankName]);
   const anb = useMemo(() => matchesAliases(bankName, ANB_ALIASES), [bankName]);
+  const albilad = useMemo(() => matchesAliases(bankName, ALBILAD_ALIASES), [bankName]);
   const domain = useMemo(() => bankDomain(bankName), [bankName]);
 
   useEffect(() => {
     setFailed(false);
-  }, [domain, bankName, snb, anb]);
+  }, [domain, bankName, snb, anb, albilad]);
 
   const source = snb
     ? { uri: SNB_LOGO_DATA_URI }
     : anb
       ? { uri: ANB_LOGO_DATA_URI }
-      : domain
-        ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
-        : null;
+      : albilad
+        ? { uri: ALBILAD_LOGO_DATA_URI }
+        : domain
+          ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
+          : null;
 
   if (!source || failed) {
     const letter = String(bankName || 'ب').trim().charAt(0) || 'ب';
