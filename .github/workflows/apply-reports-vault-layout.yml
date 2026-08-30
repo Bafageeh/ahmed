@@ -1,0 +1,69 @@
+name: Move secure vault to S-130
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-reports-vault-layout.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip reports vault patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update S-130 and More menu
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('ahmed-mobile/AppShell.js')
+          text = path.read_text(encoding='utf-8')
+          original = text
+
+          old_back = "if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('more')} />;"
+          new_back = "if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('reports')} />;"
+          if old_back not in text:
+              raise SystemExit('secureVault back target not found')
+          text = text.replace(old_back, new_back, 1)
+
+          old_reports = "function ReportsScreen({ goTo, openInvestments }) {\n  return <ScreenWrap><Header badge=\"مركز التقارير\" title=\"#S-130 تقارير أحمد\" subtitle=\"اختصارات التقارير والإحصائيات.\" icon=\"reports\" /><View style={styles.grid}><Quick title=\"احصائيات\" text=\"إحصائيات عامة\" icon=\"stats\" onPress={() => goTo('stats')} /><Quick title=\"حساباتي\" text=\"الدخل والقيم المستوردة\" icon=\"wealth\" onPress={() => goTo('accounts')} /><Quick title=\"استثماراتي\" text=\"منصات الاستثمار\" icon=\"investments\" onPress={openInvestments} /><Quick title=\"مزيد\" text=\"الإعدادات والاختصارات\" icon=\"more\" onPress={() => goTo('more')} /></View></ScreenWrap>;\n}"
+          new_reports = "function ReportsScreen({ goTo, openInvestments }) {\n  return <ScreenWrap><Header badge=\"مركز التقارير\" title=\"#S-130 تقارير أحمد\" subtitle=\"اختصارات التقارير والإحصائيات.\" icon=\"reports\" /><View style={styles.grid}><Quick title=\"احصائيات\" text=\"إحصائيات عامة\" icon=\"stats\" onPress={() => goTo('stats')} /><Quick title=\"حساباتي\" text=\"الدخل والقيم المستوردة\" icon=\"wealth\" onPress={() => goTo('accounts')} /><Quick title=\"استثماراتي\" text=\"منصات الاستثمار\" icon=\"investments\" onPress={openInvestments} /><Quick title=\"الخزنة الآمنة\" text=\"حفظ الحسابات والبطاقات وبيانات الدخول\" icon=\"settings\" onPress={() => goTo('secureVault')} /><Quick title=\"مزيد\" text=\"الإعدادات والاختصارات\" icon=\"more\" onPress={() => goTo('more')} /></View></ScreenWrap>;\n}"
+          if old_reports not in text:
+              raise SystemExit('S-130 reports target not found')
+          text = text.replace(old_reports, new_reports, 1)
+
+          vault_row = "<MenuRow title=\"الخزنة الآمنة\" text=\"حفظ الحسابات والبطاقات وبيانات الدخول\" icon=\"settings\" onPress={() => goTo('secureVault')} />"
+          stats_row = "<MenuRow title=\"احصائيات\" text=\"احصائيات عامة\" icon=\"stats\" onPress={() => goTo('stats')} />"
+          if vault_row not in text:
+              raise SystemExit('More secure vault row not found')
+          if stats_row not in text:
+              raise SystemExit('More stats row not found')
+          text = text.replace(vault_row, '', 1)
+          text = text.replace(stats_row, '', 1)
+
+          if text == original:
+              raise SystemExit('No changes made')
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit S-130 navigation update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ahmed-mobile/AppShell.js
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Move secure vault to S-130 and clean More menu [skip reports vault patch]"
+            git push
+          fi
