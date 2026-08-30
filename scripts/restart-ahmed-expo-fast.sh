@@ -115,7 +115,7 @@ echo "EXPO_PUBLIC_API_URL=https://$DOMAIN/api" > .env
 
 # New native/local Expo modules can be added while node_modules already exists.
 # Check the modules required by the current package.json, not only expo-updates.
-if [ ! -d node_modules ] || [ ! -d node_modules/expo-updates ] || [ ! -d node_modules/expo-notifications ]; then
+if [ ! -d node_modules ] || [ ! -d node_modules/expo-updates ] || [ ! -d node_modules/expo-notifications ] || [ ! -d node_modules/expo-clipboard ]; then
   log "Installing mobile dependencies"
   npm install --legacy-peer-deps --no-audit --no-fund
 fi
