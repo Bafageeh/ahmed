@@ -9,6 +9,20 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
     return null;
   };
 
+  const styleNameOf = (opening) => {
+    if (!t.isJSXOpeningElement(opening)) return null;
+    const attr = opening.attributes.find((item) =>
+      t.isJSXAttribute(item) && t.isJSXIdentifier(item.name, { name: 'style' })
+    );
+    if (!attr || !t.isJSXExpressionContainer(attr.value)) return null;
+    const expression = attr.value.expression;
+    return t.isMemberExpression(expression) &&
+      t.isIdentifier(expression.object, { name: 'styles' }) &&
+      t.isIdentifier(expression.property)
+      ? expression.property.name
+      : null;
+  };
+
   const inFunction = (path, name) => {
     const fn = path.findParent((parent) =>
       parent.isFunctionDeclaration() || parent.isFunctionExpression() || parent.isArrowFunctionExpression()
@@ -53,7 +67,7 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
                 const hydrated = await Promise.all(loaded.map(async (entry) => {
                   if (getMode(entry) !== 'card' || entry.card_type !== 'credit' || !entry.has_sadad_number) return entry;
                   try {
-                    const detailResponse = await fetch(\`${API_URL}/secure-vault/\${entry.id}\`, {
+                    const detailResponse = await fetch(\`\${API_URL}/secure-vault/\${entry.id}\`, {
                       headers: ahmedUserHeaders({ Accept: 'application/json' }),
                     });
                     const detailJson = await detailResponse.json();
@@ -66,6 +80,12 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
               `);
               declaration.insertAfter(injected);
               hydratedInserted = true;
+            }
+
+            if (t.isIdentifier(path.node.id, { name: 'hasRevealable' }) && inFunction(path, 'BankCard')) {
+              path.node.init = template.expression.ast(
+                `item.has_card_number || item.card_last_four || item.has_card_cvv || (credit && item.has_sadad_number)`
+              );
             }
           },
 
@@ -102,50 +122,50 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
 
           JSXElement(path) {
             const opening = path.node.openingElement;
-            if (!t.isJSXIdentifier(opening.name, { name: 'FormInput' })) return;
-            if (attrValue(opening, 'label') !== 'رقم البطاقة (اختياري)' || cvvFormInserted) return;
 
-            const cvvInput = template.expression.ast(`
-              <FormInput
-                label="CVV (اختياري)"
-                value={String(form.card_cvv || '')}
-                onChangeText={(value) => setField('card_cvv', digitsOnly(value, 4))}
-                keyboardType="number-pad"
-                placeholder="CVV"
-              />
-            `, { plugins: ['jsx'] });
-            path.insertAfter(cvvInput);
-            cvvFormInserted = true;
+            if (
+              t.isJSXIdentifier(opening.name, { name: 'FormInput' }) &&
+              attrValue(opening, 'label') === 'رقم البطاقة (اختياري)' &&
+              !cvvFormInserted
+            ) {
+              const cvvInput = template.expression.ast(`
+                <FormInput
+                  label="CVV (اختياري)"
+                  value={String(form.card_cvv || '')}
+                  onChangeText={(value) => setField('card_cvv', digitsOnly(value, 4))}
+                  keyboardType="number-pad"
+                  placeholder="CVV"
+                />
+              `, { plugins: ['jsx'] });
+              path.insertAfter(cvvInput);
+              cvvFormInserted = true;
+              return;
+            }
+
+            if (styleNameOf(opening) === 'specGrid' && inFunction(path, 'BankCard') && !cvvSpecInserted) {
+              const cvvSpec = template.expression.ast(`
+                <Spec label="CVV" value={revealed ? (item.card_cvv || '—') : (item.has_card_cvv ? '•••' : '—')} />
+              `, { plugins: ['jsx'] });
+              path.node.children.push(cvvSpec);
+              cvvSpecInserted = true;
+            }
           },
 
           JSXOpeningElement(path) {
             if (!t.isJSXIdentifier(path.node.name, { name: 'Spec' })) return;
-            const label = attrValue(path.node, 'label');
-
-            if (label === 'رقم سداد') {
-              const valueAttr = path.node.attributes.find((attribute) =>
-                t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'value' })
+            if (attrValue(path.node, 'label') !== 'رقم سداد') return;
+            const valueAttr = path.node.attributes.find((attribute) =>
+              t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'value' })
+            );
+            if (valueAttr) {
+              valueAttr.value = t.jsxExpressionContainer(
+                t.logicalExpression(
+                  '||',
+                  t.memberExpression(t.identifier('item'), t.identifier('sadad_number')),
+                  t.stringLiteral('—')
+                )
               );
-              if (valueAttr) {
-                valueAttr.value = t.jsxExpressionContainer(
-                  t.logicalExpression('||', t.memberExpression(t.identifier('item'), t.identifier('sadad_number')), t.stringLiteral('—'))
-                );
-              }
-
-              if (!cvvSpecInserted) {
-                const cvvSpec = template.expression.ast(`
-                  <Spec label="CVV" value={revealed ? (item.card_cvv || '—') : (item.has_card_cvv ? '•••' : '—')} />
-                `, { plugins: ['jsx'] });
-                path.parentPath.insertAfter(cvvSpec);
-                cvvSpecInserted = true;
-              }
             }
-          },
-
-          VariableDeclarator(path) {
-            if (!t.isIdentifier(path.node.id, { name: 'hasRevealable' }) || !inFunction(path, 'BankCard')) return;
-            const source = template.expression.ast(`item.has_card_number || item.card_last_four || item.has_card_cvv || (credit && item.has_sadad_number)`);
-            path.node.init = source;
           },
         });
       },
