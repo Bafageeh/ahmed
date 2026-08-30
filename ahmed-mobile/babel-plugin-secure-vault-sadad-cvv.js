@@ -9,20 +9,6 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
     return null;
   };
 
-  const styleNameOf = (opening) => {
-    if (!t.isJSXOpeningElement(opening)) return null;
-    const attr = opening.attributes.find((item) =>
-      t.isJSXAttribute(item) && t.isJSXIdentifier(item.name, { name: 'style' })
-    );
-    if (!attr || !t.isJSXExpressionContainer(attr.value)) return null;
-    const expression = attr.value.expression;
-    return t.isMemberExpression(expression) &&
-      t.isIdentifier(expression.object, { name: 'styles' }) &&
-      t.isIdentifier(expression.property)
-      ? expression.property.name
-      : null;
-  };
-
   const inFunction = (path, name) => {
     const fn = path.findParent((parent) =>
       parent.isFunctionDeclaration() || parent.isFunctionExpression() || parent.isArrowFunctionExpression()
@@ -55,9 +41,7 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
 
         let hydratedInserted = false;
         let cvvFormInserted = false;
-        let cvvSpecInserted = false;
-        let copyButtonsInserted = false;
-        let bankCardHelpersInserted = false;
+        let bankCardReplaced = false;
 
         programPath.traverse({
           VariableDeclarator(path) {
@@ -96,12 +80,6 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
               declaration.insertAfter(injected);
               hydratedInserted = true;
             }
-
-            if (t.isIdentifier(path.node.id, { name: 'hasRevealable' }) && inFunction(path, 'BankCard')) {
-              path.node.init = template.expression.ast(
-                `item.has_card_number || item.card_last_four || item.has_card_cvv || (credit && item.has_sadad_number)`
-              );
-            }
           },
 
           CallExpression(path) {
@@ -136,11 +114,21 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
           },
 
           FunctionDeclaration(path) {
-            if (!t.isIdentifier(path.node.id, { name: 'BankCard' }) || bankCardHelpersInserted) return;
-            const returnPath = path.get('body.body').find((statementPath) => statementPath.isReturnStatement());
-            if (!returnPath) return;
+            if (!t.isIdentifier(path.node.id, { name: 'BankCard' }) || bankCardReplaced) return;
 
-            const helpers = template.statements.ast(`
+            const body = template.statements.ast(`
+              const debt = creditDebts.find((entry) => String(entry.id) === String(item.credit_card_debt_id));
+              const credit = item.card_type === 'credit';
+              const brand = item.card_type === 'mada' ? 'مدى' : item.card_brand === 'mastercard' ? 'ماستركارد' : 'فيزا';
+              const expiry = item.expiry_month && item.expiry_year ? \`\${String(item.expiry_month).padStart(2, '0')}/\${item.expiry_year}\` : '—';
+              const cardDisplay = revealed && item.card_number
+                ? item.card_number
+                : item.card_last_four
+                  ? \`••••  \${item.card_last_four}\`
+                  : '—';
+              const cvvDisplay = revealed ? (item.card_cvv || '—') : (item.has_card_cvv ? '•••' : '—');
+              const hasRevealable = item.has_card_number || item.card_last_four || item.has_card_cvv;
+
               const fetchFullVaultCard = async () => {
                 try {
                   const response = await fetch(\`\${API_URL}/secure-vault/\${item.id}\`, {
@@ -160,7 +148,6 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
                   return;
                 }
                 await Clipboard.setStringAsync(value);
-                Alert.alert('تم النسخ', 'تم نسخ رقم السداد.');
               };
 
               const copyCardNumber = async () => {
@@ -171,28 +158,129 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
                   return;
                 }
                 Alert.alert(
-                  'تنبيه',
+                  'تنبيه مهم',
                   'هذا رقم البطاقة وليس رقم السداد.',
                   [
                     { text: 'إلغاء', style: 'cancel' },
                     {
-                      text: 'نسخ رقم البطاقة',
+                      text: 'نسخ',
                       onPress: async () => {
                         await Clipboard.setStringAsync(value);
-                        Alert.alert('تم النسخ', 'تم نسخ رقم البطاقة.');
                       },
                     },
                   ]
                 );
               };
-            `);
-            returnPath.insertBefore(helpers);
-            bankCardHelpersInserted = true;
+
+              const MiniInfo = ({ label, value, wide = false }) => (
+                <View style={{
+                  width: wide ? '100%' : '31.5%',
+                  minHeight: 52,
+                  borderRadius: 15,
+                  backgroundColor: '#f8fafc',
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  justifyContent: 'center',
+                }}>
+                  <Text style={{ color: '#94a3b8', fontSize: 10.5, fontWeight: '800', textAlign: 'right' }}>{label}</Text>
+                  <Text numberOfLines={1} style={{ color: '#0f172a', fontSize: 13.5, fontWeight: '900', textAlign: 'right', marginTop: 2 }}>{String(value || '—')}</Text>
+                </View>
+              );
+
+              const NumberLine = ({ label, value, onCopy, canCopy }) => (
+                <View style={{
+                  minHeight: 46,
+                  borderRadius: 14,
+                  backgroundColor: '#f8fafc',
+                  paddingHorizontal: 11,
+                  flexDirection: 'row-reverse',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <Text style={{ color: '#64748b', fontSize: 11, fontWeight: '800', minWidth: 72, textAlign: 'right' }}>{label}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                    <Text selectable numberOfLines={1} style={{ color: '#0f172a', fontSize: 14.5, fontWeight: '900', letterSpacing: 0.3 }}>{String(value || '—')}</Text>
+                    {canCopy ? (
+                      <TouchableOpacity
+                        accessibilityLabel={\`نسخ \${label}\`}
+                        onPress={onCopy}
+                        activeOpacity={0.7}
+                        style={{ width: 27, height: 27, borderRadius: 9, backgroundColor: '#e8f3ff', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Text style={{ color: '#1d4ed8', fontSize: 14, fontWeight: '900' }}>⧉</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+              );
+
+              return <View style={{
+                backgroundColor: '#fff',
+                borderRadius: 22,
+                padding: 13,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: '#e8eef5',
+                shadowColor: '#0f172a',
+                shadowOpacity: 0.035,
+                shadowRadius: 10,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 1,
+              }}>
+                <View style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 10 }}>
+                  <NetworkBadge brand={credit ? item.card_brand : 'mada'} />
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={{ color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' }}>{item.title || 'بطاقة'}</Text>
+                    <Text style={{ color: '#7c8ca3', fontSize: 11.5, fontWeight: '700', textAlign: 'right', marginTop: 2 }}>{credit ? \`ائتمانية • \${brand}\` : 'مدى'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row-reverse', gap: 6 }}>
+                    <TouchableOpacity onPress={onEdit} style={{ width: 31, height: 31, borderRadius: 10, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 14 }}>✏️</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={onDelete} style={{ width: 31, height: 31, borderRadius: 10, backgroundColor: '#fff5f5', alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontSize: 14 }}>🗑️</Text></TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={{ gap: 7, marginTop: 10 }}>
+                  <NumberLine
+                    label="رقم البطاقة"
+                    value={cardDisplay}
+                    canCopy={Boolean(item.has_card_number || item.card_number)}
+                    onCopy={copyCardNumber}
+                  />
+                  {credit ? (
+                    <NumberLine
+                      label="رقم السداد"
+                      value={item.sadad_number || '—'}
+                      canCopy={Boolean(item.has_sadad_number || item.sadad_number)}
+                      onCopy={copySadadNumber}
+                    />
+                  ) : null}
+                </View>
+
+                <View style={{ flexDirection: 'row-reverse', flexWrap: 'wrap', justifyContent: 'space-between', gap: 6, marginTop: 8 }}>
+                  {credit ? <MiniInfo label="الحد" value={debt ? money(debt.credit_limit) : '—'} /> : null}
+                  {credit ? <MiniInfo label="الكشف" value={item.statement_day ? \`يوم \${item.statement_day}\` : '—'} /> : null}
+                  <MiniInfo label="الانتهاء" value={expiry} />
+                  {credit ? <MiniInfo label="CVV" value={cvvDisplay} /> : null}
+                </View>
+
+                {hasRevealable ? (
+                  <TouchableOpacity
+                    style={{ alignSelf: 'flex-start', marginTop: 9, borderRadius: 999, backgroundColor: revealed ? '#f1f5f9' : '#ecfeff', paddingHorizontal: 12, paddingVertical: 7 }}
+                    onPress={onReveal}
+                  >
+                    <Text style={{ color: revealed ? '#475569' : '#0e7490', fontSize: 11.5, fontWeight: '900' }}>{revealed ? 'إخفاء' : 'فك بيانات البطاقة'}</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>;
+            `, { plugins: ['jsx'] });
+
+            path.node.body.body = body;
+            bankCardReplaced = true;
+            path.skip();
           },
 
           JSXElement(path) {
             const opening = path.node.openingElement;
-
             if (
               t.isJSXIdentifier(opening.name, { name: 'FormInput' }) &&
               attrValue(opening, 'label') === 'رقم البطاقة (اختياري)' &&
@@ -209,53 +297,6 @@ module.exports = function secureVaultSadadCvv({ types: t, template }) {
               `, { plugins: ['jsx'] });
               path.insertAfter(cvvInput);
               cvvFormInserted = true;
-              return;
-            }
-
-            if (styleNameOf(opening) === 'specGrid' && inFunction(path, 'BankCard')) {
-              if (!cvvSpecInserted) {
-                const cvvSpec = template.expression.ast(`
-                  <Spec label="CVV" value={revealed ? (item.card_cvv || '—') : (item.has_card_cvv ? '•••' : '—')} />
-                `, { plugins: ['jsx'] });
-                path.node.children.push(cvvSpec);
-                cvvSpecInserted = true;
-              }
-
-              if (!copyButtonsInserted) {
-                const copyRow = template.expression.ast(`
-                  <View style={{ flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10, marginTop: 10 }}>
-                    {(item.has_card_number || item.card_number) ? (
-                      <TouchableOpacity style={styles.revealButton} onPress={copyCardNumber}>
-                        <Text style={styles.revealText}>نسخ رقم البطاقة</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                    {credit && (item.has_sadad_number || item.sadad_number) ? (
-                      <TouchableOpacity style={styles.revealButton} onPress={copySadadNumber}>
-                        <Text style={styles.revealText}>نسخ رقم سداد</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                `, { plugins: ['jsx'] });
-                path.insertAfter(copyRow);
-                copyButtonsInserted = true;
-              }
-            }
-          },
-
-          JSXOpeningElement(path) {
-            if (!t.isJSXIdentifier(path.node.name, { name: 'Spec' })) return;
-            if (attrValue(path.node, 'label') !== 'رقم سداد') return;
-            const valueAttr = path.node.attributes.find((attribute) =>
-              t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'value' })
-            );
-            if (valueAttr) {
-              valueAttr.value = t.jsxExpressionContainer(
-                t.logicalExpression(
-                  '||',
-                  t.memberExpression(t.identifier('item'), t.identifier('sadad_number')),
-                  t.stringLiteral('—')
-                )
-              );
             }
           },
         });
