@@ -73,7 +73,7 @@ module.exports = function secureVaultAutoCreditDebt({ types: t, template }) {
                 />
                 <Text style={styles.securityHint}>إذا كان الرصيد أكبر من صفر ستظهر البطاقة تلقائيًا في شاشة مديونية بطائق الائتمان، وسيتم ربطها بالبنك نفسه.</Text>
               </View>
-            `);
+            `, { plugins: ['jsx'] });
             path.replaceWith(replacement);
             path.skip();
           },
