@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - '.github/workflows/restore-secure-vault-bank-accounts.yml'
-      - 'scripts/restore-secure-vault-bank-accounts.py'
+      - 'scripts/restore-secure-vault-bank-accounts-v2.py'
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Restore bank account UI and form
-        run: python3 scripts/restore-secure-vault-bank-accounts.py
+        run: python3 scripts/restore-secure-vault-bank-accounts-v2.py
 
       - name: Commit restored account flow
         run: |
