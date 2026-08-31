@@ -17,6 +17,13 @@ module.exports = function ahmedAppShellFixes() {
         '\n    <View style={styles.grid}>',
       );
 
+      // S-130: remove only the "More" card from Reports.
+      // The bottom navigation tab "مزيد" remains available.
+      source = source.replace(
+        /<Quick title="مزيد" text="الإعدادات والاختصارات" icon="more" onPress=\{\(\) => goTo\('more'\)\} \/>/,
+        '',
+      );
+
       source = source.replace(
         "import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';",
         "import { Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';",
