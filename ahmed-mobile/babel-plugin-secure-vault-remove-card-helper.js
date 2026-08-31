@@ -13,6 +13,23 @@ module.exports = function secureVaultRemoveCardHelper({ types: t }) {
       : null;
   };
 
+  const hasAttribute = (opening, name) => opening.attributes.some((attribute) =>
+    t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name })
+  );
+
+  const elementContainsText = (elementPath, wanted) => {
+    let found = false;
+    elementPath.traverse({
+      StringLiteral(stringPath) {
+        if (String(stringPath.node.value || '').includes(wanted)) found = true;
+      },
+      JSXText(textPath) {
+        if (String(textPath.node.value || '').includes(wanted)) found = true;
+      },
+    });
+    return found;
+  };
+
   return {
     name: 'secure-vault-remove-card-helper',
     visitor: {
@@ -24,7 +41,43 @@ module.exports = function secureVaultRemoveCardHelper({ types: t }) {
           JSXElement(elementPath) {
             const opening = elementPath.node.openingElement;
             if (!t.isJSXIdentifier(opening.name, { name: 'Text' })) return;
-            if (styleNameOf(opening) !== 'securityHint') return;
+
+            const styleName = styleNameOf(opening);
+
+            // Home card: keep "مواقع أو تطبيقات" visually clean on a single line.
+            if (styleName === 'homeTitle' && elementContainsText(elementPath, 'مواقع أو تطبيقات')) {
+              if (!hasAttribute(opening, 'numberOfLines')) {
+                opening.attributes.push(t.jsxAttribute(
+                  t.jsxIdentifier('numberOfLines'),
+                  t.jsxExpressionContainer(t.numericLiteral(1))
+                ));
+              }
+              if (!hasAttribute(opening, 'adjustsFontSizeToFit')) {
+                opening.attributes.push(t.jsxAttribute(t.jsxIdentifier('adjustsFontSizeToFit'), null));
+              }
+              if (!hasAttribute(opening, 'minimumFontScale')) {
+                opening.attributes.push(t.jsxAttribute(
+                  t.jsxIdentifier('minimumFontScale'),
+                  t.jsxExpressionContainer(t.numericLiteral(0.75))
+                ));
+              }
+
+              const styleAttr = opening.attributes.find((attribute) =>
+                t.isJSXAttribute(attribute) && t.isJSXIdentifier(attribute.name, { name: 'style' })
+              );
+              if (styleAttr && t.isJSXExpressionContainer(styleAttr.value)) {
+                styleAttr.value.expression = t.arrayExpression([
+                  styleAttr.value.expression,
+                  t.objectExpression([
+                    t.objectProperty(t.identifier('fontSize'), t.numericLiteral(21)),
+                    t.objectProperty(t.identifier('flexShrink'), t.numericLiteral(1)),
+                  ]),
+                ]);
+              }
+              return;
+            }
+
+            if (styleName !== 'securityHint') return;
 
             let isCardHelper = false;
             elementPath.traverse({
