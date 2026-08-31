@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
 import { SNB_LOGO_DATA_URI } from './snbLogoData';
 import { ANB_LOGO_DATA_URI } from './anbLogoData';
 import { ALBILAD_LOGO_DATA_URI } from './albiladLogoData';
 import { ALJAZIRA_LOGO_DATA_URI } from './aljaziraLogoData';
+import { ALRAJHI_LOGO_DATA_URI } from './alrajhiLogoData';
 
 // Embedded/local brand assets are always preferred for the supported banks.
 const BANKS = [
@@ -51,17 +51,6 @@ function bankDomain(bankName) {
   return match ? match.domain : null;
 }
 
-function AlRajhiLogo({ size }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 256 256" accessibilityLabel="شعار مصرف الراجحي">
-      <Rect x="6" y="6" width="244" height="244" rx="50" fill="#171EFF" />
-      <Path d="M128 40 L178 69 L178 128 L128 157 L78 128 L78 69 Z" fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
-      <Path d="M80 104 L130 133 L130 192 L80 221 L30 192 L30 133 Z" fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
-      <Path d="M176 104 L226 133 L226 192 L176 221 L126 192 L126 133 Z" fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
-    </Svg>
-  );
-}
-
 export default function BankLogo({ bankName, size = 40 }) {
   const [failed, setFailed] = useState(false);
   const snb = useMemo(() => matchesAliases(bankName, SNB_ALIASES), [bankName]);
@@ -75,21 +64,19 @@ export default function BankLogo({ bankName, size = 40 }) {
     setFailed(false);
   }, [domain, bankName, snb, anb, albilad, aljazira, alrajhi]);
 
-  if (alrajhi) {
-    return <AlRajhiLogo size={size} />;
-  }
-
-  const source = snb
-    ? { uri: SNB_LOGO_DATA_URI }
-    : anb
-      ? { uri: ANB_LOGO_DATA_URI }
-      : albilad
-        ? { uri: ALBILAD_LOGO_DATA_URI }
-        : aljazira
-          ? { uri: ALJAZIRA_LOGO_DATA_URI }
-          : domain
-            ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
-            : null;
+  const source = alrajhi
+    ? { uri: ALRAJHI_LOGO_DATA_URI }
+    : snb
+      ? { uri: SNB_LOGO_DATA_URI }
+      : anb
+        ? { uri: ANB_LOGO_DATA_URI }
+        : albilad
+          ? { uri: ALBILAD_LOGO_DATA_URI }
+          : aljazira
+            ? { uri: ALJAZIRA_LOGO_DATA_URI }
+            : domain
+              ? { uri: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` }
+              : null;
 
   if (!source || failed) {
     const letter = String(bankName || 'ب').trim().charAt(0) || 'ب';
