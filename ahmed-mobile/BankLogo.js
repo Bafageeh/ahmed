@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
 import { SNB_LOGO_DATA_URI } from './snbLogoData';
 import { ANB_LOGO_DATA_URI } from './anbLogoData';
 import { ALBILAD_LOGO_DATA_URI } from './albiladLogoData';
 import { ALJAZIRA_LOGO_DATA_URI } from './aljaziraLogoData';
 
-// Embedded brand assets are always preferred for SNB, ANB, Bank Albilad and Bank Aljazira.
+// Embedded/local brand assets are always preferred for the supported banks.
 const BANKS = [
   { aliases: ['الانماء', 'الإنماء', 'بنك الانماء', 'بنك الإنماء', 'مصرف الانماء', 'مصرف الإنماء', 'alinma'], domain: 'alinma.com' },
   { aliases: ['الراجحي', 'بنك الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'], domain: 'alrajhibank.com.sa' },
@@ -29,6 +30,7 @@ const SNB_ALIASES = ['الاهلي', 'الأهلي', 'البنك الاهلي', 
 const ANB_ALIASES = ['العربي', 'البنك العربي', 'البنك العربي الوطني', 'anb', 'arab national bank'];
 const ALBILAD_ALIASES = ['البلاد', 'بنك البلاد', 'bank albilad', 'albilad'];
 const ALJAZIRA_ALIASES = ['الجزيرة', 'بنك الجزيرة', 'bank aljazira', 'aljazira'];
+const ALRAJHI_ALIASES = ['الراجحي', 'بنك الراجحي', 'مصرف الراجحي', 'alrajhi', 'al rajhi'];
 
 function normalize(value) {
   return String(value || '')
@@ -49,17 +51,33 @@ function bankDomain(bankName) {
   return match ? match.domain : null;
 }
 
+function AlRajhiLogo({ size }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 256 256" accessibilityLabel="شعار مصرف الراجحي">
+      <Rect x="6" y="6" width="244" height="244" rx="50" fill="#171EFF" />
+      <Path d="M128 40 L178 69 L178 128 L128 157 L78 128 L78 69 Z" fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
+      <Path d="M80 104 L130 133 L130 192 L80 221 L30 192 L30 133 Z" fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
+      <Path d="M176 104 L226 133 L226 192 L176 221 L126 192 L126 133 Z" fill="none" stroke="#FFFFFF" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 export default function BankLogo({ bankName, size = 40 }) {
   const [failed, setFailed] = useState(false);
   const snb = useMemo(() => matchesAliases(bankName, SNB_ALIASES), [bankName]);
   const anb = useMemo(() => matchesAliases(bankName, ANB_ALIASES), [bankName]);
   const albilad = useMemo(() => matchesAliases(bankName, ALBILAD_ALIASES), [bankName]);
   const aljazira = useMemo(() => matchesAliases(bankName, ALJAZIRA_ALIASES), [bankName]);
+  const alrajhi = useMemo(() => matchesAliases(bankName, ALRAJHI_ALIASES), [bankName]);
   const domain = useMemo(() => bankDomain(bankName), [bankName]);
 
   useEffect(() => {
     setFailed(false);
-  }, [domain, bankName, snb, anb, albilad, aljazira]);
+  }, [domain, bankName, snb, anb, albilad, aljazira, alrajhi]);
+
+  if (alrajhi) {
+    return <AlRajhiLogo size={size} />;
+  }
 
   const source = snb
     ? { uri: SNB_LOGO_DATA_URI }
