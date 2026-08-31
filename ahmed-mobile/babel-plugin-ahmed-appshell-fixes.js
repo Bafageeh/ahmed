@@ -10,6 +10,13 @@ module.exports = function ahmedAppShellFixes() {
 
       let source = code;
 
+      // S-120: remove the highlighted Finance imported-values hero card from Accounts.
+      // Keep the Finance details screen/routes available elsewhere in the app.
+      source = source.replace(
+        /\n\s*<TouchableOpacity style=\{styles\.financeHeroButton\}[\s\S]*?<\/TouchableOpacity>\n\s*<View style=\{styles\.grid\}>/,
+        '\n    <View style={styles.grid}>',
+      );
+
       source = source.replace(
         "import { Modal, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';",
         "import { Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';",
