@@ -65,41 +65,11 @@ jobs:
           print('Android versionCode:', data['expo']['android']['versionCode'])
           PY
 
-      - name: Regenerate valid Expo PNG assets
+      - name: Restore approved Ahmed app icon
         working-directory: ahmed-mobile
         run: |
-          python3 - <<'PY'
-          import os, struct, zlib
-          SIZE = 1024
-          BG = (30, 16, 78, 255)
-          CYAN = (48, 220, 230, 255)
-          WHITE = (255, 255, 255, 255)
-          CLEAR = (0, 0, 0, 0)
-          def chunk(kind, data):
-              return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
-          def write_png(path, transparent=False):
-              rows = []
-              for y in range(SIZE):
-                  row = bytearray([0])
-                  for x in range(SIZE):
-                      c = CLEAR if transparent else BG
-                      if (x - 512) ** 2 + (y - 512) ** 2 < 360 ** 2: c = BG
-                      if 310 <= x <= 390 and 350 <= y <= 760: c = CYAN
-                      if 630 <= x <= 710 and 350 <= y <= 760: c = CYAN
-                      if 390 <= x <= 630 and 350 <= y <= 430: c = CYAN
-                      if 405 <= x <= 615 and 505 <= y <= 585: c = WHITE
-                      row.extend(c)
-                  rows.append(bytes(row))
-              raw = b''.join(rows)
-              png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', SIZE, SIZE, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b'')
-              with open(path, 'wb') as f: f.write(png)
-              print(path, os.path.getsize(path))
-          os.makedirs('assets', exist_ok=True)
-          write_png('assets/icon.png')
-          write_png('assets/adaptive-icon.png', True)
-          write_png('assets/splash-icon.png', True)
-          PY
-          file assets/icon.png assets/adaptive-icon.png assets/splash-icon.png
+          python3 scripts/generate_app_icon.py
+          file assets/approved-app-icon.png assets/icon.png assets/adaptive-icon.png assets/splash-icon.png
 
       - name: Apply mobile UI patches
         run: |
