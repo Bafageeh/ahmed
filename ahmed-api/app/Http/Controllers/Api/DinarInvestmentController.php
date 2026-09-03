@@ -27,6 +27,21 @@ class DinarInvestmentController extends Controller
                     ->orderBy('installment_no')
                     ->get();
 
+                $originalInvestment = max(0, (float) $item->investment_amount);
+                $returnedPrincipal = (float) $item->payments
+                    ->filter(fn ($payment) => (bool) $payment->is_paid)
+                    ->sum(fn ($payment) => max(0, (float) $payment->total_principal));
+                $returnedPrincipal = min($originalInvestment, $returnedPrincipal);
+                $remainingInvestment = max(0, $originalInvestment - $returnedPrincipal);
+
+                // Keep the stored investment amount as the historical original value.
+                // Current capital is derived from paid principal so undoing a payment
+                // restores it without double additions or irreversible balance drift.
+                $item->original_investment_amount = round($originalInvestment, 2);
+                $item->returned_principal = round($returnedPrincipal, 2);
+                $item->remaining_investment_amount = round($remainingInvestment, 2);
+                $item->is_principal_returned = $originalInvestment > 0 && $remainingInvestment <= 0.01;
+
                 return $item;
             })
             ->values();
@@ -380,12 +395,24 @@ class DinarInvestmentController extends Controller
 
     private function summary($items, $unlinked): array
     {
-        $totalInvestment = 0;
+        $originalInvestment = 0;
+        $returnedPrincipal = 0;
+        $currentInvestment = 0;
         $expectedDistributions = 0;
         $linkedPaid = 0;
+        $activeOpportunities = 0;
 
         foreach ($items as $item) {
-            $totalInvestment += (float) $item->investment_amount;
+            $itemOriginal = (float) ($item->original_investment_amount ?? $item->investment_amount);
+            $itemReturned = (float) ($item->returned_principal ?? 0);
+            $itemCurrent = (float) ($item->remaining_investment_amount ?? max(0, $itemOriginal - $itemReturned));
+
+            $originalInvestment += $itemOriginal;
+            $returnedPrincipal += $itemReturned;
+            $currentInvestment += $itemCurrent;
+            if ($itemCurrent > 0.01) {
+                $activeOpportunities++;
+            }
 
             foreach ($item->payments as $payment) {
                 $expectedDistributions += (float) $payment->total_distribution;
@@ -398,13 +425,19 @@ class DinarInvestmentController extends Controller
         $unlinkedPaid = collect($unlinked)->sum(fn ($payment) => (float) ($payment->paid_amount ?: $payment->total_distribution));
 
         return [
-            'total_investment' => round($totalInvestment, 2),
+            'total_investment' => round($currentInvestment, 2),
+            'current_investment' => round($currentInvestment, 2),
+            'original_investment' => round($originalInvestment, 2),
+            'returned_principal' => round($returnedPrincipal, 2),
             'expected_distributions' => round($expectedDistributions, 2),
             'linked_paid_distributions' => round($linkedPaid, 2),
             'unlinked_paid_distributions' => round($unlinkedPaid, 2),
             'paid_distributions' => round($linkedPaid + $unlinkedPaid, 2),
             'remaining_distributions' => round(max(0, $expectedDistributions - $linkedPaid), 2),
+            'total_received' => round($linkedPaid + $unlinkedPaid + $returnedPrincipal, 2),
             'opportunities_count' => count($items),
+            'active_opportunities_count' => $activeOpportunities,
+            'completed_opportunities_count' => max(0, count($items) - $activeOpportunities),
         ];
     }
 

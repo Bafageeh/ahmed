@@ -15,7 +15,9 @@ import SecureVaultScreen from './SecureVaultScreen';
 import PersonalExpensesScreen from './PersonalExpensesScreen';
 import DebtsScreen from './DebtsScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
+import { ahmedUserHeaders } from './ahmedCurrentUser';
 import * as LocalAuthentication from 'expo-local-authentication';
+const { dinarRemainingInvestment } = require('./dinarInvestmentMath');
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const FINANCE_SUMMARY_URL = 'https://finance.pm.sa/api/v1/integrations/ahmed/summary';
@@ -231,17 +233,24 @@ function FutureMonthlyIncomeScreen({ goTo }) {
   };
   const loadDinarIncome = async () => {
     try {
-      const response = await fetch(`${API_URL}/dinar/investments`, { headers: { Accept: 'application/json' } });
+      const response = await fetch(`${API_URL}/dinar/investments`, {
+        headers: ahmedUserHeaders({ Accept: 'application/json' }),
+      });
       const json = await response.json();
 
       if (!response.ok) throw new Error(json.message || 'dinar fetch failed');
 
       const rows = Array.isArray(json.data) ? json.data : [];
-      const summaryInvestment = Number(json?.summary?.total_investment || 0);
+      const rawSummaryInvestment = json?.summary?.total_investment;
+      const summaryInvestment = Number(rawSummaryInvestment);
+      const hasSummaryInvestment =
+        rawSummaryInvestment !== undefined &&
+        rawSummaryInvestment !== null &&
+        Number.isFinite(summaryInvestment);
 
-      const totalInvestment = summaryInvestment > 0
-        ? summaryInvestment
-        : rows.reduce((sum, item) => sum + Number(item.investment_amount || item.investment || 0), 0);
+      const totalInvestment = hasSummaryInvestment
+        ? Math.max(0, summaryInvestment)
+        : rows.reduce((sum, item) => sum + dinarRemainingInvestment(item), 0);
 
       setDinarMonthlyIncome((totalInvestment * 0.12) / 12);
     } catch {

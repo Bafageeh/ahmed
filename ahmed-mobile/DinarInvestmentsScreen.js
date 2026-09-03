@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
+  StatusBar as NativeStatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -12,21 +14,27 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 import { ahmedUserHeaders } from './ahmedCurrentUser';
+const {
+  toDinarNumber: n,
+  isDinarPaymentPaid: isPaid,
+  dinarOriginalInvestment,
+  dinarReturnedPrincipal,
+  dinarRemainingInvestment,
+  dinarExpectedDistributions,
+  dinarPaidDistributions,
+  dinarRemainingDistributions,
+  dinarTotalReceived,
+} = require('./dinarInvestmentMath');
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const ANDROID_STATUS_BAR_INSET =
+  Platform.OS === 'android' ? Math.max(NativeStatusBar.currentHeight || 0, 24) : 0;
 
 const money = (value, digits = 2) =>
   `${Number(value || 0).toLocaleString('en-US', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })} ر.س`;
-
-const n = (value) => {
-  const number = Number(String(value ?? 0).replace(/,/g, ''));
-  return Number.isFinite(number) ? number : 0;
-};
-
-const isPaid = (payment) => Boolean(Number(payment?.is_paid));
 
 const dateText = (value) => String(value || '-');
 
@@ -48,6 +56,7 @@ export default function DinarInvestmentsScreen({ onBack }) {
   const [unlinkedPayments, setUnlinkedPayments] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [updatingPaymentId, setUpdatingPaymentId] = useState(null);
   const [message, setMessage] = useState('');
 
   const load = async () => {
@@ -84,28 +93,33 @@ export default function DinarInvestmentsScreen({ onBack }) {
 
     setItems((current) =>
       current.map((item) => {
-        if (item.id !== updated.dinar_investment_id) return item;
+        if (String(item.id) !== String(updated.dinar_investment_id)) return item;
         return {
           ...item,
           payments: (item.payments || []).map((payment) =>
-            payment.id === updated.id ? updated : payment
+            String(payment.id) === String(updated.id) ? updated : payment
           ),
         };
       })
     );
 
     setSelected((current) => {
-      if (!current || current.id !== updated.dinar_investment_id) return current;
+      if (!current || String(current.id) !== String(updated.dinar_investment_id)) return current;
       return {
         ...current,
         payments: (current.payments || []).map((payment) =>
-          payment.id === updated.id ? updated : payment
+          String(payment.id) === String(updated.id) ? updated : payment
         ),
       };
     });
   };
 
   const togglePaid = async (payment) => {
+    if (updatingPaymentId !== null) return;
+
+    const nextPaid = !isPaid(payment);
+    setUpdatingPaymentId(payment.id);
+    setMessage('');
     try {
       const response = await fetch(`${API_URL}/dinar/payments/${payment.id}/toggle-paid`, {
         method: 'POST',
@@ -114,24 +128,44 @@ export default function DinarInvestmentsScreen({ onBack }) {
           'Content-Type': 'application/json',
         }),
         body: JSON.stringify({
-          is_paid: !isPaid(payment),
+          is_paid: nextPaid,
         }),
       });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'تعذر تحديث الدفعة');
-      updatePaymentLocal(json.data);
+      const updated = json.data || payment;
+      updatePaymentLocal(updated);
+
+      const principal = Math.max(0, n(updated.total_principal ?? payment.total_principal));
+      if (nextPaid) {
+        setMessage(
+          principal > 0
+            ? `تم تسجيل الدفعة وخصم ${money(principal, 2)} من رأس المال المستثمر.`
+            : 'تم تسجيل التوزيع كمدفوع.'
+        );
+      } else {
+        setMessage(
+          principal > 0
+            ? `تم إلغاء المدفوع وإعادة ${money(principal, 2)} إلى رأس المال المستثمر.`
+            : 'تم إلغاء حالة المدفوع.'
+        );
+      }
     } catch (error) {
       setMessage(error.message || 'تعذر تحديث الدفعة');
+    } finally {
+      setUpdatingPaymentId(null);
     }
   };
 
   const stats = useMemo(() => {
-    const totalInvestment = items.reduce((sum, item) => sum + n(item.investment_amount), 0);
-    const expected = items.reduce((sum, item) => sum + (item.payments || []).reduce((pSum, payment) => pSum + n(payment.total_distribution), 0), 0);
-    const linkedPaid = items.reduce((sum, item) => sum + (item.payments || []).reduce((pSum, payment) => pSum + (isPaid(payment) ? n(payment.paid_amount || payment.total_distribution) : 0), 0), 0);
+    const originalInvestment = items.reduce((sum, item) => sum + dinarOriginalInvestment(item), 0);
+    const returnedPrincipal = items.reduce((sum, item) => sum + dinarReturnedPrincipal(item), 0);
+    const totalInvestment = items.reduce((sum, item) => sum + dinarRemainingInvestment(item), 0);
+    const expected = items.reduce((sum, item) => sum + dinarExpectedDistributions(item), 0);
+    const linkedPaid = items.reduce((sum, item) => sum + dinarPaidDistributions(item), 0);
     const unlinkedPaid = unlinkedPayments.reduce((sum, payment) => sum + n(payment.paid_amount || payment.total_distribution), 0);
     const weightedReturn = totalInvestment
-      ? items.reduce((sum, item) => sum + n(item.investment_amount) * n(item.annual_return), 0) / totalInvestment
+      ? items.reduce((sum, item) => sum + dinarRemainingInvestment(item) * n(item.annual_return), 0) / totalInvestment
       : 0;
 
     const pending = items
@@ -140,6 +174,8 @@ export default function DinarInvestmentsScreen({ onBack }) {
       .sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)))[0];
 
     return {
+      originalInvestment,
+      returnedPrincipal,
       totalInvestment,
       expected,
       linkedPaid,
@@ -157,6 +193,7 @@ export default function DinarInvestmentsScreen({ onBack }) {
         item={selected}
         onBack={() => setSelected(null)}
         onTogglePaid={togglePaid}
+        updatingPaymentId={updatingPaymentId}
         message={message}
       />
     );
@@ -164,13 +201,18 @@ export default function DinarInvestmentsScreen({ onBack }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
+        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.78} hitSlop={10}>
+          <UiIcon name="back" size={23} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>#S-141 استثمار دينار</Text>
-        <View style={styles.backButton} />
+        <View style={styles.topTitleWrap}>
+          <Text style={styles.topTitle} numberOfLines={1}>استثمار دينار</Text>
+          <Text style={styles.screenId}>#S-141</Text>
+        </View>
+        <View style={styles.headerIcon}>
+          <UiIcon name="dinar" size={22} color="#6d28d9" />
+        </View>
       </View>
 
       <ScrollView
@@ -188,10 +230,12 @@ export default function DinarInvestmentsScreen({ onBack }) {
         {!!message ? <Text style={styles.message}>{message}</Text> : null}
 
         <View style={styles.statsGrid}>
-          <Stat title="إجمالي الاستثمار" value={money(stats.totalInvestment, 0)} />
-          <Stat title="المستلم" value={money(stats.paid, 2)} />
-          <Stat title="المتبقي" value={money(stats.remaining, 2)} />
-          <Stat title="متوسط العائد" value={`${stats.weightedReturn.toFixed(2)}%`} />
+          <Stat title="رأس المال القائم" value={money(stats.totalInvestment, 0)} />
+          <Stat title="رأس المال المسترد" value={money(stats.returnedPrincipal, 0)} />
+          <Stat title="الأرباح المستلمة" value={money(stats.paid, 2)} />
+          <Stat title="الأرباح المتبقية" value={money(stats.remaining, 2)} />
+          <Stat title="الاستثمار الأصلي" value={money(stats.originalInvestment, 0)} />
+          <Stat title="عائد رأس المال القائم" value={`${stats.weightedReturn.toFixed(2)}%`} />
         </View>
 
         {stats.pending ? (
@@ -224,8 +268,10 @@ export default function DinarInvestmentsScreen({ onBack }) {
         <Text style={styles.sectionTitle}>الشركات</Text>
 
         {items.map((item) => {
-          const paid = (item.payments || []).reduce((sum, payment) => sum + (isPaid(payment) ? n(payment.paid_amount || payment.total_distribution) : 0), 0);
-          const expected = (item.payments || []).reduce((sum, payment) => sum + n(payment.total_distribution), 0);
+          const paid = dinarPaidDistributions(item);
+          const expected = dinarExpectedDistributions(item);
+          const returnedPrincipal = dinarReturnedPrincipal(item);
+          const remainingInvestment = dinarRemainingInvestment(item);
 
           return (
             <TouchableOpacity key={item.id} activeOpacity={0.86} style={styles.companyCard} onPress={() => setSelected(item)}>
@@ -243,7 +289,7 @@ export default function DinarInvestmentsScreen({ onBack }) {
                 <Metric label="العائد" value={`${n(item.annual_return).toFixed(2)}%`} />
                 <Metric label="المدة" value={`${item.duration_months} شهر`} />
                 <Metric label="الصكوك" value={String(item.units)} />
-                <Metric label="الاستثمار" value={money(item.investment_amount, 0)} />
+                <Metric label="رأس المال القائم" value={money(remainingInvestment, 0)} />
               </View>
 
               <View style={styles.methodRow}>
@@ -252,7 +298,10 @@ export default function DinarInvestmentsScreen({ onBack }) {
               </View>
 
               <Text style={styles.openText}>
-                المستلم {money(paid, 2)} · المتبقي {money(Math.max(0, expected - paid), 2)}
+                أرباح مستلمة {money(paid, 2)} · رأس مال مسترد {money(returnedPrincipal, 0)}
+              </Text>
+              <Text style={styles.remainingText}>
+                أرباح متبقية {money(Math.max(0, expected - paid), 2)}
               </Text>
             </TouchableOpacity>
           );
@@ -262,21 +311,31 @@ export default function DinarInvestmentsScreen({ onBack }) {
   );
 }
 
-function DinarDetails({ item, onBack, onTogglePaid, message }) {
+function DinarDetails({ item, onBack, onTogglePaid, updatingPaymentId, message }) {
   const payments = item.payments || [];
-  const expected = payments.reduce((sum, payment) => sum + n(payment.total_distribution), 0);
-  const paid = payments.reduce((sum, payment) => sum + (isPaid(payment) ? n(payment.paid_amount || payment.total_distribution) : 0), 0);
+  const expected = dinarExpectedDistributions(item);
+  const paid = dinarPaidDistributions(item);
   const totalPrincipal = payments.reduce((sum, payment) => sum + n(payment.total_principal), 0);
+  const originalInvestment = dinarOriginalInvestment(item);
+  const returnedPrincipal = dinarReturnedPrincipal(item);
+  const remainingInvestment = dinarRemainingInvestment(item);
+  const remainingDistributions = dinarRemainingDistributions(item);
+  const totalReceived = dinarTotalReceived(item);
 
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar style="dark" />
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
+        <TouchableOpacity style={styles.backButton} onPress={onBack} activeOpacity={0.78} hitSlop={10}>
+          <UiIcon name="back" size={23} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
-        <Text style={styles.topTitle} numberOfLines={1}>{item.title}</Text>
-        <View style={styles.backButton} />
+        <View style={styles.topTitleWrap}>
+          <Text style={styles.topTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.screenId}>تفاصيل الاستثمار</Text>
+        </View>
+        <View style={styles.headerIcon}>
+          <UiIcon name="dinar" size={22} color="#6d28d9" />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -288,18 +347,21 @@ function DinarDetails({ item, onBack, onTogglePaid, message }) {
         {!!message ? <Text style={styles.message}>{message}</Text> : null}
 
         <View style={styles.statsGrid}>
-          <Stat title="الاستثمار" value={money(item.investment_amount, 0)} />
-          <Stat title="المستلم" value={money(paid, 2)} />
-          <Stat title="المتبقي" value={money(Math.max(0, expected - paid), 2)} />
-          <Stat title="التوزيعات" value={money(expected, 2)} />
+          <Stat title="رأس المال القائم" value={money(remainingInvestment, 0)} />
+          <Stat title="رأس المال المسترد" value={money(returnedPrincipal, 0)} />
+          <Stat title="الأرباح المستلمة" value={money(paid, 2)} />
+          <Stat title="إجمالي المستلم" value={money(totalReceived, 2)} />
         </View>
 
         <View style={styles.infoCard}>
+          <Info label="الاستثمار الأصلي" value={money(originalInvestment, 2)} />
           <Info label="المدة" value={`${item.duration_months} شهر`} />
           <Info label="عدد الصكوك" value={String(item.units)} />
           <Info label="طريقة توزيع الأرباح" value={item.profit_method} />
           <Info label="طريقة رجوع رأس المال" value={item.capital_method} />
           <Info label="رأس المال المتوقع رجوعه" value={money(totalPrincipal, 2)} />
+          <Info label="إجمالي الأرباح المتوقعة" value={money(expected, 2)} />
+          <Info label="الأرباح المتبقية" value={money(remainingDistributions, 2)} />
         </View>
 
         <Text style={styles.sectionTitle}>جدول السداد والتوزيعات</Text>
@@ -308,6 +370,7 @@ function DinarDetails({ item, onBack, onTogglePaid, message }) {
           {payments.map((payment) => {
             const status = paymentStatus(payment);
             const paidNow = isPaid(payment);
+            const isUpdating = String(updatingPaymentId) === String(payment.id);
 
             return (
               <View key={payment.id} style={[styles.scheduleRow, paidNow && styles.scheduleRowPaid, status.style === 'late' && styles.scheduleRowLate]}>
@@ -336,18 +399,28 @@ function DinarDetails({ item, onBack, onTogglePaid, message }) {
                 {paidNow ? (
                   <Text style={styles.paidNote}>
                     تم استلام التوزيع: {money(payment.paid_amount || payment.total_distribution, 2)}
+                    {n(payment.total_principal) > 0 ? ` · واسترداد رأس المال: ${money(payment.total_principal, 2)}` : ''}
                     {payment.paid_at ? ` بتاريخ ${dateText(payment.paid_at)}` : ''}
                   </Text>
                 ) : null}
 
                 <TouchableOpacity
                   activeOpacity={0.86}
-                  style={[styles.manualPaidButton, paidNow && styles.manualPaidButtonActive]}
+                  style={[
+                    styles.manualPaidButton,
+                    paidNow && styles.manualPaidButtonActive,
+                    updatingPaymentId !== null && styles.manualPaidButtonDisabled,
+                  ]}
                   onPress={() => onTogglePaid(payment)}
+                  disabled={updatingPaymentId !== null}
                 >
-                  <Text style={[styles.manualPaidButtonText, paidNow && styles.manualPaidButtonTextActive]}>
-                    {paidNow ? 'إلغاء المدفوع' : 'تحديد كمدفوع'}
-                  </Text>
+                  {isUpdating ? (
+                    <ActivityIndicator color={paidNow ? '#be123c' : '#0f766e'} />
+                  ) : (
+                    <Text style={[styles.manualPaidButtonText, paidNow && styles.manualPaidButtonTextActive]}>
+                      {paidNow ? 'إلغاء المدفوع' : 'تحديد كمدفوع'}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </View>
             );
@@ -387,9 +460,12 @@ function Info({ label, value }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
-  topBar: { paddingHorizontal: 28, paddingTop: 34, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
-  topTitle: { flex: 1, marginHorizontal: 12, color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  topBar: { paddingHorizontal: 18, paddingTop: ANDROID_STATUS_BAR_INSET + 8, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  backButton: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
+  topTitleWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  topTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  screenId: { marginTop: 2, color: '#64748b', fontSize: 11, fontWeight: '800', textAlign: 'center' },
+  headerIcon: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#f5f3ff', borderWidth: 1, borderColor: '#ddd6fe', alignItems: 'center', justifyContent: 'center' },
   content: { paddingHorizontal: 18, paddingBottom: 36 },
   hero: { marginTop: 8, backgroundColor: '#111827', borderRadius: 30, padding: 24, alignItems: 'flex-end' },
   heroBadge: { color: '#ddd6fe', backgroundColor: '#312e81', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, overflow: 'hidden', fontSize: 13, fontWeight: '900' },
@@ -426,6 +502,7 @@ const styles = StyleSheet.create({
   methodRow: { marginTop: 10, backgroundColor: '#f5f3ff', borderRadius: 14, padding: 10, gap: 3 },
   methodText: { color: '#4338ca', fontSize: 12, fontWeight: '900', textAlign: 'right' },
   openText: { marginTop: 10, color: '#7c3aed', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  remainingText: { marginTop: 4, color: '#64748b', fontSize: 11, fontWeight: '800', textAlign: 'center' },
   detailHero: { marginTop: 8, backgroundColor: '#ffffff', borderRadius: 24, borderWidth: 1, borderColor: '#dbe3ea', padding: 18, alignItems: 'flex-end' },
   detailTitle: { color: '#0f172a', fontSize: 22, fontWeight: '900', textAlign: 'right', lineHeight: 31 },
   detailSub: { marginTop: 5, color: '#2563eb', fontSize: 14, fontWeight: '800', textAlign: 'right' },
@@ -449,6 +526,7 @@ const styles = StyleSheet.create({
   paidNote: { marginTop: 8, color: '#0f766e', fontSize: 12, fontWeight: '900', textAlign: 'right' },
   manualPaidButton: { marginTop: 10, alignSelf: 'stretch', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#99f6e4', borderRadius: 13, paddingVertical: 10, alignItems: 'center', justifyContent: 'center' },
   manualPaidButtonActive: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  manualPaidButtonDisabled: { opacity: 0.62 },
   manualPaidButtonText: { color: '#0f766e', fontSize: 13, fontWeight: '900', textAlign: 'center' },
   manualPaidButtonTextActive: { color: '#be123c' },
 });

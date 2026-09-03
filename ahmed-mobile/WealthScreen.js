@@ -13,6 +13,11 @@ import {
 } from 'react-native';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK } from './UiIcon';
 import { ahmedUserHeaders } from './ahmedCurrentUser';
+const {
+  isDinarPaymentPaid,
+  dinarRemainingInvestment,
+  dinarRemainingDistributions,
+} = require('./dinarInvestmentMath');
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -62,16 +67,6 @@ function getMoneyMoonProfit(item) {
   const rate = asNumber(item?.expected_rate || meta.profit_rate || 0);
   if (asNumber(item?.expected_profit_amount) > 0) return asNumber(item.expected_profit_amount);
   return asNumber(item?.principal_amount) * (rate / 100);
-}
-function isDinarPaymentPaid(payment) {
-  return Boolean(Number(payment?.is_paid)) || String(payment?.status || '').toLowerCase() === 'paid';
-}
-function getDinarProfit(item) {
-  const payments = Array.isArray(item?.payments) ? item.payments : [];
-  return payments.reduce(
-    (total, payment) => total + asNumber(payment?.total_distribution || payment?.expected_profit_amount || payment?.amount),
-    0
-  );
 }
 function isDinarOverdue(item) {
   const payments = Array.isArray(item?.payments) ? item.payments : [];
@@ -151,7 +146,15 @@ export default function WealthScreen({ openInvestments }) {
   );
   const ta3meedActiveMine = useMemo(() => ta3meedMine.filter(({ item }) => !isReceived(item)), [ta3meedMine]);
   const moneyMoonActive = useMemo(() => moneyMoonItems.filter((item) => !isReceived(item)), [moneyMoonItems]);
-  const dinarActive = useMemo(() => dinarItems.filter((item) => !isReceived(item)), [dinarItems]);
+  const dinarActive = useMemo(
+    () =>
+      dinarItems.filter(
+        (item) =>
+          !isReceived(item) &&
+          (dinarRemainingInvestment(item) > 0.005 || dinarRemainingDistributions(item) > 0.005)
+      ),
+    [dinarItems]
+  );
   const bankAmount = asNumber(bankRow?.amount);
   const bankMonthlyProfit = (bankAmount * 0.12) / 12;
 
@@ -168,8 +171,8 @@ export default function WealthScreen({ openInvestments }) {
     const ta3meedProfit = ta3meedActiveMine.reduce((total, row) => total + row.mine.profit, 0);
     const moneyMoonInvested = moneyMoonActive.reduce((total, item) => total + asNumber(item.principal_amount), 0);
     const moneyMoonProfit = moneyMoonActive.reduce((total, item) => total + getMoneyMoonProfit(item), 0);
-    const dinarInvested = dinarActive.reduce((total, item) => total + asNumber(item.investment_amount || item.investment), 0);
-    const dinarProfit = dinarActive.reduce((total, item) => total + getDinarProfit(item), 0);
+    const dinarInvested = dinarActive.reduce((total, item) => total + dinarRemainingInvestment(item), 0);
+    const dinarProfit = dinarActive.reduce((total, item) => total + dinarRemainingDistributions(item), 0);
 
     return {
       totalWealth: ta3meedInvested + moneyMoonInvested + dinarInvested + bankAmount,
