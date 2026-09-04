@@ -1,0 +1,56 @@
+name: Apply Dinar Statement Reconciliation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ahmed-api/database/migrations/2026_09_04_220000_import_dinar_statement_and_net_returns.php'
+      - '.github/workflows/apply-dinar-statement-reconciliation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-dinar:
+    name: Reconcile Dinar statement data
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Apply migration over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -euo pipefail
+            PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
+            TARGET_SHA="${{ github.sha }}"
+
+            if [ -z "$PROJECT_PATH" ] || [ ! -d "$PROJECT_PATH/.git" ]; then
+              if [ -d "/home/pmsa/apps/ahmed/.git" ]; then
+                PROJECT_PATH="/home/pmsa/apps/ahmed"
+              elif [ -d "/mnt/home-storage/home/pmsa/apps/ahmed/.git" ]; then
+                PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
+              else
+                echo "ERROR: Ahmed project path not found"
+                exit 1
+              fi
+            fi
+
+            cd "$PROJECT_PATH"
+            git fetch origin main
+            if ! git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null; then
+              git fetch origin "$TARGET_SHA"
+            fi
+            git reset --hard "$TARGET_SHA"
+
+            cd "$PROJECT_PATH/ahmed-api"
+            php artisan migrate --force --path=database/migrations/2026_09_04_220000_import_dinar_statement_and_net_returns.php
+            php artisan optimize:clear
+            php artisan migrate:status --path=database/migrations/2026_09_04_220000_import_dinar_statement_and_net_returns.php
+
+            echo "Dinar statement reconciliation applied successfully at commit $TARGET_SHA"
