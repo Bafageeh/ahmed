@@ -174,4 +174,68 @@ class SulfaInvestmentLedgerTest extends TestCase
             ->assertJsonCount(91, 'data.entries')
             ->assertJsonCount(142, 'data.transactions');
     }
+
+    public function test_third_sulfa_history_batch_is_idempotent_and_updates_statistics(): void
+    {
+        $token = 'sulfa-batch-three-session';
+        $userId = DB::table('users')->insertGetId([
+            'name' => 'أحمد',
+            'username' => 'ahmed',
+            'email' => 'ahmed-batch-three@example.test',
+            'password' => Hash::make('secret'),
+            'remember_token' => hash('sha256', $token),
+            'is_admin' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $firstMigration = require database_path(
+            'migrations/2026_09_04_101000_import_sulfa_transaction_history_from_images.php'
+        );
+        $secondMigration = require database_path(
+            'migrations/2026_09_04_102000_import_additional_sulfa_transaction_history.php'
+        );
+        $thirdMigration = require database_path(
+            'migrations/2026_09_04_103000_import_third_sulfa_transaction_history.php'
+        );
+
+        $firstMigration->up();
+        $secondMigration->up();
+        $thirdMigration->up();
+        $thirdMigration->up();
+
+        $transactions = DB::table('sulfa_investment_transactions')
+            ->where('user_id', $userId)
+            ->get();
+
+        $this->assertCount(212, $transactions);
+        $this->assertCount(212, $transactions->pluck('source_key')->unique());
+        $this->assertSame(
+            105,
+            DB::table('sulfa_investment_entries')
+                ->where('user_id', $userId)
+                ->whereNotNull('opportunity_number')
+                ->count()
+        );
+
+        $response = $this->withToken($token)->getJson('/api/sulfa/investment');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.invested_amount', 46700)
+            ->assertJsonPath('data.monthly_profit', 408.63)
+            ->assertJsonPath('data.monthly_principal_return', 1945.83)
+            ->assertJsonPath('data.monthly_cash_flow', 2354.46)
+            ->assertJsonPath('data.stats.total_invested_amount', 46700)
+            ->assertJsonPath('data.stats.opportunity_count', 105)
+            ->assertJsonPath('data.stats.investment_transaction_count', 105)
+            ->assertJsonPath('data.stats.deposit_count', 20)
+            ->assertJsonPath('data.stats.profit_distribution_count', 87)
+            ->assertJsonPath('data.stats.total_deposits', 45112)
+            ->assertJsonPath('data.stats.distributed_profits', 2966.2)
+            ->assertJsonPath('data.stats.wallet_balance', 1378.2)
+            ->assertJsonPath('data.stats.transaction_count', 212)
+            ->assertJsonCount(105, 'data.entries')
+            ->assertJsonCount(212, 'data.transactions');
+    }
 }
