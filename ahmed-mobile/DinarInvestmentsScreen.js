@@ -21,7 +21,16 @@ const {
   dinarReturnedPrincipal,
   dinarRemainingInvestment,
   dinarExpectedDistributions,
-  dinarPaidDistributions,
+  dinarPaymentGrossDistribution,
+  dinarPaymentInvestmentFee,
+  dinarPaymentVat,
+  dinarPaymentTotalFees,
+  dinarPaymentNetDistribution,
+  dinarGrossPaidDistributions,
+  dinarNetPaidDistributions,
+  dinarPaidInvestmentFees,
+  dinarPaidVat,
+  dinarPaidFees,
   dinarRemainingDistributions,
   dinarTotalReceived,
 } = require('./dinarInvestmentMath');
@@ -162,8 +171,33 @@ export default function DinarInvestmentsScreen({ onBack }) {
     const returnedPrincipal = items.reduce((sum, item) => sum + dinarReturnedPrincipal(item), 0);
     const totalInvestment = items.reduce((sum, item) => sum + dinarRemainingInvestment(item), 0);
     const expected = items.reduce((sum, item) => sum + dinarExpectedDistributions(item), 0);
-    const linkedPaid = items.reduce((sum, item) => sum + dinarPaidDistributions(item), 0);
-    const unlinkedPaid = unlinkedPayments.reduce((sum, payment) => sum + n(payment.paid_amount || payment.total_distribution), 0);
+    const linkedGross = items.reduce((sum, item) => sum + dinarGrossPaidDistributions(item), 0);
+    const linkedNet = items.reduce((sum, item) => sum + dinarNetPaidDistributions(item), 0);
+    const linkedInvestmentFees = items.reduce((sum, item) => sum + dinarPaidInvestmentFees(item), 0);
+    const linkedVat = items.reduce((sum, item) => sum + dinarPaidVat(item), 0);
+
+    const unlinkedGross = unlinkedPayments.reduce(
+      (sum, payment) => sum + dinarPaymentGrossDistribution(payment),
+      0
+    );
+    const unlinkedNet = unlinkedPayments.reduce(
+      (sum, payment) => sum + dinarPaymentNetDistribution(payment),
+      0
+    );
+    const unlinkedInvestmentFees = unlinkedPayments.reduce(
+      (sum, payment) => sum + dinarPaymentInvestmentFee(payment),
+      0
+    );
+    const unlinkedVat = unlinkedPayments.reduce(
+      (sum, payment) => sum + dinarPaymentVat(payment),
+      0
+    );
+    const unlinkedReturnedPrincipal = unlinkedPayments.reduce(
+      (sum, payment) =>
+        sum + (isPaid(payment) ? Math.max(0, n(payment.total_principal)) : 0),
+      0
+    );
+
     const weightedReturn = totalInvestment
       ? items.reduce((sum, item) => sum + dinarRemainingInvestment(item) * n(item.annual_return), 0) / totalInvestment
       : 0;
@@ -176,12 +210,19 @@ export default function DinarInvestmentsScreen({ onBack }) {
     return {
       originalInvestment,
       returnedPrincipal,
+      unlinkedReturnedPrincipal,
       totalInvestment,
       expected,
-      linkedPaid,
-      unlinkedPaid,
-      paid: linkedPaid + unlinkedPaid,
-      remaining: Math.max(0, expected - linkedPaid),
+      linkedGross,
+      linkedNet,
+      unlinkedGross,
+      unlinkedNet,
+      grossPaid: linkedGross + unlinkedGross,
+      netPaid: linkedNet + unlinkedNet,
+      investmentFees: linkedInvestmentFees + unlinkedInvestmentFees,
+      vat: linkedVat + unlinkedVat,
+      fees: linkedInvestmentFees + linkedVat + unlinkedInvestmentFees + unlinkedVat,
+      remaining: Math.max(0, expected - linkedGross),
       weightedReturn,
       pending,
     };
@@ -223,7 +264,9 @@ export default function DinarInvestmentsScreen({ onBack }) {
         <View style={styles.hero}>
           <Text style={styles.heroBadge}>دينار</Text>
           <Text style={styles.heroTitle}>شركات استثمارية</Text>
-          <Text style={styles.heroText}>البيانات محفوظة الآن في قاعدة البيانات، والمدفوعات تحدث من السيرفر.</Text>
+          <Text style={styles.heroText}>
+            الحسابات تفصل الآن بين إجمالي التوزيع ورسوم الاستثمار والضريبة وصافي الربح، ورجوع القيمة الاسمية يخفض رأس المال القائم فقط عند ربطه بالفرصة الصحيحة.
+          </Text>
         </View>
 
         {loading ? <ActivityIndicator color="#0f766e" style={{ marginTop: 14 }} /> : null}
@@ -232,11 +275,26 @@ export default function DinarInvestmentsScreen({ onBack }) {
         <View style={styles.statsGrid}>
           <Stat title="رأس المال القائم" value={money(stats.totalInvestment, 0)} />
           <Stat title="رأس المال المسترد" value={money(stats.returnedPrincipal, 0)} />
-          <Stat title="الأرباح المستلمة" value={money(stats.paid, 2)} />
+          <Stat title="صافي الأرباح المستلمة" value={money(stats.netPaid, 2)} />
+          <Stat title="إجمالي التوزيعات المستلمة" value={money(stats.grossPaid, 2)} />
+          <Stat title="الرسوم والضريبة" value={money(stats.fees, 2)} />
           <Stat title="الأرباح المتبقية" value={money(stats.remaining, 2)} />
           <Stat title="الاستثمار الأصلي" value={money(stats.originalInvestment, 0)} />
           <Stat title="عائد رأس المال القائم" value={`${stats.weightedReturn.toFixed(2)}%`} />
         </View>
+
+        {stats.unlinkedReturnedPrincipal > 0 ? (
+          <View style={styles.warningCard}>
+            <Text style={styles.warningTitle}>قيمة اسمية مستردة غير مربوطة بفرصة</Text>
+            <View style={styles.warningRow}>
+              <Text style={styles.warningAmount}>{money(stats.unlinkedReturnedPrincipal, 2)}</Text>
+              <View style={styles.warningTextBlock}>
+                <Text style={styles.warningName}>محفوظة من كشف دينار ولم تخصم من رأس مال فرصة غير مؤكدة</Text>
+                <Text style={styles.warningDate}>يتم خصمها من الاستثمار عند تحديد الفرصة المرتبطة بها</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {stats.pending ? (
           <View style={styles.nextCard}>
@@ -253,22 +311,34 @@ export default function DinarInvestmentsScreen({ onBack }) {
         {unlinkedPayments.length ? (
           <View style={styles.warningCard}>
             <Text style={styles.warningTitle}>مدفوعات محفوظة وغير مربوطة بفرصة</Text>
-            {unlinkedPayments.map((payment) => (
-              <View key={payment.id} style={styles.warningRow}>
-                <Text style={styles.warningAmount}>{money(payment.paid_amount || payment.total_distribution, 2)}</Text>
-                <View style={styles.warningTextBlock}>
-                  <Text style={styles.warningName} numberOfLines={1}>{payment.title}</Text>
-                  <Text style={styles.warningDate}>{dateText(payment.due_date)}</Text>
+            {unlinkedPayments.map((payment) => {
+              const gross = dinarPaymentGrossDistribution(payment);
+              const net = dinarPaymentNetDistribution(payment);
+              const fees = dinarPaymentTotalFees(payment);
+
+              return (
+                <View key={payment.id} style={styles.warningRow}>
+                  <Text style={styles.warningAmount}>{money(net, 2)}</Text>
+                  <View style={styles.warningTextBlock}>
+                    <Text style={styles.warningName} numberOfLines={1}>{payment.title}</Text>
+                    <Text style={styles.warningDate}>
+                      {dateText(payment.due_date)} · إجمالي {money(gross, 2)}
+                      {fees > 0 ? ` · رسوم وضريبة ${money(fees, 2)}` : ''}
+                      {n(payment.total_principal) > 0 ? ` · قيمة اسمية ${money(payment.total_principal, 2)}` : ''}
+                    </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : null}
 
         <Text style={styles.sectionTitle}>الشركات</Text>
 
         {items.map((item) => {
-          const paid = dinarPaidDistributions(item);
+          const grossPaid = dinarGrossPaidDistributions(item);
+          const netPaid = dinarNetPaidDistributions(item);
+          const fees = dinarPaidFees(item);
           const expected = dinarExpectedDistributions(item);
           const returnedPrincipal = dinarReturnedPrincipal(item);
           const remainingInvestment = dinarRemainingInvestment(item);
@@ -298,10 +368,10 @@ export default function DinarInvestmentsScreen({ onBack }) {
               </View>
 
               <Text style={styles.openText}>
-                أرباح مستلمة {money(paid, 2)} · رأس مال مسترد {money(returnedPrincipal, 0)}
+                صافي أرباح {money(netPaid, 2)} · رسوم وضريبة {money(fees, 2)} · رأس مال مسترد {money(returnedPrincipal, 0)}
               </Text>
               <Text style={styles.remainingText}>
-                أرباح متبقية {money(Math.max(0, expected - paid), 2)}
+                إجمالي توزيعات مستلمة {money(grossPaid, 2)} · أرباح متبقية {money(Math.max(0, expected - grossPaid), 2)}
               </Text>
             </TouchableOpacity>
           );
@@ -314,7 +384,11 @@ export default function DinarInvestmentsScreen({ onBack }) {
 function DinarDetails({ item, onBack, onTogglePaid, updatingPaymentId, message }) {
   const payments = item.payments || [];
   const expected = dinarExpectedDistributions(item);
-  const paid = dinarPaidDistributions(item);
+  const grossPaid = dinarGrossPaidDistributions(item);
+  const netPaid = dinarNetPaidDistributions(item);
+  const investmentFees = dinarPaidInvestmentFees(item);
+  const vat = dinarPaidVat(item);
+  const fees = dinarPaidFees(item);
   const totalPrincipal = payments.reduce((sum, payment) => sum + n(payment.total_principal), 0);
   const originalInvestment = dinarOriginalInvestment(item);
   const returnedPrincipal = dinarReturnedPrincipal(item);
@@ -349,8 +423,10 @@ function DinarDetails({ item, onBack, onTogglePaid, updatingPaymentId, message }
         <View style={styles.statsGrid}>
           <Stat title="رأس المال القائم" value={money(remainingInvestment, 0)} />
           <Stat title="رأس المال المسترد" value={money(returnedPrincipal, 0)} />
-          <Stat title="الأرباح المستلمة" value={money(paid, 2)} />
-          <Stat title="إجمالي المستلم" value={money(totalReceived, 2)} />
+          <Stat title="صافي الأرباح المستلمة" value={money(netPaid, 2)} />
+          <Stat title="إجمالي التوزيعات" value={money(grossPaid, 2)} />
+          <Stat title="الرسوم والضريبة" value={money(fees, 2)} />
+          <Stat title="إجمالي المستلم الصافي" value={money(totalReceived, 2)} />
         </View>
 
         <View style={styles.infoCard}>
@@ -360,8 +436,10 @@ function DinarDetails({ item, onBack, onTogglePaid, updatingPaymentId, message }
           <Info label="طريقة توزيع الأرباح" value={item.profit_method} />
           <Info label="طريقة رجوع رأس المال" value={item.capital_method} />
           <Info label="رأس المال المتوقع رجوعه" value={money(totalPrincipal, 2)} />
-          <Info label="إجمالي الأرباح المتوقعة" value={money(expected, 2)} />
-          <Info label="الأرباح المتبقية" value={money(remainingDistributions, 2)} />
+          <Info label="إجمالي الأرباح المتوقعة قبل الرسوم" value={money(expected, 2)} />
+          <Info label="الأرباح المتبقية قبل رسومها المستقبلية" value={money(remainingDistributions, 2)} />
+          <Info label="رسوم الاستثمار المسجلة" value={money(investmentFees, 2)} />
+          <Info label="ضريبة القيمة المضافة المسجلة" value={money(vat, 2)} />
         </View>
 
         <Text style={styles.sectionTitle}>جدول السداد والتوزيعات</Text>
@@ -371,6 +449,10 @@ function DinarDetails({ item, onBack, onTogglePaid, updatingPaymentId, message }
             const status = paymentStatus(payment);
             const paidNow = isPaid(payment);
             const isUpdating = String(updatingPaymentId) === String(payment.id);
+            const gross = dinarPaymentGrossDistribution(payment);
+            const investmentFee = dinarPaymentInvestmentFee(payment);
+            const vatAmount = dinarPaymentVat(payment);
+            const net = dinarPaymentNetDistribution(payment);
 
             return (
               <View key={payment.id} style={[styles.scheduleRow, paidNow && styles.scheduleRowPaid, status.style === 'late' && styles.scheduleRowLate]}>
@@ -398,9 +480,12 @@ function DinarDetails({ item, onBack, onTogglePaid, updatingPaymentId, message }
 
                 {paidNow ? (
                   <Text style={styles.paidNote}>
-                    تم استلام التوزيع: {money(payment.paid_amount || payment.total_distribution, 2)}
-                    {n(payment.total_principal) > 0 ? ` · واسترداد رأس المال: ${money(payment.total_principal, 2)}` : ''}
-                    {payment.paid_at ? ` بتاريخ ${dateText(payment.paid_at)}` : ''}
+                    إجمالي التوزيع {money(gross, 2)}
+                    {investmentFee > 0 ? ` · رسوم ${money(investmentFee, 2)}` : ''}
+                    {vatAmount > 0 ? ` · ضريبة ${money(vatAmount, 2)}` : ''}
+                    {` · صافي الربح ${money(net, 2)}`}
+                    {n(payment.total_principal) > 0 ? ` · رأس مال مسترد ${money(payment.total_principal, 2)}` : ''}
+                    {payment.paid_at ? ` · بتاريخ ${dateText(payment.paid_at)}` : ''}
                   </Text>
                 ) : null}
 
