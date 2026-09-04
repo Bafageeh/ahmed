@@ -38,23 +38,83 @@ const dinarExpectedDistributions = (item) => {
   );
 };
 
-const dinarPaidDistributions = (item) => {
-  const payments = Array.isArray(item?.payments) ? item.payments : [];
-  return payments.reduce((sum, payment) => {
-    if (!isDinarPaymentPaid(payment)) return sum;
-    const received =
-      payment?.paid_amount !== undefined && payment?.paid_amount !== null
-        ? payment.paid_amount
-        : payment?.total_distribution;
-    return sum + Math.max(0, toDinarNumber(received));
-  }, 0);
+const dinarPaymentGrossDistribution = (payment) => {
+  if (!isDinarPaymentPaid(payment)) return 0;
+
+  const scheduled = Math.max(0, toDinarNumber(payment?.total_distribution));
+  if (scheduled > 0) return scheduled;
+
+  return Math.max(0, toDinarNumber(payment?.paid_amount));
 };
 
+const dinarPaymentInvestmentFee = (payment) =>
+  isDinarPaymentPaid(payment) ? Math.max(0, toDinarNumber(payment?.investment_fee)) : 0;
+
+const dinarPaymentVat = (payment) =>
+  isDinarPaymentPaid(payment) ? Math.max(0, toDinarNumber(payment?.vat_amount)) : 0;
+
+const dinarPaymentTotalFees = (payment) =>
+  dinarPaymentInvestmentFee(payment) + dinarPaymentVat(payment);
+
+const dinarPaymentNetDistribution = (payment) => {
+  if (!isDinarPaymentPaid(payment)) return 0;
+
+  if (payment?.net_distribution !== undefined && payment?.net_distribution !== null) {
+    return Math.max(0, toDinarNumber(payment.net_distribution));
+  }
+
+  const paid =
+    payment?.paid_amount !== undefined && payment?.paid_amount !== null
+      ? Math.max(0, toDinarNumber(payment.paid_amount))
+      : dinarPaymentGrossDistribution(payment);
+  const fees = dinarPaymentTotalFees(payment);
+
+  return Math.max(0, paid - fees);
+};
+
+const dinarGrossPaidDistributions = (item) => {
+  const payments = Array.isArray(item?.payments) ? item.payments : [];
+  return payments.reduce(
+    (sum, payment) => sum + dinarPaymentGrossDistribution(payment),
+    0
+  );
+};
+
+// Backward-compatible alias: schedule progress should continue to use gross
+// distributions. Net profit is exposed separately below.
+const dinarPaidDistributions = dinarGrossPaidDistributions;
+
+const dinarNetPaidDistributions = (item) => {
+  const payments = Array.isArray(item?.payments) ? item.payments : [];
+  return payments.reduce(
+    (sum, payment) => sum + dinarPaymentNetDistribution(payment),
+    0
+  );
+};
+
+const dinarPaidInvestmentFees = (item) => {
+  const payments = Array.isArray(item?.payments) ? item.payments : [];
+  return payments.reduce(
+    (sum, payment) => sum + dinarPaymentInvestmentFee(payment),
+    0
+  );
+};
+
+const dinarPaidVat = (item) => {
+  const payments = Array.isArray(item?.payments) ? item.payments : [];
+  return payments.reduce(
+    (sum, payment) => sum + dinarPaymentVat(payment),
+    0
+  );
+};
+
+const dinarPaidFees = (item) => dinarPaidInvestmentFees(item) + dinarPaidVat(item);
+
 const dinarRemainingDistributions = (item) =>
-  Math.max(0, dinarExpectedDistributions(item) - dinarPaidDistributions(item));
+  Math.max(0, dinarExpectedDistributions(item) - dinarGrossPaidDistributions(item));
 
 const dinarTotalReceived = (item) =>
-  dinarPaidDistributions(item) + dinarReturnedPrincipal(item);
+  dinarNetPaidDistributions(item) + dinarReturnedPrincipal(item);
 
 module.exports = {
   toDinarNumber,
@@ -63,7 +123,17 @@ module.exports = {
   dinarReturnedPrincipal,
   dinarRemainingInvestment,
   dinarExpectedDistributions,
+  dinarPaymentGrossDistribution,
+  dinarPaymentInvestmentFee,
+  dinarPaymentVat,
+  dinarPaymentTotalFees,
+  dinarPaymentNetDistribution,
+  dinarGrossPaidDistributions,
   dinarPaidDistributions,
+  dinarNetPaidDistributions,
+  dinarPaidInvestmentFees,
+  dinarPaidVat,
+  dinarPaidFees,
   dinarRemainingDistributions,
   dinarTotalReceived,
 };
