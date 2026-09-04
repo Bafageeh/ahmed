@@ -1,0 +1,117 @@
+<?php
+
+namespace Tests\Feature;
+
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+class SulfaInvestmentLedgerTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_sulfa_image_history_is_idempotent_and_drives_statistics(): void
+    {
+        $token = 'sulfa-test-session';
+        $userId = DB::table('users')->insertGetId([
+            'name' => 'أحمد',
+            'username' => 'ahmed',
+            'email' => 'ahmed@example.test',
+            'password' => Hash::make('secret'),
+            'remember_token' => hash('sha256', $token),
+            'is_admin' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('sulfa_investment_entries')->insert([
+            'user_id' => $userId,
+            'label' => 'الاستثمار السابق',
+            'invested_amount' => 99999,
+            'expected_profit' => 0,
+            'duration_months' => 24,
+            'is_active' => true,
+            'notes' => 'تم ترحيله تلقائيًا من المبلغ السابق في سلفة.',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $migration = require database_path(
+            'migrations/2026_09_04_101000_import_sulfa_transaction_history_from_images.php'
+        );
+        $migration->up();
+        $migration->up();
+
+        $this->assertSame(
+            72,
+            DB::table('sulfa_investment_transactions')->where('user_id', $userId)->count()
+        );
+        $this->assertSame(
+            38,
+            DB::table('sulfa_investment_entries')
+                ->where('user_id', $userId)
+                ->whereNotNull('opportunity_number')
+                ->count()
+        );
+        $this->assertSame(
+            1,
+            DB::table('sulfa_investment_entries')
+                ->where('user_id', $userId)
+                ->where('status', 'replaced')
+                ->count()
+        );
+
+        $response = $this->withToken($token)->getJson('/api/sulfa/investment');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.invested_amount', 20900)
+            ->assertJsonPath('data.monthly_profit', 182.88)
+            ->assertJsonPath('data.monthly_principal_return', 870.83)
+            ->assertJsonPath('data.stats.total_invested_amount', 20900)
+            ->assertJsonPath('data.stats.opportunity_count', 38)
+            ->assertJsonPath('data.stats.total_deposits', 29052)
+            ->assertJsonPath('data.stats.distributed_profits', 451.84)
+            ->assertJsonPath('data.stats.wallet_balance', 8603.84)
+            ->assertJsonPath('data.stats.transaction_count', 72)
+            ->assertJsonCount(38, 'data.entries')
+            ->assertJsonCount(72, 'data.transactions');
+    }
+
+    public function test_sulfa_transactions_can_be_filtered_by_type_date_and_opportunity(): void
+    {
+        $token = 'sulfa-filter-session';
+        $userId = DB::table('users')->insertGetId([
+            'name' => 'أحمد',
+            'username' => 'ahmed',
+            'email' => 'ahmed-filter@example.test',
+            'password' => Hash::make('secret'),
+            'remember_token' => hash('sha256', $token),
+            'is_admin' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $migration = require database_path(
+            'migrations/2026_09_04_101000_import_sulfa_transaction_history_from_images.php'
+        );
+        $migration->up();
+
+        $response = $this->withToken($token)->getJson(
+            '/api/sulfa/investment?type=profit_distribution&from_date=2026-07-30&to_date=2026-07-30&search=1191408901'
+        );
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(2, 'data.transactions')
+            ->assertJsonPath('data.transactions.0.transaction_type', 'profit_distribution')
+            ->assertJsonPath('data.transactions.0.opportunity_number', '1191408901')
+            ->assertJsonPath('data.filters.type', 'profit_distribution');
+
+        $this->assertSame(
+            72,
+            DB::table('sulfa_investment_transactions')->where('user_id', $userId)->count()
+        );
+    }
+}
