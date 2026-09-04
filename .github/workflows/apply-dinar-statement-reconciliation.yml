@@ -8,6 +8,7 @@ on:
       - 'ahmed-api/database/migrations/2026_09_04_220000_import_dinar_statement_and_net_returns.php'
       - 'ahmed-api/database/migrations/2026_09_04_221000_reconcile_older_dinar_statement_history.php'
       - 'ahmed-api/database/migrations/2026_09_04_222000_import_earliest_dinar_statement_history.php'
+      - 'ahmed-api/database/migrations/2026_09_04_223000_import_oldest_dinar_statement_history.php'
       - '.github/workflows/apply-dinar-statement-reconciliation.yml'
   workflow_dispatch:
 
@@ -54,7 +55,8 @@ jobs:
             php artisan migrate --force --path=database/migrations/2026_09_04_220000_import_dinar_statement_and_net_returns.php
             php artisan migrate --force --path=database/migrations/2026_09_04_221000_reconcile_older_dinar_statement_history.php
             php artisan migrate --force --path=database/migrations/2026_09_04_222000_import_earliest_dinar_statement_history.php
+            php artisan migrate --force --path=database/migrations/2026_09_04_223000_import_oldest_dinar_statement_history.php
             php artisan optimize:clear
-            php artisan migrate:status --path=database/migrations/2026_09_04_222000_import_earliest_dinar_statement_history.php
+            php artisan migrate:status --path=database/migrations/2026_09_04_223000_import_oldest_dinar_statement_history.php
 
             echo "Dinar statement reconciliation applied successfully at commit $TARGET_SHA"
