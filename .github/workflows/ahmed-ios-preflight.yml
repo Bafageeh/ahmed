@@ -109,6 +109,11 @@ jobs:
                   hasSubmissionApiKey:!!item.appStoreConnectApiKeyForSubmissions,
                   apiKeyId:item.appStoreConnectApiKeyForSubmissions?.id || null,
                   apiKeyRoles:item.appStoreConnectApiKeyForSubmissions?.roles || [] }))));
+              const { AppStoreConnectApiKeyQuery } = require('eas-cli/build/credentials/ios/api/graphql/queries/AppStoreConnectApiKeyQuery');
+              const keyPage = await AppStoreConnectApiKeyQuery.getAllForAccountPaginatedAsync(client, 'bafageeh', { first: 20 });
+              console.log('IOS_TEAM_UPLOAD_KEYS=' + JSON.stringify(keyPage.edges.map(edge => edge.node)
+                .filter(key => key.appleTeam?.appleTeamIdentifier === '8PY9NA9CA2')
+                .map(key => ({ id:key.id, roles:key.roles, createdAt:key.createdAt }))));
               await analytics.flushAsync();
             })().catch(error => { console.error(error.message); process.exitCode = 1; });
             NODE
