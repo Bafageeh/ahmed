@@ -13,7 +13,7 @@ permissions:
 jobs:
   inspect-ios:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     steps:
       - name: Inspect Ahmed iOS build and submission status
         uses: appleboy/ssh-action@v1.2.0
@@ -22,7 +22,7 @@ jobs:
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
-          command_timeout: 10m
+          command_timeout: 4m
           script: |
             set -eu
             AHMED_IOS_PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
@@ -39,14 +39,16 @@ jobs:
             cd "$AHMED_IOS_PROJECT/ahmed-mobile"
             export CI=1 EXPO_NO_TELEMETRY=1
             node -e 'const a=require("./app.json").expo; if(a.ios.bundleIdentifier!=="sa.pm.ahmed"||a.extra.eas.projectId!=="85d588cc-f97a-4907-a248-0e778d83d674") process.exit(1); console.log(JSON.stringify({name:a.name,version:a.version,bundleIdentifier:a.ios.bundleIdentifier,projectId:a.extra.eas.projectId}));'
-            timeout 60s npx --no-install eas-cli whoami
-            timeout 60s npx --no-install eas-cli project:info
-            timeout 60s npx --no-install eas-cli --version
+            test -f node_modules/eas-cli/bin/run
+            echo 'Checking the installed Expo session'
+            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run whoami
+            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run project:info
+            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run --version
             AHMED_IOS_DIAG_DIR="$(mktemp -d)"
             export AHMED_IOS_DIAG_DIR
             trap 'rm -rf "$AHMED_IOS_DIAG_DIR"' EXIT
-            timeout 60s npx --no-install eas-cli build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
-            timeout 60s npx --no-install eas-cli build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
+            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
+            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
             python3 - <<'PY'
             import json, os, pathlib, re
             root = pathlib.Path(os.environ['AHMED_IOS_DIAG_DIR'])
@@ -72,3 +74,5 @@ jobs:
             PY
 
 # Requested iOS upload preflight: 2026-09-05. Reuse the existing authenticated CLI.
+
+# Invoke the installed CLI directly without npm package resolution.
