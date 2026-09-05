@@ -38,15 +38,16 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
               const AccountNumberLine = ({ label, value, isIban = false }) => (
                 <View style={styles.bankAccountCompactRow}>
                   <View style={styles.bankAccountCopyValueWrap}>
-                    <Text
-                      style={isIban ? styles.bankAccountCompactValue : styles.bankAccountNumberValue}
-                      selectable
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={isIban ? 0.76 : 0.82}
-                    >
-                      {value || '—'}
-                    </Text>
+                    <View style={styles.bankAccountCopyTextWrap}>
+                      <Text
+                        style={isIban ? styles.bankAccountIbanSingleLine : styles.bankAccountNumberValue}
+                        selectable
+                        numberOfLines={1}
+                        allowFontScaling={false}
+                      >
+                        {value || '—'}
+                      </Text>
+                    </View>
                     {value ? (
                       <TouchableOpacity
                         accessibilityLabel={\`نسخ \${label}\`}
@@ -95,6 +96,29 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
                   t.objectProperty(t.identifier('flexDirection'), t.stringLiteral('row')),
                   t.objectProperty(t.identifier('alignItems'), t.stringLiteral('center')),
                   t.objectProperty(t.identifier('gap'), t.numericLiteral(6)),
+                  t.objectProperty(t.identifier('minWidth'), t.numericLiteral(0)),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('bankAccountCopyTextWrap'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('flex'), t.numericLiteral(1)),
+                  t.objectProperty(t.identifier('minWidth'), t.numericLiteral(0)),
+                  t.objectProperty(t.identifier('minHeight'), t.numericLiteral(30)),
+                  t.objectProperty(t.identifier('justifyContent'), t.stringLiteral('center')),
+                  t.objectProperty(t.identifier('overflow'), t.stringLiteral('visible')),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('bankAccountIbanSingleLine'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('color'), t.stringLiteral('#0f172a')),
+                  t.objectProperty(t.identifier('fontSize'), t.numericLiteral(12.5)),
+                  t.objectProperty(t.identifier('lineHeight'), t.numericLiteral(20)),
+                  t.objectProperty(t.identifier('fontWeight'), t.stringLiteral('800')),
+                  t.objectProperty(t.identifier('textAlign'), t.stringLiteral('left')),
+                  t.objectProperty(t.identifier('includeFontPadding'), t.booleanLiteral(true)),
+                  t.objectProperty(t.identifier('paddingVertical'), t.numericLiteral(1)),
                 ])
               ),
               t.objectProperty(
