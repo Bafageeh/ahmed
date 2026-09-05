@@ -73,6 +73,25 @@ jobs:
             trap 'rm -rf "$AHMED_IOS_DIAG_DIR"' EXIT
             timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
             timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
+            timeout --kill-after=5s 45s node <<'NODE'
+            const { createAnalyticsAsync } = require('eas-cli/build/analytics/AnalyticsManager');
+            const SessionManager = require('eas-cli/build/user/SessionManager').default;
+            const { createGraphqlClient } = require('eas-cli/build/commandUtils/context/contextUtils/createGraphqlClient');
+            const { SubmissionQuery } = require('eas-cli/build/graphql/queries/SubmissionQuery');
+            (async () => {
+              const analytics = await createAnalyticsAsync();
+              const session = new SessionManager(analytics);
+              const { authenticationInfo } = await session.ensureLoggedInAsync({ nonInteractive: true });
+              const client = createGraphqlClient(authenticationInfo);
+              const appId = require('./app.json').expo.extra.eas.projectId;
+              if (appId !== '85d588cc-f97a-4907-a248-0e778d83d674') throw new Error('Unexpected Expo project');
+              const history = await SubmissionQuery.allForAppAsync(client, appId, { limit: 5, platform: 'IOS' });
+              console.log('IOS_SUBMISSION_HISTORY=' + JSON.stringify(history.map(item => ({
+                id: item.id, status: item.status, ascAppId: item.iosConfig?.ascAppIdentifier || null
+              }))));
+              await analytics.flushAsync();
+            })().catch(error => { console.error(error.message); process.exitCode = 1; });
+            NODE
             python3 - <<'PY'
             import json, os, pathlib, re
             root = pathlib.Path(os.environ['AHMED_IOS_DIAG_DIR'])
@@ -102,3 +121,5 @@ jobs:
 # Invoke the installed CLI directly without npm package resolution.
 
 # Resume requested Apple upload after a bounded server connectivity check.
+
+# Inspect the existing App Store app identifier from Ahmed submission history.
