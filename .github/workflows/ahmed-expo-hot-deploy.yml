@@ -8,6 +8,7 @@ on:
       - 'ahmed-api/**'
       - 'ahmed-mobile/**'
       - 'scripts/restart-ahmed-expo-fast.sh'
+      - 'scripts/patch-tokenize-platform.py'
       - '.github/workflows/ahmed-expo-hot-deploy.yml'
   workflow_dispatch:
 
@@ -116,3 +117,4 @@ jobs:
 # Secure vault account rows compacted 2026-08-29
 # Secure vault account number always plaintext and visible 2026-08-29
 # API migrations added to Ahmed hot deploy 2026-09-05
+# Tokenize patch changes now trigger deployment 2026-09-05
