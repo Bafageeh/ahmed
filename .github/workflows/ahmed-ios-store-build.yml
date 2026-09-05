@@ -47,6 +47,7 @@ jobs:
             python3 scripts/patch-ta3meed-quick-menu.py
             python3 scripts/patch-credit-card-no-cents.py
             python3 scripts/patch-tokenize-platform.py
+            sed -i 's/tuple\[int, int\]/tuple/g' ahmed-mobile/scripts/generate_app_icon.py
             python3 ahmed-mobile/scripts/generate_app_icon.py
             cd ahmed-mobile
             export CI=1 EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api
@@ -123,3 +124,5 @@ jobs:
             exit 1
 
 # User-requested Apple upload preparation, 2026-09-05.
+
+# Use Python-compatible icon annotations on the existing deployment server.
