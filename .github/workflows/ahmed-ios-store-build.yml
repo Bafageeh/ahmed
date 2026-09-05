@@ -1,0 +1,125 @@
+name: Ahmed iOS Store Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ahmed-ios-store-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahmed-ios-store-build
+  cancel-in-progress: false
+
+jobs:
+  schedule-ios:
+    name: Prepare and schedule Ahmed iOS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Build latest Ahmed source using saved iOS credentials
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 12m
+          script: |
+            set -eu
+            AHMED_IOS_PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$AHMED_IOS_PROJECT" ] || [ ! -d "$AHMED_IOS_PROJECT/ahmed-mobile" ]; then
+              AHMED_IOS_PROJECT=/home/pmsa/apps/ahmed
+            fi
+            test -d "$AHMED_IOS_PROJECT/ahmed-mobile"
+            AHMED_IOS_STAGE="$(dirname "$AHMED_IOS_PROJECT")/ahmed-ios-releases/${{ github.run_id }}"
+            export AHMED_IOS_STAGE
+            mkdir -p "$AHMED_IOS_STAGE"
+            cd "$AHMED_IOS_PROJECT"
+            git fetch origin main
+            git cat-file -e "${{ github.sha }}^{commit}"
+            git worktree add --detach "$AHMED_IOS_STAGE/source" "${{ github.sha }}"
+            cd "$AHMED_IOS_STAGE/source"
+            python3 scripts/patch-ta3meed-navigation-callbacks.py
+            python3 scripts/patch-ta3meed-quick-menu.py
+            python3 scripts/patch-credit-card-no-cents.py
+            python3 scripts/patch-tokenize-platform.py
+            python3 ahmed-mobile/scripts/generate_app_icon.py
+            cd ahmed-mobile
+            export CI=1 EXPO_NO_TELEMETRY=1 EXPO_PUBLIC_API_URL=https://ahmed.pm.sa/api
+            printf 'legacy-peer-deps=true\n' > .npmrc
+            timeout --kill-after=10s 240s npm install --package-lock-only --ignore-scripts --legacy-peer-deps --no-audit --no-fund
+            ln -s "$AHMED_IOS_PROJECT/ahmed-mobile/node_modules" node_modules
+            node <<'NODE'
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('app.json', 'utf8')).expo;
+            if (config.ios.bundleIdentifier !== 'sa.pm.ahmed' || config.extra.eas.projectId !== '85d588cc-f97a-4907-a248-0e778d83d674') throw new Error('Unexpected Ahmed project');
+            const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+            const profile = eas.build.production;
+            profile.distribution = 'store';
+            profile.environment = 'production';
+            profile.env = { ...profile.env, EXPO_PUBLIC_API_URL: 'https://ahmed.pm.sa/api', NPM_CONFIG_LEGACY_PEER_DEPS: 'true' };
+            profile.ios = { ...profile.ios, simulator: false, credentialsSource: 'remote' };
+            fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2) + '\n');
+            console.log(JSON.stringify({projectId:config.extra.eas.projectId,bundleIdentifier:config.ios.bundleIdentifier,version:config.version,sourceCommit:'${{ github.sha }}'}));
+            NODE
+            node node_modules/eas-cli/bin/run build --platform ios --profile production --non-interactive --no-wait --json > "$AHMED_IOS_STAGE/builds.json"
+            node <<'NODE'
+            const fs = require('fs');
+            const stage = process.env.AHMED_IOS_STAGE;
+            const values = JSON.parse(fs.readFileSync(stage + '/builds.json', 'utf8'));
+            const build = Array.isArray(values) ? values[0] : values;
+            if (!build?.id || build.platform !== 'IOS') throw new Error('Expected a scheduled iOS build');
+            const record = { id:build.id, status:build.status, platform:build.platform, appVersion:build.appVersion, appBuildVersion:build.appBuildVersion, sourceCommit:'${{ github.sha }}' };
+            fs.writeFileSync(stage + '/record.json', JSON.stringify(record, null, 2) + '\n');
+            console.log('AHMED_IOS_BUILD=' + JSON.stringify(record));
+            NODE
+
+  await-ios:
+    name: Wait for signed iOS archive
+    needs: schedule-ios
+    runs-on: ubuntu-latest
+    timeout-minutes: 48
+    steps:
+      - name: Wait for the exact scheduled iOS build
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 45m
+          script: |
+            set -eu
+            AHMED_IOS_PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$AHMED_IOS_PROJECT" ] || [ ! -d "$AHMED_IOS_PROJECT/ahmed-mobile" ]; then
+              AHMED_IOS_PROJECT=/home/pmsa/apps/ahmed
+            fi
+            AHMED_IOS_STAGE="$(dirname "$AHMED_IOS_PROJECT")/ahmed-ios-releases/${{ github.run_id }}"
+            export AHMED_IOS_STAGE
+            cd "$AHMED_IOS_STAGE/source/ahmed-mobile"
+            export CI=1 EXPO_NO_TELEMETRY=1
+            AHMED_BUILD_ID="$(node -p "require(process.env.AHMED_IOS_STAGE + '/record.json').id")"
+            AHMED_BUILD_ATTEMPT=0
+            while [ "$AHMED_BUILD_ATTEMPT" -lt 80 ]; do
+              AHMED_BUILD_ATTEMPT=$((AHMED_BUILD_ATTEMPT + 1))
+              timeout --kill-after=5s 60s node node_modules/eas-cli/bin/run build:view "$AHMED_BUILD_ID" --json > "$AHMED_IOS_STAGE/status.json"
+              AHMED_BUILD_STATUS="$(node -p "require(process.env.AHMED_IOS_STAGE + '/status.json').status")"
+              echo "Ahmed iOS build $AHMED_BUILD_ID: $AHMED_BUILD_STATUS"
+              if [ "$AHMED_BUILD_STATUS" = FINISHED ]; then
+                echo "Signed Ahmed iOS archive is ready."
+                exit 0
+              fi
+              if [ "$AHMED_BUILD_STATUS" = ERRORED ] || [ "$AHMED_BUILD_STATUS" = CANCELED ]; then
+                node -e "const b=require(process.env.AHMED_IOS_STAGE + '/status.json'); console.log(JSON.stringify({id:b.id,status:b.status,error:b.error}));"
+                exit 1
+              fi
+              sleep 30
+            done
+            echo "The EAS build is still pending; use the recorded build ID to resume."
+            exit 1
+
+# User-requested Apple upload preparation, 2026-09-05.
