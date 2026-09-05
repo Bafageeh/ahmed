@@ -63,6 +63,22 @@ jobs:
           python3 scripts/generate_app_icon.py
           file assets/approved-app-icon.png assets/icon.png assets/splash-icon.png assets/adaptive-icon.png
 
+      - name: Set installable Android build number
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = 'app.json';
+          const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+          if (data.expo.android.package !== 'sa.pm.ahmed') throw new Error('Unexpected Android package');
+          data.expo.android.versionCode = 21;
+          fs.writeFileSync(path, JSON.stringify(data, null, 2) + '\n');
+          console.log(JSON.stringify({
+            package: data.expo.android.package,
+            version: data.expo.version,
+            versionCode: data.expo.android.versionCode
+          }));
+          NODE
+
       - name: Prebuild Android project
         run: npx expo prebuild --platform android --clean --non-interactive
 
@@ -93,3 +109,5 @@ jobs:
 # recovery trigger 2026-08-23 - include Tokenize shared patch
 # manual APK trigger 2026-09-02 - approved personal finance app icon
 # manual APK trigger 2026-09-05 - latest Ahmed bank details and statement reminders
+
+# manual APK trigger 2026-09-05 - latest user-isolation fixes, Android versionCode 21
