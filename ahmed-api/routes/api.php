@@ -132,9 +132,9 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/credit-card-debts/{id}', [CreditCardDebtController::class, 'update']);
     Route::delete('/credit-card-debts/{id}', [CreditCardDebtController::class, 'destroy']);
 
-    // These legacy integrations point to the administrator's external Finance/COM
-    // accounts or contain unscoped bulk-import logic. Keep them inaccessible to
-    // non-admin users until each external account/import flow has an explicit owner.
+    // These legacy integrations point to shared administrator-owned accounts or
+    // contain unscoped bulk-import logic. Keep them inaccessible to non-admin users
+    // until each external account/import flow has an explicit per-user owner.
     Route::middleware('ahmed.admin')->group(function () {
         Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::class, 'finished']);
         Route::post('/ta3meed/image-import', [Ta3meedImageImportController::class, 'import']);
@@ -146,12 +146,12 @@ Route::middleware('ahmed.auth')->group(function () {
         Route::post('/income/linked/finance/card/sync', [LinkedIncomeController::class, 'syncFinanceMetric']);
         Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
         Route::post('/income/linked/moneymoon/profits/sync', [LinkedIncomeController::class, 'syncMoneyMoonProfits']);
-    });
 
-    Route::get('/wa/status', [WhatsAppController::class, 'status']);
-    Route::get('/wa/messages', [WhatsAppController::class, 'index']);
-    Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
-    Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
-    Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
-    Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
+        Route::get('/wa/status', [WhatsAppController::class, 'status']);
+        Route::get('/wa/messages', [WhatsAppController::class, 'index']);
+        Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
+        Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
+        Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
+        Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
+    });
 });
