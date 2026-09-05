@@ -16,6 +16,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-auto-credit-debt',
       './babel-plugin-secure-vault-remove-card-helper',
       './babel-plugin-secure-vault-sadad-cvv',
+      './babel-plugin-secure-vault-iban-single-line',
     ],
   };
 };
