@@ -68,58 +68,46 @@ jobs:
             console.log(JSON.stringify({projectId:config.extra.eas.projectId,bundleIdentifier:config.ios.bundleIdentifier,version:config.version,sourceCommit:'${{ github.sha }}'}));
             NODE
             node <<'NODE'
-            const fs = require('fs');
-            const os = require('os');
-            const path = require('path');
-            const { spawn } = require('child_process');
             const { createAnalyticsAsync } = require('eas-cli/build/analytics/AnalyticsManager');
             const SessionManager = require('eas-cli/build/user/SessionManager').default;
             const { createGraphqlClient } = require('eas-cli/build/commandUtils/context/contextUtils/createGraphqlClient');
-            const { AppStoreConnectApiKeyQuery } = require('eas-cli/build/graphql/queries/AppStoreConnectApiKeyQuery');
-            const { AppStoreConnectApiKeyQuery: KeyMetadataQuery } = require('eas-cli/build/credentials/ios/api/graphql/queries/AppStoreConnectApiKeyQuery');
+            const { withErrorHandlingAsync } = require('eas-cli/build/graphql/client');
+            const { parse } = require('eas-cli/build/credentials/ios/utils/provisioningProfile');
+            const gql = require('graphql-tag');
             (async () => {
               const analytics = await createAnalyticsAsync();
               const session = new SessionManager(analytics);
-              const { authenticationInfo } = await session.ensureLoggedInAsync({ nonInteractive:true });
+              const { authenticationInfo } = await session.ensureLoggedInAsync({nonInteractive:true});
               const client = createGraphqlClient(authenticationInfo);
-              const keyId = '39d791a9-8f87-4139-82ff-b2e4a8cf1b47';
-              const keyPage = await KeyMetadataQuery.getAllForAccountPaginatedAsync(client, 'bafageeh', { first:20 });
-              const metadata = keyPage.edges.map(edge=>edge.node).find(key=>key.id===keyId);
-              if (metadata?.appleTeam?.appleTeamIdentifier !== '8PY9NA9CA2' || !metadata.roles.includes('ADMIN'))
-                throw new Error('Unexpected Apple signing team');
-              const key = await AppStoreConnectApiKeyQuery.getByIdAsync(client, keyId);
-              // Keep the key outside the source archive and remove it after the CLI exits.
-              const keyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ahmed-ios-signing-'));
-              fs.chmodSync(keyDir, 0o700);
-              const keyPath = path.join(keyDir, 'AuthKey.p8');
-              const outputPath = path.join(process.env.AHMED_IOS_STAGE, 'builds.json');
-              let outputFd;
-              try {
-                fs.writeFileSync(keyPath, key.keyP8, { mode:0o600 });
-                outputFd = fs.openSync(outputPath, 'w', 0o600);
-                const child = spawn(process.execPath, [
-                  'node_modules/eas-cli/bin/run', 'build', '--platform','ios','--profile','production',
-                  '--non-interactive','--no-wait','--json'
-                ], {
-                  env: {
-                    ...process.env,
-                    EXPO_ASC_API_KEY_PATH:keyPath, EXPO_ASC_KEY_ID:key.keyIdentifier,
-                    EXPO_ASC_ISSUER_ID:key.issuerIdentifier, EXPO_APPLE_TEAM_ID:'8PY9NA9CA2',
-                    EXPO_APPLE_TEAM_TYPE:'INDIVIDUAL'
-                  },
-                  stdio:['ignore',outputFd,'inherit']
-                });
-                const code = await new Promise((resolve,reject) => {
-                  child.once('error',reject); child.once('exit',resolve);
-                });
-                if (code !== 0) throw new Error('EAS signing/build command failed');
-              } finally {
-                if (outputFd !== undefined) fs.closeSync(outputFd);
-                fs.rmSync(keyDir, { recursive:true, force:true });
-              }
+              const result = await withErrorHandlingAsync(client.query(gql`
+                query AhmedVerifyRepairedSigning($appId: String!) {
+                  app { byId(appId:$appId) { iosAppCredentials {
+                    appleAppIdentifier { bundleIdentifier }
+                    appleTeam { appleTeamIdentifier }
+                    iosAppBuildCredentialsList {
+                      iosDistributionType
+                      provisioningProfile { id developerPortalIdentifier provisioningProfile status }
+                    }
+                  } } }
+                }
+              `,{appId:'85d588cc-f97a-4907-a248-0e778d83d674'}).toPromise());
+              const records = result.app.byId.iosAppCredentials.filter(item=>
+                item.appleAppIdentifier.bundleIdentifier==='sa.pm.ahmed' && item.appleTeam?.appleTeamIdentifier==='8PY9NA9CA2');
+              if (records.length!==1) throw new Error('Unexpected Ahmed credential record');
+              const profile = records[0].iosAppBuildCredentialsList.find(item=>item.iosDistributionType==='APP_STORE')?.provisioningProfile;
+              if (profile?.developerPortalIdentifier!=='8CYQFWU2JM' || profile.status!=='active')
+                throw new Error('The repaired profile is not configured');
+              const parsed = parse(profile.provisioningProfile);
+              if (parsed.Entitlements?.['application-identifier']!=='8PY9NA9CA2.sa.pm.ahmed' ||
+                  parsed.Entitlements?.['aps-environment']!=='production' ||
+                  parsed.Entitlements?.['get-task-allow'] ||
+                  new Date(parsed.ExpirationDate).getTime()<=Date.now())
+                throw new Error('Repaired provisioning entitlements are not valid');
+              console.log('Verified active Ahmed App Store profile with production push entitlement.');
               await analytics.flushAsync();
-            })().catch(error => { console.error('Ahmed signed build could not be scheduled: ' + error.message); process.exitCode = 1; });
+            })().catch(error=>{ console.error(error.message); process.exitCode=1; });
             NODE
+            node node_modules/eas-cli/bin/run build --platform ios --profile production --non-interactive --no-wait --json > "$AHMED_IOS_STAGE/builds.json"
             node <<'NODE'
             const fs = require('fs');
             const stage = process.env.AHMED_IOS_STAGE;
@@ -179,4 +167,4 @@ jobs:
 
 # Use Python-compatible icon annotations on the existing deployment server.
 
-# Repair the notification provisioning entitlement using the verified Apple team key.
+# Build only after verifying the repaired App Store provisioning profile.
