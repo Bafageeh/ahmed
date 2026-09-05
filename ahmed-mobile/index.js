@@ -2,6 +2,7 @@ import React from 'react';
 import { registerRootComponent } from 'expo';
 import App from './AppShellWithAccountSelector';
 import AutoUpdater from './AutoUpdater';
+import CardStatementNotificationGate from './CardStatementNotificationGate';
 import { ahmedUserHeaders } from './ahmedCurrentUser';
 
 const baseFetch = globalThis.fetch;
@@ -11,7 +12,11 @@ globalThis.fetch = (input, init = {}) => {
 };
 
 function Root() {
-  return React.createElement(AutoUpdater, null, React.createElement(App));
+  return React.createElement(
+    AutoUpdater,
+    null,
+    React.createElement(CardStatementNotificationGate, null, React.createElement(App))
+  );
 }
 
 registerRootComponent(Root);
