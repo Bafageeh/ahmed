@@ -96,8 +96,8 @@ jobs:
             cd "$AHMED_PROJECT_PATH/ahmed-mobile"
             echo "Checking Expo account for automatic OTA publishing"
             npx eas-cli whoami
-            echo "Publishing Ahmed OTA update to production"
-            npx eas-cli update --channel production --platform android --environment production --message "Automatic Ahmed update ${{ github.sha }}" --non-interactive
+            echo "Publishing Ahmed OTA update to production for iOS and Android"
+            npx eas-cli update --channel production --platform all --environment production --message "Automatic Ahmed update ${{ github.sha }}" --non-interactive
 
       - name: Record successful restart and OTA publish
         uses: actions/github-script@v7
@@ -107,7 +107,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 1,
-              body: `✅ Ahmed API migrated, Expo 8082 restarted and 🚀 OTA update published to production from commit ${context.sha} at ${new Date().toISOString()}`,
+              body: `✅ Ahmed API migrated, Expo 8082 restarted and 🚀 OTA update published to iOS/Android production from commit ${context.sha} at ${new Date().toISOString()}`,
             });
 
 # Automatic OTA publishing enabled 2026-08-22
@@ -118,3 +118,4 @@ jobs:
 # Secure vault account number always plaintext and visible 2026-08-29
 # API migrations added to Ahmed hot deploy 2026-09-05
 # Tokenize patch changes now trigger deployment 2026-09-05
+# OTA publishing expanded to iOS and Android 2026-09-05
