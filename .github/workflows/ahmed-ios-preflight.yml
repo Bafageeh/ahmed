@@ -15,7 +15,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - name: Check available upload connections
+        id: health
+        env:
+          AHMED_PROBE_HOST: ${{ secrets.AHMED_SSH_HOST }}
+          AHMED_CI_EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json, os, socket
+          ready = False
+          reason = ''
+          try:
+              with socket.create_connection((os.environ['AHMED_PROBE_HOST'], 2222), timeout=10) as connection:
+                  connection.settimeout(10)
+                  ready = connection.recv(256).startswith(b'SSH-')
+                  reason = 'SSH banner received' if ready else 'No SSH banner'
+          except Exception as error:
+              reason = type(error).__name__
+          has_token = bool(os.environ.get('AHMED_CI_EXPO_TOKEN'))
+          print(json.dumps({'ssh_ready': ready, 'ssh_status': reason, 'ci_expo_token_available': has_token}))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('ssh_ready=' + str(ready).lower() + '\n')
+          PY
+
       - name: Inspect Ahmed iOS build and submission status
+        if: steps.health.outputs.ssh_ready == 'true'
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -76,3 +100,5 @@ jobs:
 # Requested iOS upload preflight: 2026-09-05. Reuse the existing authenticated CLI.
 
 # Invoke the installed CLI directly without npm package resolution.
+
+# Resume requested Apple upload after a bounded server connectivity check.
