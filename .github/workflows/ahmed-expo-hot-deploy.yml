@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - 'ahmed-api/**'
       - 'ahmed-mobile/**'
       - 'scripts/restart-ahmed-expo-fast.sh'
       - '.github/workflows/ahmed-expo-hot-deploy.yml'
@@ -16,7 +17,7 @@ permissions:
 
 jobs:
   restart-expo:
-    name: Sync Expo 8082 and publish OTA
+    name: Sync API, Expo 8082 and publish OTA
     runs-on: ubuntu-latest
 
     steps:
@@ -28,10 +29,10 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 1,
-              body: `⏳ Ahmed OTA deploy started | run_id=${context.runId} | commit=${context.sha}`,
+              body: `⏳ Ahmed deploy started | run_id=${context.runId} | commit=${context.sha}`,
             });
 
-      - name: Restart Ahmed Expo and publish OTA over SSH
+      - name: Migrate Ahmed API, restart Expo and publish OTA over SSH
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -81,6 +82,13 @@ jobs:
             fi
 
             git reset --hard "$AHMED_TARGET_SHA"
+
+            echo "Running Ahmed API migrations"
+            cd "$AHMED_PROJECT_PATH/ahmed-api"
+            php artisan migrate --force
+            php artisan optimize:clear
+
+            cd "$AHMED_PROJECT_PATH"
             chmod +x scripts/restart-ahmed-expo-fast.sh
             bash scripts/restart-ahmed-expo-fast.sh
 
@@ -98,7 +106,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: 1,
-              body: `✅ Ahmed Expo 8082 restarted and 🚀 OTA update published to production from commit ${context.sha} at ${new Date().toISOString()}`,
+              body: `✅ Ahmed API migrated, Expo 8082 restarted and 🚀 OTA update published to production from commit ${context.sha} at ${new Date().toISOString()}`,
             });
 
 # Automatic OTA publishing enabled 2026-08-22
@@ -107,3 +115,4 @@ jobs:
 # Concurrent deploy ref-lock retry added 2026-08-23
 # Secure vault account rows compacted 2026-08-29
 # Secure vault account number always plaintext and visible 2026-08-29
+# API migrations added to Ahmed hot deploy 2026-09-05

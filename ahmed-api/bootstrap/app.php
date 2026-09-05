@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\AhmedAdminOnly;
 use App\Http\Middleware\AhmedAuthenticate;
 use App\Http\Middleware\NormalizeMadaVaultCard;
 use Illuminate\Foundation\Application;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(NormalizeMadaVaultCard::class);
         $middleware->alias([
             'ahmed.auth' => AhmedAuthenticate::class,
+            'ahmed.admin' => AhmedAdminOnly::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -8,10 +8,16 @@ use Illuminate\Support\Facades\DB;
 
 class IncomeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $userId = $this->userId($request);
+
         $items = DB::table('financial_transactions')
-            ->leftJoin('income_sources', 'financial_transactions.income_source_id', '=', 'income_sources.id')
+            ->leftJoin('income_sources', function ($join) use ($userId) {
+                $join->on('financial_transactions.income_source_id', '=', 'income_sources.id')
+                    ->where('income_sources.user_id', '=', $userId);
+            })
+            ->where('financial_transactions.user_id', $userId)
             ->whereIn('financial_transactions.transaction_type', ['basic_income', 'linked_income'])
             ->select([
                 'financial_transactions.id',
@@ -57,10 +63,15 @@ class IncomeController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $sourceId = DB::table('income_sources')->where('name', $data['income_type'])->value('id');
+        $userId = $this->userId($request);
+        $sourceId = DB::table('income_sources')
+            ->where('user_id', $userId)
+            ->where('name', $data['income_type'])
+            ->value('id');
 
         if (! $sourceId) {
             $sourceId = DB::table('income_sources')->insertGetId([
+                'user_id' => $userId,
                 'name' => $data['income_type'],
                 'source_type' => 'basic',
                 'default_currency' => 'SAR',
@@ -72,6 +83,7 @@ class IncomeController extends Controller
         }
 
         $id = DB::table('financial_transactions')->insertGetId([
+            'user_id' => $userId,
             'income_source_id' => $sourceId,
             'transaction_type' => 'basic_income',
             'direction' => 'in',
@@ -84,13 +96,20 @@ class IncomeController extends Controller
             'updated_at' => now(),
         ]);
 
-        return response()->json(['data' => DB::table('financial_transactions')->where('id', $id)->first()], 201);
+        return response()->json([
+            'data' => DB::table('financial_transactions')
+                ->where('id', $id)
+                ->where('user_id', $userId)
+                ->first(),
+        ], 201);
     }
 
-    public function destroy(int $id)
+    public function destroy(Request $request, int $id)
     {
+        $userId = $this->userId($request);
         $transaction = DB::table('financial_transactions')
             ->where('id', $id)
+            ->where('user_id', $userId)
             ->whereIn('transaction_type', ['basic_income', 'linked_income'])
             ->first();
 
@@ -98,12 +117,22 @@ class IncomeController extends Controller
             return response()->json(['message' => 'Income transaction not found'], 404);
         }
 
-        DB::table('financial_transactions')->where('id', $id)->delete();
+        DB::table('financial_transactions')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->delete();
 
         return response()->json([
             'ok' => true,
             'message' => 'Income deleted successfully',
             'deleted_id' => $id,
         ]);
+    }
+
+    private function userId(Request $request): int
+    {
+        $userId = (int) $request->attributes->get('ahmed_user_id', 0);
+        abort_unless($userId > 0, 401, 'يجب تسجيل الدخول أولاً');
+        return $userId;
     }
 }

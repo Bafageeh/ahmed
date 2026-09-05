@@ -10,7 +10,7 @@ use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonTenantController;
-use App\Http\Controllers\Api\DinarInvestmentController;
+use App\Http\Controllers\Api\TenantDinarInvestmentController;
 use App\Http\Controllers\Api\PersonalExpenseController;
 use App\Http\Controllers\Api\SecureVaultController;
 use App\Http\Controllers\Api\SulfaInvestmentController;
@@ -72,14 +72,19 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/secure-vault/{id}', [SecureVaultController::class, 'update']);
     Route::delete('/secure-vault/{id}', [SecureVaultController::class, 'destroy']);
 
+    Route::get('/monthly-incomes', [MonthlyIncomeController::class, 'index']);
+    Route::post('/monthly-incomes', [MonthlyIncomeController::class, 'store']);
+    Route::put('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'update']);
+    Route::delete('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'destroy']);
+
     Route::get('/investment-platforms', [InvestmentPlatformController::class, 'index']);
     Route::get('/moneymoon/investments', [MoneyMoonTenantController::class, 'index']);
     Route::post('/moneymoon/investments', [MoneyMoonTenantController::class, 'store']);
     Route::put('/moneymoon/investments/{id}', [MoneyMoonTenantController::class, 'update']);
     Route::delete('/moneymoon/investments/{id}', [MoneyMoonTenantController::class, 'destroy']);
     Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonTenantController::class, 'receive']);
-    Route::get('/dinar/investments', [DinarInvestmentController::class, 'index']);
-    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);
+    Route::get('/dinar/investments', [TenantDinarInvestmentController::class, 'index']);
+    Route::post('/dinar/payments/{id}/toggle-paid', [TenantDinarInvestmentController::class, 'togglePayment']);
 
     Route::get('/tokenize/investments', [TokenizeInvestmentController::class, 'index']);
     Route::post('/tokenize/investments', [TokenizeInvestmentController::class, 'store']);
@@ -95,8 +100,6 @@ Route::middleware('ahmed.auth')->group(function () {
 
     Route::get('/ta3meed/investments', [Ta3meedController::class, 'index']);
     Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);
-    Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::class, 'finished']);
-    Route::post('/ta3meed/image-import', [Ta3meedImageImportController::class, 'import']);
     Route::put('/ta3meed/investments/{id}', [Ta3meedMutationController::class, 'update']);
     Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::class, 'receive']);
     Route::post('/ta3meed/investments/{id}/receipts', [Ta3meedReceiptController::class, 'store']);
@@ -110,6 +113,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'updateInvestorAccountEntry']);
     Route::delete('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'deleteInvestorAccountEntry']);
     Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);
+
     Route::get('/income/basic', [IncomeController::class, 'index']);
     Route::post('/income/basic', [IncomeController::class, 'store']);
     Route::delete('/income/basic/{id}', [IncomeController::class, 'destroy']);
@@ -128,22 +132,26 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/credit-card-debts/{id}', [CreditCardDebtController::class, 'update']);
     Route::delete('/credit-card-debts/{id}', [CreditCardDebtController::class, 'destroy']);
 
-    Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
-    Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
-    Route::post('/income/linked/finance/visibility', [LinkedIncomeController::class, 'updateFinanceVisibility']);
-    Route::post('/income/linked/finance/summary/sync', [LinkedIncomeController::class, 'syncFinanceSummary']);
-    Route::post('/income/linked/finance/card/sync', [LinkedIncomeController::class, 'syncFinanceMetric']);
-    Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
-    Route::post('/income/linked/moneymoon/profits/sync', [LinkedIncomeController::class, 'syncMoneyMoonProfits']);
-    Route::get('/wa/status', [WhatsAppController::class, 'status']);
-    Route::get('/wa/messages', [WhatsAppController::class, 'index']);
-    Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
-    Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
-    Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
-    Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
-});
+    // These legacy integrations point to shared administrator-owned accounts or
+    // contain unscoped bulk-import logic. Keep them inaccessible to non-admin users
+    // until each external account/import flow has an explicit per-user owner.
+    Route::middleware('ahmed.admin')->group(function () {
+        Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::class, 'finished']);
+        Route::post('/ta3meed/image-import', [Ta3meedImageImportController::class, 'import']);
 
-Route::get('/monthly-incomes', [MonthlyIncomeController::class, 'index']);
-Route::post('/monthly-incomes', [MonthlyIncomeController::class, 'store']);
-Route::put('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'update']);
-Route::delete('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'destroy']);
+        Route::get('/income/linked', [LinkedIncomeController::class, 'index']);
+        Route::get('/income/linked/finance/summary', [LinkedIncomeController::class, 'financeSummary']);
+        Route::post('/income/linked/finance/visibility', [LinkedIncomeController::class, 'updateFinanceVisibility']);
+        Route::post('/income/linked/finance/summary/sync', [LinkedIncomeController::class, 'syncFinanceSummary']);
+        Route::post('/income/linked/finance/card/sync', [LinkedIncomeController::class, 'syncFinanceMetric']);
+        Route::post('/income/linked/finance/installments/sync', [LinkedIncomeController::class, 'syncFinanceInstallments']);
+        Route::post('/income/linked/moneymoon/profits/sync', [LinkedIncomeController::class, 'syncMoneyMoonProfits']);
+
+        Route::get('/wa/status', [WhatsAppController::class, 'status']);
+        Route::get('/wa/messages', [WhatsAppController::class, 'index']);
+        Route::post('/wa/send', [WhatsAppController::class, 'sendText']);
+        Route::post('/wa/template', [WhatsAppController::class, 'sendTemplate']);
+        Route::post('/wa/queue', [WhatsAppController::class, 'scheduleText']);
+        Route::post('/wa/queue-template', [WhatsAppController::class, 'queueTemplate']);
+    });
+});
