@@ -1,0 +1,75 @@
+name: Ahmed iOS App Store Preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ahmed-ios-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect-ios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Inspect Ahmed iOS build and submission status
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 10m
+          script: |
+            set -eu
+            AHMED_IOS_PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$AHMED_IOS_PROJECT" ] || [ ! -d "$AHMED_IOS_PROJECT/ahmed-mobile" ]; then
+              if [ -d /home/pmsa/apps/ahmed/ahmed-mobile ]; then
+                AHMED_IOS_PROJECT=/home/pmsa/apps/ahmed
+              elif [ -d /mnt/home-storage/home/pmsa/apps/ahmed/ahmed-mobile ]; then
+                AHMED_IOS_PROJECT=/mnt/home-storage/home/pmsa/apps/ahmed
+              else
+                echo 'Ahmed project directory is unavailable.'
+                exit 1
+              fi
+            fi
+            cd "$AHMED_IOS_PROJECT/ahmed-mobile"
+            export CI=1 EXPO_NO_TELEMETRY=1
+            node -e 'const a=require("./app.json").expo; if(a.ios.bundleIdentifier!=="sa.pm.ahmed"||a.extra.eas.projectId!=="85d588cc-f97a-4907-a248-0e778d83d674") process.exit(1); console.log(JSON.stringify({name:a.name,version:a.version,bundleIdentifier:a.ios.bundleIdentifier,projectId:a.extra.eas.projectId}));'
+            npx --yes eas-cli@23.2.0 whoami
+            npx --yes eas-cli@23.2.0 project:info
+            AHMED_IOS_DIAG_DIR="$(mktemp -d)"
+            export AHMED_IOS_DIAG_DIR
+            trap 'rm -rf "$AHMED_IOS_DIAG_DIR"' EXIT
+            npx --yes eas-cli@23.2.0 build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
+            npx --yes eas-cli@23.2.0 submit:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/submissions.json" || true
+            npx --yes eas-cli@23.2.0 build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
+            npx --yes eas-cli@23.2.0 submit:status --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/store-status.json" || true
+            python3 - <<'PY'
+            import json, os, pathlib, re
+            root = pathlib.Path(os.environ['AHMED_IOS_DIAG_DIR'])
+            blocked = re.compile(r'token|secret|password|private|credential|certificate|authorization|header|apikey|logfile|artifact|email', re.I)
+            def safe(value):
+                if isinstance(value, dict):
+                    return {key: safe(item) for key, item in value.items() if not blocked.search(key)}
+                if isinstance(value, list):
+                    return [safe(item) for item in value]
+                if isinstance(value, str) and value.startswith('https://'):
+                    return value.split('?')[0]
+                return value
+            for path in root.glob('*.json'):
+                try:
+                    value = json.loads(path.read_text())
+                except (ValueError, OSError):
+                    print(path.name + ': unavailable')
+                    continue
+                if path.name == 'builds.json':
+                    fields = ['id', 'status', 'platform', 'distribution', 'appIdentifier', 'appVersion', 'appBuildVersion', 'gitCommitHash', 'createdAt', 'completedAt', 'error']
+                    value = [{key: item[key] for key in fields if key in item} for item in value]
+                print(path.name + ': ' + json.dumps(safe(value), ensure_ascii=False))
+            PY
+
+# Requested iOS upload preflight: 2026-09-05.
