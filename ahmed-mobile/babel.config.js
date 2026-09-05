@@ -5,6 +5,7 @@ module.exports = function (api) {
     presets: ['babel-preset-expo'],
     plugins: [
       './babel-plugin-ahmed-appshell-fixes',
+      './babel-plugin-investment-platform-cards',
       './babel-plugin-debt-detail-extra-stats',
       './babel-plugin-debt-header-safe-area',
       './babel-plugin-debt-last-payment-stat',
