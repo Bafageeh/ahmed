@@ -63,21 +63,15 @@ jobs:
             cd "$AHMED_IOS_PROJECT/ahmed-mobile"
             export CI=1 EXPO_NO_TELEMETRY=1
             node -e 'const a=require("./app.json").expo; if(a.ios.bundleIdentifier!=="sa.pm.ahmed"||a.extra.eas.projectId!=="85d588cc-f97a-4907-a248-0e778d83d674") process.exit(1); console.log(JSON.stringify({name:a.name,version:a.version,bundleIdentifier:a.ios.bundleIdentifier,projectId:a.extra.eas.projectId}));'
-            test -f node_modules/eas-cli/bin/run
-            echo 'Checking the installed Expo session'
-            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run whoami
-            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run project:info
-            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run --version
-            AHMED_IOS_DIAG_DIR="$(mktemp -d)"
-            export AHMED_IOS_DIAG_DIR
-            trap 'rm -rf "$AHMED_IOS_DIAG_DIR"' EXIT
-            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
-            timeout --kill-after=5s 45s node node_modules/eas-cli/bin/run build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
-            timeout --kill-after=5s 45s node <<'NODE'
+            timeout --kill-after=5s 90s node <<'NODE'
+            const crypto = require('crypto');
             const { createAnalyticsAsync } = require('eas-cli/build/analytics/AnalyticsManager');
             const SessionManager = require('eas-cli/build/user/SessionManager').default;
             const { createGraphqlClient } = require('eas-cli/build/commandUtils/context/contextUtils/createGraphqlClient');
-            const { SubmissionQuery } = require('eas-cli/build/graphql/queries/SubmissionQuery');
+            const { AppStoreConnectApiKeyQuery } = require('eas-cli/build/graphql/queries/AppStoreConnectApiKeyQuery');
+            const { AppStoreConnectApiKeyQuery: KeyMetadataQuery } = require('eas-cli/build/credentials/ios/api/graphql/queries/AppStoreConnectApiKeyQuery');
+            const gql = require('graphql-tag');
+            const { withErrorHandlingAsync } = require('eas-cli/build/graphql/client');
             (async () => {
               const analytics = await createAnalyticsAsync();
               const session = new SessionManager(analytics);
@@ -85,66 +79,60 @@ jobs:
               const client = createGraphqlClient(authenticationInfo);
               const appId = require('./app.json').expo.extra.eas.projectId;
               if (appId !== '85d588cc-f97a-4907-a248-0e778d83d674') throw new Error('Unexpected Expo project');
-              const history = await SubmissionQuery.allForAppAsync(client, appId, { limit: 5, platform: 'IOS' });
-              console.log('IOS_SUBMISSION_HISTORY=' + JSON.stringify(history.map(item => ({
-                id: item.id, status: item.status, ascAppId: item.iosConfig?.ascAppIdentifier || null
-              }))));
-              const gql = require('graphql-tag');
-              const { withErrorHandlingAsync } = require('eas-cli/build/graphql/client');
               const data = await withErrorHandlingAsync(client.query(gql`
-                query AhmedIosSubmissionReadiness($appId: String!) {
-                  app { byId(appId: $appId) {
-                    iosAppCredentials {
-                      appleTeam { appleTeamIdentifier }
-                      appleAppIdentifier { bundleIdentifier }
-                      appStoreConnectApiKeyForSubmissions { id roles }
+                query AhmedIosSigningReadiness($appId: String!) {
+                  app { byId(appId: $appId) { iosAppCredentials {
+                    id
+                    appleTeam { appleTeamIdentifier }
+                    appleAppIdentifier { bundleIdentifier }
+                    appStoreConnectApiKeyForSubmissions { id roles }
+                    iosAppBuildCredentialsList {
+                      id iosDistributionType
+                      provisioningProfile { id developerPortalIdentifier status }
+                      distributionCertificate { id serialNumber developerPortalIdentifier }
                     }
-                  } }
+                  } } }
                 }
               `, { appId }).toPromise());
-              console.log('IOS_STORE_READINESS=' + JSON.stringify(data.app.byId.iosAppCredentials
-                .filter(item => item.appleAppIdentifier.bundleIdentifier === 'sa.pm.ahmed')
-                .map(item => ({ bundleIdentifier:item.appleAppIdentifier.bundleIdentifier,
-                  appleTeamId:item.appleTeam?.appleTeamIdentifier,
-                  hasSubmissionApiKey:!!item.appStoreConnectApiKeyForSubmissions,
-                  apiKeyId:item.appStoreConnectApiKeyForSubmissions?.id || null,
-                  apiKeyRoles:item.appStoreConnectApiKeyForSubmissions?.roles || [] }))));
-              const { AppStoreConnectApiKeyQuery } = require('eas-cli/build/credentials/ios/api/graphql/queries/AppStoreConnectApiKeyQuery');
-              const keyPage = await AppStoreConnectApiKeyQuery.getAllForAccountPaginatedAsync(client, 'bafageeh', { first: 20 });
-              console.log('IOS_TEAM_UPLOAD_KEYS=' + JSON.stringify(keyPage.edges.map(edge => edge.node)
-                .filter(key => key.appleTeam?.appleTeamIdentifier === '8PY9NA9CA2')
-                .map(key => ({ id:key.id, roles:key.roles, createdAt:key.createdAt }))));
+              const credentials = data.app.byId.iosAppCredentials.filter(item =>
+                item.appleAppIdentifier.bundleIdentifier === 'sa.pm.ahmed' &&
+                item.appleTeam?.appleTeamIdentifier === '8PY9NA9CA2');
+              if (credentials.length !== 1) throw new Error('Expected one Ahmed signing configuration');
+              console.log('IOS_SIGNING_METADATA=' + JSON.stringify(credentials));
+              const keyId = '39d791a9-8f87-4139-82ff-b2e4a8cf1b47';
+              const keyPage = await KeyMetadataQuery.getAllForAccountPaginatedAsync(client, 'bafageeh', { first: 20 });
+              const metadata = keyPage.edges.map(edge => edge.node).find(key => key.id === keyId);
+              if (metadata?.appleTeam?.appleTeamIdentifier !== '8PY9NA9CA2' || !metadata.roles.includes('ADMIN'))
+                throw new Error('Apple upload key must belong to the verified Ahmed team');
+              const key = await AppStoreConnectApiKeyQuery.getByIdAsync(client, keyId);
+              const now = Math.floor(Date.now()/1000);
+              const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
+              const unsigned = encode({ alg:'ES256', kid:key.keyIdentifier, typ:'JWT' }) + '.' +
+                encode({ iss:key.issuerIdentifier, iat:now, exp:now+600, aud:'appstoreconnect-v1' });
+              const signature = crypto.sign('sha256', Buffer.from(unsigned), { key:key.keyP8, dsaEncoding:'ieee-p1363' }).toString('base64url');
+              const jwt = unsigned + '.' + signature;
+              async function appleGet(path) {
+                const response = await fetch('https://api.appstoreconnect.apple.com/v1/' + path, {
+                  headers:{ Authorization:'Bearer ' + jwt }, signal:AbortSignal.timeout(25000), redirect:'error'
+                });
+                const body = await response.json();
+                if (!response.ok) {
+                  console.log('APPLE_API_ERROR=' + JSON.stringify({status:response.status,errors:body.errors?.map(e=>({code:e.code,title:e.title}))}));
+                  throw new Error('Apple API lookup failed');
+                }
+                return body;
+              }
+              const apps = await appleGet('apps?' + new URLSearchParams({
+                'filter[bundleId]':'sa.pm.ahmed','fields[apps]':'name,bundleId,sku,primaryLocale',limit:'5'
+              }));
+              console.log('AHMED_APP_STORE_RECORDS=' + JSON.stringify(apps.data.map(app => ({id:app.id,...app.attributes}))));
+              const bundles = await appleGet('bundleIds?' + new URLSearchParams({
+                'filter[identifier]':'sa.pm.ahmed',include:'bundleIdCapabilities',limit:'5'
+              }));
+              console.log('AHMED_APPLE_BUNDLE=' + JSON.stringify({
+                bundles:bundles.data.map(item=>({id:item.id,...item.attributes})),
+                capabilities:bundles.included?.filter(item=>item.type==='bundleIdCapabilities').map(item=>({id:item.id,...item.attributes}))
+              }));
               await analytics.flushAsync();
-            })().catch(error => { console.error(error.message); process.exitCode = 1; });
+            })().catch(error => { console.error('Ahmed Apple readiness failed: ' + error.name); process.exitCode = 1; });
             NODE
-            python3 - <<'PY'
-            import json, os, pathlib, re
-            root = pathlib.Path(os.environ['AHMED_IOS_DIAG_DIR'])
-            blocked = re.compile(r'token|secret|password|private|credential|certificate|authorization|header|apikey|logfile|artifact|email', re.I)
-            def safe(value):
-                if isinstance(value, dict):
-                    return {key: safe(item) for key, item in value.items() if not blocked.search(key)}
-                if isinstance(value, list):
-                    return [safe(item) for item in value]
-                if isinstance(value, str) and value.startswith('https://'):
-                    return value.split('?')[0]
-                return value
-            for path in root.glob('*.json'):
-                try:
-                    value = json.loads(path.read_text())
-                except (ValueError, OSError):
-                    print(path.name + ': unavailable')
-                    continue
-                if path.name == 'builds.json':
-                    fields = ['id', 'status', 'platform', 'distribution', 'appIdentifier', 'appVersion', 'appBuildVersion', 'gitCommitHash', 'createdAt', 'completedAt', 'error']
-                    value = [{key: item[key] for key in fields if key in item} for item in value]
-                print(path.name + ': ' + json.dumps(safe(value), ensure_ascii=False))
-            PY
-
-# Requested iOS upload preflight: 2026-09-05. Reuse the existing authenticated CLI.
-
-# Invoke the installed CLI directly without npm package resolution.
-
-# Resume requested Apple upload after a bounded server connectivity check.
-
-# Inspect the existing App Store app identifier from Ahmed submission history.
