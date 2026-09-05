@@ -10,7 +10,7 @@ use App\Http\Controllers\Api\IncomeController;
 use App\Http\Controllers\Api\InvestmentPlatformController;
 use App\Http\Controllers\Api\LinkedIncomeController;
 use App\Http\Controllers\Api\MoneyMoonTenantController;
-use App\Http\Controllers\Api\DinarInvestmentController;
+use App\Http\Controllers\Api\TenantDinarInvestmentController;
 use App\Http\Controllers\Api\PersonalExpenseController;
 use App\Http\Controllers\Api\SecureVaultController;
 use App\Http\Controllers\Api\SulfaInvestmentController;
@@ -83,8 +83,8 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/moneymoon/investments/{id}', [MoneyMoonTenantController::class, 'update']);
     Route::delete('/moneymoon/investments/{id}', [MoneyMoonTenantController::class, 'destroy']);
     Route::post('/moneymoon/investments/{id}/receive', [MoneyMoonTenantController::class, 'receive']);
-    Route::get('/dinar/investments', [DinarInvestmentController::class, 'index']);
-    Route::post('/dinar/payments/{id}/toggle-paid', [DinarInvestmentController::class, 'togglePayment']);
+    Route::get('/dinar/investments', [TenantDinarInvestmentController::class, 'index']);
+    Route::post('/dinar/payments/{id}/toggle-paid', [TenantDinarInvestmentController::class, 'togglePayment']);
 
     Route::get('/tokenize/investments', [TokenizeInvestmentController::class, 'index']);
     Route::post('/tokenize/investments', [TokenizeInvestmentController::class, 'store']);
