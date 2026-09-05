@@ -89,6 +89,26 @@ jobs:
               console.log('IOS_SUBMISSION_HISTORY=' + JSON.stringify(history.map(item => ({
                 id: item.id, status: item.status, ascAppId: item.iosConfig?.ascAppIdentifier || null
               }))));
+              const gql = require('graphql-tag');
+              const { withErrorHandlingAsync } = require('eas-cli/build/graphql/client');
+              const data = await withErrorHandlingAsync(client.query(gql`
+                query AhmedIosSubmissionReadiness($appId: String!) {
+                  app { byId(appId: $appId) {
+                    iosAppCredentials {
+                      appleTeam { appleTeamIdentifier }
+                      appleAppIdentifier { bundleIdentifier }
+                      appStoreConnectApiKeyForSubmissions { id roles }
+                    }
+                  } }
+                }
+              `, { appId }).toPromise());
+              console.log('IOS_STORE_READINESS=' + JSON.stringify(data.app.byId.iosAppCredentials
+                .filter(item => item.appleAppIdentifier.bundleIdentifier === 'sa.pm.ahmed')
+                .map(item => ({ bundleIdentifier:item.appleAppIdentifier.bundleIdentifier,
+                  appleTeamId:item.appleTeam?.appleTeamIdentifier,
+                  hasSubmissionApiKey:!!item.appStoreConnectApiKeyForSubmissions,
+                  apiKeyId:item.appStoreConnectApiKeyForSubmissions?.id || null,
+                  apiKeyRoles:item.appStoreConnectApiKeyForSubmissions?.roles || [] }))));
               await analytics.flushAsync();
             })().catch(error => { console.error(error.message); process.exitCode = 1; });
             NODE
