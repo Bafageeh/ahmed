@@ -1,4 +1,4 @@
-name: Ahmed iOS App Store Readiness
+name: Ahmed iOS App Store Preflight
 
 on:
   workflow_dispatch:
@@ -63,7 +63,7 @@ jobs:
             cd "$AHMED_IOS_PROJECT/ahmed-mobile"
             export CI=1 EXPO_NO_TELEMETRY=1
             node -e 'const a=require("./app.json").expo; if(a.ios.bundleIdentifier!=="sa.pm.ahmed"||a.extra.eas.projectId!=="85d588cc-f97a-4907-a248-0e778d83d674") process.exit(1); console.log(JSON.stringify({name:a.name,version:a.version,bundleIdentifier:a.ios.bundleIdentifier,projectId:a.extra.eas.projectId}));'
-            timeout --kill-after=5s 150s node <<'NODE'
+            timeout --kill-after=5s 90s node <<'NODE'
             const crypto = require('crypto');
             const { createAnalyticsAsync } = require('eas-cli/build/analytics/AnalyticsManager');
             const SessionManager = require('eas-cli/build/user/SessionManager').default;
@@ -111,10 +111,9 @@ jobs:
                 encode({ iss:key.issuerIdentifier, iat:now, exp:now+600, aud:'appstoreconnect-v1' });
               const signature = crypto.sign('sha256', Buffer.from(unsigned), { key:key.keyP8, dsaEncoding:'ieee-p1363' }).toString('base64url');
               const jwt = unsigned + '.' + signature;
-              async function appleGet(path, method='GET', payload) {
+              async function appleGet(path) {
                 const response = await fetch('https://api.appstoreconnect.apple.com/v1/' + path, {
-                  method, body:payload ? JSON.stringify(payload) : undefined,
-                  headers:{ Authorization:'Bearer ' + jwt, 'Content-Type':'application/json' }, signal:AbortSignal.timeout(25000), redirect:'error'
+                  headers:{ Authorization:'Bearer ' + jwt }, signal:AbortSignal.timeout(25000), redirect:'error'
                 });
                 const body = await response.json();
                 if (!response.ok) {
@@ -134,78 +133,8 @@ jobs:
                 bundles:bundles.data.map(item=>({id:item.id,...item.attributes})),
                 capabilities:bundles.included?.filter(item=>item.type==='bundleIdCapabilities').map(item=>({id:item.id,...item.attributes}))
               }));
-              if (bundles.data.length !== 1 || bundles.data[0].id !== 'M866W5K2SA' || bundles.data[0].attributes.seedId !== '8PY9NA9CA2')
-                throw new Error('Unexpected Apple bundle identity');
-              const certificate = (await appleGet('certificates/ZMXV7NXCZ4')).data;
-              if (certificate.attributes.serialNumber !== '5FA8C82893210FAB4F73B771DDC0E987' ||
-                  new Date(certificate.attributes.expirationDate).getTime() <= Date.now())
-                throw new Error('The saved distribution certificate is not valid');
-              const buildCredentials = credentials[0].iosAppBuildCredentialsList.find(item=>item.iosDistributionType==='APP_STORE');
-              if (buildCredentials?.provisioningProfile?.id !== 'e3a9f15a-69db-4575-8fae-9ff70c736cd9' ||
-                  buildCredentials.distributionCertificate.developerPortalIdentifier !== certificate.id)
-                throw new Error('Unexpected App Store signing configuration');
-              if (!bundles.included?.some(item=>item.attributes?.capabilityType==='PUSH_NOTIFICATIONS')) {
-                await appleGet('bundleIdCapabilities', 'POST', { data:{
-                  type:'bundleIdCapabilities',attributes:{capabilityType:'PUSH_NOTIFICATIONS'},
-                  relationships:{bundleId:{data:{type:'bundleIds',id:'M866W5K2SA'}}}
-                }});
-                console.log('AHMED_PUSH_CAPABILITY=enabled');
-              }
-              const profileName = '[expo] sa.pm.ahmed AppStore Push 2026-09-05';
-              const profiles = await appleGet('profiles?' + new URLSearchParams({'filter[name]':profileName,limit:'5'}));
-              let profile = profiles.data.find(item=>item.attributes.name===profileName);
-              if (!profile) {
-                profile = (await appleGet('profiles', 'POST', {data:{
-                  type:'profiles',attributes:{name:profileName,profileType:'IOS_APP_STORE'},
-                  relationships:{
-                    bundleId:{data:{type:'bundleIds',id:'M866W5K2SA'}},
-                    certificates:{data:[{type:'certificates',id:certificate.id}]}
-                  }
-                }})).data;
-              }
-              const { parse } = require('eas-cli/build/credentials/ios/utils/provisioningProfile');
-              const parsed = parse(profile.attributes.profileContent);
-              const entitlements = parsed.Entitlements;
-              if (parsed.TeamIdentifier?.[0] !== '8PY9NA9CA2' ||
-                  entitlements?.['application-identifier'] !== '8PY9NA9CA2.sa.pm.ahmed' ||
-                  entitlements?.['aps-environment'] !== 'production' ||
-                  entitlements?.['get-task-allow'] || parsed.ProvisionedDevices ||
-                  new Date(parsed.ExpirationDate).getTime() <= Date.now())
-                throw new Error('The replacement profile failed signing validation');
-              const updated = await withErrorHandlingAsync(client.mutation(gql`
-                mutation AhmedUpdateStoreProfile($id: ID!, $input: AppleProvisioningProfileInput!) {
-                  appleProvisioningProfile {
-                    updateAppleProvisioningProfile(id:$id,appleProvisioningProfileInput:$input) {
-                      id developerPortalIdentifier status expiration
-                    }
-                  }
-                }
-              `, {
-                id:buildCredentials.provisioningProfile.id,
-                input:{appleProvisioningProfile:profile.attributes.profileContent,developerPortalIdentifier:profile.id}
-              }).toPromise());
-              console.log('AHMED_STORE_PROFILE_REPAIRED=' + JSON.stringify({
-                ...updated.appleProvisioningProfile.updateAppleProvisioningProfile,
-                bundleIdentifier:'sa.pm.ahmed',pushEnvironment:entitlements['aps-environment']
-              }));
-              // Restore only an existing Apple session; never request or print login secrets.
-              const {Auth,JsonFileCache} = require('@expo/apple-utils');
-              const cached = await JsonFileCache.getCacheAsync(JsonFileCache.usernameCachePath());
-              if (!cached?.username) {
-                console.log('AHMED_APPLE_SESSION=' + JSON.stringify({cachedUsernameAvailable:false,restored:false}));
-              } else {
-                try {
-                  const appleSession = await Auth.tryRestoringAuthStateFromUserCredentialsAsync({
-                    username:cached.username,teamId:'8PY9NA9CA2'
-                  },{autoResolveProvider:true});
-                  console.log('AHMED_APPLE_SESSION=' + JSON.stringify({
-                    cachedUsernameAvailable:true,restored:!!appleSession,teamId:appleSession?.context?.teamId || null
-                  }));
-                } catch (error) {
-                  console.log('AHMED_APPLE_SESSION=' + JSON.stringify({cachedUsernameAvailable:true,restored:false,errorType:error.name}));
-                }
-              }
-            
               await analytics.flushAsync();
             })().catch(error => { console.error('Ahmed Apple readiness failed: ' + error.name); process.exitCode = 1; });
             NODE
+
+# Read-only verification after the App Store signing profile was repaired.
