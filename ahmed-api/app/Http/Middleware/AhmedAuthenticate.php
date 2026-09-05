@@ -12,13 +12,6 @@ class AhmedAuthenticate
 {
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->is('api/secure-vault*')) {
-            $fallbackUserId = (int) ($request->header('X-Ahmed-User-Id') ?: 1);
-            $request->headers->set('X-Ahmed-User-Id', (string) $fallbackUserId);
-            $request->attributes->set('ahmed_user_id', $fallbackUserId);
-            return $next($request);
-        }
-
         $sessionKey = trim((string) ($request->bearerToken() ?: $request->header('X-Ahmed-Token', '')));
 
         if ($sessionKey === '' || ! Schema::hasTable('users') || ! Schema::hasColumn('users', 'remember_token')) {
@@ -42,6 +35,8 @@ class AhmedAuthenticate
             return response()->json(['message' => 'انتهت الجلسة أو بيانات الدخول غير صحيحة'], 401);
         }
 
+        // Never trust a user id supplied by the client. The authenticated session is
+        // the single source of truth for all tenant-scoped queries in the application.
         $request->headers->set('X-Ahmed-User-Id', (string) $user->id);
         $request->attributes->set('ahmed_user_id', (int) $user->id);
         $request->attributes->set('ahmed_user', $user);
