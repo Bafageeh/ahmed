@@ -91,11 +91,12 @@ jobs:
               const projectId = '85d588cc-f97a-4907-a248-0e778d83d674';
               const buildId = '986691af-fa71-4c99-9f80-8c0e9d4d2b26';
               const build = await BuildQuery.withSubmissionsByIdAsync(client,buildId,{useCache:false});
-              if (build.app.id!==projectId || build.platform!=='IOS' || build.distribution!=='STORE' ||
+              if (build.project?.id!==projectId || build.platform!=='IOS' || build.distribution!=='STORE' ||
                   build.appVersion!=='1.0.19' || build.appBuildVersion!=='4')
                 throw new Error('Release identity does not match the requested Ahmed iOS build');
               console.log('AHMED_RELEASE=' + JSON.stringify({
-                id:build.id,status:build.status,version:build.appVersion,buildNumber:build.appBuildVersion
+                id:build.id,status:build.status,version:build.appVersion,buildNumber:build.appBuildVersion,
+                archiveUrl:build.artifacts?.applicationArchiveUrl || build.artifacts?.buildUrl || null
               }));
               const keyId = '39d791a9-8f87-4139-82ff-b2e4a8cf1b47';
               const keyPage = await KeyMetadataQuery.getAllForAccountPaginatedAsync(client,'bafageeh',{first:20});
