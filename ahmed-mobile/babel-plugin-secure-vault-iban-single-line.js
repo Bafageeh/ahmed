@@ -1,4 +1,6 @@
 module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
+  const NATIONAL_ID_TAG = '__bank_username_national_id__';
+
   const attrValue = (opening, name) => {
     if (!t.isJSXOpeningElement(opening)) return null;
     const attr = opening.attributes.find((item) =>
@@ -46,7 +48,7 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
         let accountCardReplaced = false;
         let secretCardReplaced = false;
         let customerCredentialsPatched = false;
-        let customerInputPatched = false;
+        let bankUsernameModePatched = false;
 
         programPath.traverse({
           FunctionDeclaration(path) {
@@ -108,9 +110,10 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
                 const hasLogin = item.has_username || item.has_password || item.username || item.password;
                 if (!hasLogin) return <View style={styles.secretCard}><Text style={styles.noLogin}>لا توجد بيانات دخول محفوظة لهذا البنك.</Text></View>;
                 const customerNumber = revealed ? (item.security_question || '—') : '••••••••';
+                const usesNationalId = String(item.tags || '') === '${NATIONAL_ID_TAG}';
                 return <View style={styles.secretCard}>
                   <SecretRow label="رقم العميل" value={customerNumber} />
-                  <SecretRow label="اسم المستخدم" value={revealed ? (item.username || '—') : (item.has_username ? '••••••••' : '—')} />
+                  <SecretRow label={usesNationalId ? 'رقم الهوية' : 'اسم المستخدم'} value={revealed ? (item.username || '—') : (item.has_username ? '••••••••' : '—')} />
                   <SecretRow label="كلمة المرور" value={revealed ? (item.password || '—') : (item.has_password ? '••••••••••' : '—')} />
                   <TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك التشفير'}</Text></TouchableOpacity>
                 </View>;
@@ -123,22 +126,70 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
           },
 
           JSXElement(path) {
-            if (customerInputPatched) return;
+            if (bankUsernameModePatched) return;
             const opening = path.node.openingElement;
             if (!t.isJSXIdentifier(opening.name, { name: 'FormInput' })) return;
             if (attrValue(opening, 'label') !== 'اسم المستخدم') return;
             if (!insideConditional(path, 'isBankLogin')) return;
 
-            const customerInput = template.expression.ast(`
-              <FormInput
-                label="رقم العميل"
-                value={form.security_question}
-                onChangeText={(value) => setField('security_question', value)}
-                autoCapitalize="none"
-              />
+            const replacement = template.expression.ast(`
+              <>
+                <View style={styles.bankUsernameModeBlock}>
+                  <View style={styles.bankUsernameModeHeader}>
+                    <Text style={styles.inputLabel}>اسم المستخدم</Text>
+                    <TouchableOpacity
+                      style={[styles.nationalIdToggle, String(form.tags || '') === '${NATIONAL_ID_TAG}' && styles.nationalIdToggleActive]}
+                      activeOpacity={0.75}
+                      onPress={() => {
+                        const enabled = String(form.tags || '') !== '${NATIONAL_ID_TAG}';
+                        if (enabled) {
+                          const identityValue = String(form.security_answer || form.username || '').replace(/\\D/g, '').slice(0, 10);
+                          setField('tags', '${NATIONAL_ID_TAG}');
+                          setField('security_answer', identityValue);
+                          setField('username', identityValue);
+                        } else {
+                          setField('tags', '');
+                          setField('username', '');
+                        }
+                      }}
+                    >
+                      <Text style={[styles.nationalIdToggleText, String(form.tags || '') === '${NATIONAL_ID_TAG}' && styles.nationalIdToggleTextActive]}>رقم الهوية</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {String(form.tags || '') === '${NATIONAL_ID_TAG}' ? (
+                    <FormInput
+                      label="رقم الهوية"
+                      value={form.security_answer}
+                      onChangeText={(value) => {
+                        const identityValue = digitsOnly(value, 10);
+                        setField('security_answer', identityValue);
+                        setField('username', identityValue);
+                      }}
+                      keyboardType="number-pad"
+                      placeholder="أدخل رقم الهوية"
+                    />
+                  ) : (
+                    <TextInput
+                      value={form.username}
+                      onChangeText={(value) => setField('username', value)}
+                      autoCapitalize="none"
+                      style={styles.input}
+                      textAlign="right"
+                      placeholder="اسم المستخدم"
+                    />
+                  )}
+                </View>
+                <FormInput
+                  label="رقم العميل"
+                  value={form.security_question}
+                  onChangeText={(value) => setField('security_question', value)}
+                  autoCapitalize="none"
+                />
+              </>
             `, { plugins: ['jsx'] });
-            path.insertAfter(customerInput);
-            customerInputPatched = true;
+            path.replaceWith(replacement);
+            bankUsernameModePatched = true;
+            path.skip();
           },
 
           JSXText(path) {
@@ -147,7 +198,7 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
             if (!value.includes('اسم المستخدم وكلمة المرور فقط')) return;
             path.node.value = value.replace(
               'اسم المستخدم وكلمة المرور فقط، وتُحفظ البيانات مشفرة.',
-              'رقم العميل واسم المستخدم وكلمة المرور تُحفظ مشفرة.'
+              'رقم العميل وبيانات الدخول تُحفظ مشفرة. ويمكن جعل اسم المستخدم هو رقم الهوية من البدال.'
             );
           },
 
@@ -162,21 +213,25 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
               t.isStringLiteral(parent.node.arguments[0], { value: 'bankLogin' }) &&
               parent.node.arguments[1] === path.node
             ) {
-              const hasCustomerNumber = path.node.properties.some((property) =>
-                t.isObjectProperty(property) && t.isIdentifier(property.key, { name: 'security_question' })
-              );
-              if (!hasCustomerNumber) {
+              const addProperty = (name, fallback = '') => {
+                const exists = path.node.properties.some((property) =>
+                  t.isObjectProperty(property) && t.isIdentifier(property.key, { name })
+                );
+                if (exists) return;
                 path.node.properties.push(
                   t.objectProperty(
-                    t.identifier('security_question'),
+                    t.identifier(name),
                     t.logicalExpression(
                       '||',
-                      t.memberExpression(t.identifier('full'), t.identifier('security_question')),
-                      t.stringLiteral('')
+                      t.memberExpression(t.identifier('full'), t.identifier(name)),
+                      t.stringLiteral(fallback)
                     )
                   )
                 );
-              }
+              };
+              addProperty('security_question');
+              addProperty('security_answer');
+              addProperty('tags');
               customerCredentialsPatched = true;
             }
 
@@ -241,6 +296,53 @@ module.exports = function secureVaultIbanSingleLine({ types: t, template }) {
                   t.objectProperty(t.identifier('color'), t.stringLiteral('#1d4ed8')),
                   t.objectProperty(t.identifier('fontSize'), t.numericLiteral(14)),
                   t.objectProperty(t.identifier('fontWeight'), t.stringLiteral('900')),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('bankUsernameModeBlock'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('marginBottom'), t.numericLiteral(10)),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('bankUsernameModeHeader'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('flexDirection'), t.stringLiteral('row-reverse')),
+                  t.objectProperty(t.identifier('alignItems'), t.stringLiteral('center')),
+                  t.objectProperty(t.identifier('justifyContent'), t.stringLiteral('space-between')),
+                  t.objectProperty(t.identifier('marginBottom'), t.numericLiteral(7)),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('nationalIdToggle'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('borderWidth'), t.numericLiteral(1)),
+                  t.objectProperty(t.identifier('borderColor'), t.stringLiteral('#cbd5e1')),
+                  t.objectProperty(t.identifier('backgroundColor'), t.stringLiteral('#f8fafc')),
+                  t.objectProperty(t.identifier('borderRadius'), t.numericLiteral(999)),
+                  t.objectProperty(t.identifier('paddingHorizontal'), t.numericLiteral(12)),
+                  t.objectProperty(t.identifier('paddingVertical'), t.numericLiteral(7)),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('nationalIdToggleActive'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('backgroundColor'), t.stringLiteral('#e8f3ff')),
+                  t.objectProperty(t.identifier('borderColor'), t.stringLiteral('#60a5fa')),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('nationalIdToggleText'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('color'), t.stringLiteral('#64748b')),
+                  t.objectProperty(t.identifier('fontWeight'), t.stringLiteral('900')),
+                  t.objectProperty(t.identifier('fontSize'), t.numericLiteral(13)),
+                ])
+              ),
+              t.objectProperty(
+                t.identifier('nationalIdToggleTextActive'),
+                t.objectExpression([
+                  t.objectProperty(t.identifier('color'), t.stringLiteral('#1d4ed8')),
                 ])
               )
             );
