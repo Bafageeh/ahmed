@@ -124,8 +124,8 @@ jobs:
                 process.exitCode=2;
                 return;
               }
-              if (matches.length!==1 || !/^\d+$/.test(matches[0].id))
-                throw new Error('Expected exactly one App Store record for Ahmed');
+              if (matches.length!==1 || matches[0].id!=='6809024498'
+                throw new Error('Expected Ahmed App Store record 6809024498');
               if (build.status!=='FINISHED') throw new Error('The signed iOS build is not ready: '+build.status);
               const ascAppId = matches[0].id;
               console.log('AHMED_APP_STORE_APP=' + JSON.stringify({id:ascAppId,...matches[0].attributes}));
@@ -177,3 +177,5 @@ jobs:
               await analytics.flushAsync();
             })().catch(error=>{console.error('Ahmed submission: '+error.message);process.exitCode=1;});
             NODE
+
+# App Store Connect record 6809024498 supplied by the user; upload signed build 1.0.19 (4).
