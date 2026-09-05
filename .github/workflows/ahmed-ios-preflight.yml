@@ -39,15 +39,14 @@ jobs:
             cd "$AHMED_IOS_PROJECT/ahmed-mobile"
             export CI=1 EXPO_NO_TELEMETRY=1
             node -e 'const a=require("./app.json").expo; if(a.ios.bundleIdentifier!=="sa.pm.ahmed"||a.extra.eas.projectId!=="85d588cc-f97a-4907-a248-0e778d83d674") process.exit(1); console.log(JSON.stringify({name:a.name,version:a.version,bundleIdentifier:a.ios.bundleIdentifier,projectId:a.extra.eas.projectId}));'
-            npx --yes eas-cli@23.2.0 whoami
-            npx --yes eas-cli@23.2.0 project:info
+            timeout 60s npx --no-install eas-cli whoami
+            timeout 60s npx --no-install eas-cli project:info
+            timeout 60s npx --no-install eas-cli --version
             AHMED_IOS_DIAG_DIR="$(mktemp -d)"
             export AHMED_IOS_DIAG_DIR
             trap 'rm -rf "$AHMED_IOS_DIAG_DIR"' EXIT
-            npx --yes eas-cli@23.2.0 build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
-            npx --yes eas-cli@23.2.0 submit:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/submissions.json" || true
-            npx --yes eas-cli@23.2.0 build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
-            npx --yes eas-cli@23.2.0 submit:status --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/store-status.json" || true
+            timeout 60s npx --no-install eas-cli build:list --platform ios --limit 5 --json --non-interactive > "$AHMED_IOS_DIAG_DIR/builds.json"
+            timeout 60s npx --no-install eas-cli build:version:get --platform ios --profile production --json --non-interactive > "$AHMED_IOS_DIAG_DIR/version.json" || true
             python3 - <<'PY'
             import json, os, pathlib, re
             root = pathlib.Path(os.environ['AHMED_IOS_DIAG_DIR'])
@@ -72,4 +71,4 @@ jobs:
                 print(path.name + ': ' + json.dumps(safe(value), ensure_ascii=False))
             PY
 
-# Requested iOS upload preflight: 2026-09-05.
+# Requested iOS upload preflight: 2026-09-05. Reuse the existing authenticated CLI.
