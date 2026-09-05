@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   build-apk:
@@ -24,16 +23,6 @@ jobs:
       CI: 1
       GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx4g
     steps:
-      - name: Record recovery build start
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: 1,
-              body: `🛠️ Ahmed APK recovery build started | run_id=${context.runId} | commit=${context.sha}`,
-            });
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -97,15 +86,10 @@ jobs:
           if-no-files-found: error
 
       - name: Record APK ready
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: 1,
-              body: `📦 Ahmed APK recovery ready | run_id=${context.runId} | commit=${context.sha} | artifact=ahmed-android-apk-recovery`,
-            });
+        run: |
+          echo "Ahmed release APK built from $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Artifact: ahmed-android-apk-recovery" >> "$GITHUB_STEP_SUMMARY"
 
 # recovery trigger 2026-08-23 - include Tokenize shared patch
 # manual APK trigger 2026-09-02 - approved personal finance app icon
+# manual APK trigger 2026-09-05 - latest Ahmed bank details and statement reminders
