@@ -25,6 +25,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-banks-add-button',
       './babel-plugin-secure-vault-saudi-bank-dropdown',
       './babel-plugin-secure-vault-sites-title-single-line',
+      './babel-plugin-appshell-reports-home',
     ],
   };
 };
