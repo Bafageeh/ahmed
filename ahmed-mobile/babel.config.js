@@ -20,6 +20,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-national-id-info',
       './babel-plugin-secure-vault-phone-banking',
       './babel-plugin-secure-vault-bank-detail-header',
+      './babel-plugin-secure-vault-section-icons',
     ],
   };
 };
