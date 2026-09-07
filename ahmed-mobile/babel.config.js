@@ -19,6 +19,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-iban-single-line',
       './babel-plugin-secure-vault-national-id-info',
       './babel-plugin-secure-vault-phone-banking',
+      './babel-plugin-secure-vault-bank-detail-header',
     ],
   };
 };
