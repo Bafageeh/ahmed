@@ -50,6 +50,7 @@ module.exports = function appShellSettingsVaultTab({ types: t }) {
         let tabsPatched = false;
         let settingsCardAdded = false;
         let settingsHeaderPatched = false;
+        let reportsHeaderRemoved = false;
 
         programPath.traverse({
           VariableDeclarator(path) {
@@ -74,6 +75,13 @@ module.exports = function appShellSettingsVaultTab({ types: t }) {
               path.traverse({
                 JSXElement(innerPath) {
                   const opening = innerPath.node.openingElement;
+
+                  if (t.isJSXIdentifier(opening.name, { name: 'Header' })) {
+                    innerPath.remove();
+                    reportsHeaderRemoved = true;
+                    return;
+                  }
+
                   if (!t.isJSXIdentifier(opening.name, { name: 'View' }) || !isStylesGrid(opening)) return;
 
                   const alreadyExists = innerPath.node.children.some((child) => {
@@ -109,6 +117,7 @@ module.exports = function appShellSettingsVaultTab({ types: t }) {
         if (!tabsPatched) throw programPath.buildCodeFrameError('تعذر استبدال تبويب مزيد بالخزنة الآمنة.');
         if (!settingsCardAdded) throw programPath.buildCodeFrameError('تعذر إضافة بطاقة الإعدادات إلى شاشة S-130.');
         if (!settingsHeaderPatched) throw programPath.buildCodeFrameError('تعذر تحويل شاشة مزيد إلى الإعدادات.');
+        if (!reportsHeaderRemoved) throw programPath.buildCodeFrameError('تعذر حذف البطاقة السوداء من شاشة S-130.');
       },
     },
   };
