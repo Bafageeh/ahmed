@@ -23,6 +23,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-section-icons',
       './babel-plugin-secure-vault-home-header-cleanup',
       './babel-plugin-secure-vault-banks-add-button',
+      './babel-plugin-secure-vault-saudi-bank-dropdown',
     ],
   };
 };
