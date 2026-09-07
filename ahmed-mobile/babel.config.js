@@ -21,6 +21,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-phone-banking',
       './babel-plugin-secure-vault-bank-detail-header',
       './babel-plugin-secure-vault-section-icons',
+      './babel-plugin-secure-vault-home-header-cleanup',
     ],
   };
 };
