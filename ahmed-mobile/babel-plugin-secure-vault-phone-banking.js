@@ -182,7 +182,7 @@ module.exports = function secureVaultPhoneBanking({ types: t, template }) {
                 let full = existing;
                 if (existing?.id) {
                   try {
-                    const response = await fetch(\`${API_URL}/secure-vault/\${existing.id}\`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
+                    const response = await fetch(\`\${API_URL}/secure-vault/\${existing.id}\`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
                     const json = await response.json();
                     if (response.ok && json?.data) full = json.data;
                   } catch (error) {}
