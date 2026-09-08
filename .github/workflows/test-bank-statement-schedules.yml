@@ -1,0 +1,36 @@
+name: Test Bank Statement Schedules
+
+on:
+  push:
+    branches:
+      - feature/global-bank-statement-schedules-20260908
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ahmed-mobile/package-lock.json
+      - name: Install mobile dependencies
+        working-directory: ahmed-mobile
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+      - name: Export Android bundle and run Babel plugins
+        working-directory: ahmed-mobile
+        env:
+          EXPO_PUBLIC_API_URL: https://ahmed.pm.sa/api
+          EXPO_NO_TELEMETRY: 1
+          CI: 1
+        run: npx expo export --platform android --output-dir /tmp/ahmed-export --non-interactive
+      - name: Lint PHP files
+        run: |
+          php -l ahmed-api/app/Http/Controllers/Api/BankStatementScheduleController.php
+          php -l ahmed-api/database/migrations/2026_09_08_000100_create_bank_statement_schedules_table.php
+          php -l ahmed-api/routes/api.php
