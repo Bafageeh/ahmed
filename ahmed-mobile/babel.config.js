@@ -27,6 +27,7 @@ module.exports = function (api) {
       './babel-plugin-secure-vault-sites-title-single-line',
       './babel-plugin-appshell-reports-home',
       './babel-plugin-appshell-settings-vault-tab',
+      './babel-plugin-bank-statement-schedules',
     ],
   };
 };
