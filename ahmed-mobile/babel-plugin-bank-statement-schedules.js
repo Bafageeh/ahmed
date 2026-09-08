@@ -19,6 +19,13 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
     });
     return found;
   };
+  const isModeCardTest = (node) => {
+    if (!t.isBinaryExpression(node) || !['===', '=='].includes(node.operator)) return false;
+    return (
+      (t.isIdentifier(node.left, { name: 'mode' }) && t.isStringLiteral(node.right, { value: 'card' })) ||
+      (t.isIdentifier(node.right, { name: 'mode' }) && t.isStringLiteral(node.left, { value: 'card' }))
+    );
+  };
   const findFormInput = (node, label) => {
     let match = null;
     t.traverseFast(node, (child) => {
@@ -164,7 +171,7 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
               if (t.isIdentifier(path.node.id, { name: 'preparePayload' })) {
                 path.traverse({
                   IfStatement(innerPath) {
-                    if (!containsString(innerPath.node.test, "mode") || !containsString(innerPath.node.test, "card")) return;
+                    if (!isModeCardTest(innerPath.node.test)) return;
                     if (!t.isBlockStatement(innerPath.node.consequent)) return;
 
                     innerPath.node.consequent.body = innerPath.node.consequent.body.filter((statement) => !containsString(statement, 'حدد يوم الكشف من 1 إلى 31'));
