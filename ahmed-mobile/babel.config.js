@@ -28,6 +28,7 @@ module.exports = function (api) {
       './babel-plugin-appshell-reports-home',
       './babel-plugin-appshell-settings-vault-tab',
       './babel-plugin-bank-statement-schedules',
+      './babel-plugin-card-edit-form-restore',
     ],
   };
 };
