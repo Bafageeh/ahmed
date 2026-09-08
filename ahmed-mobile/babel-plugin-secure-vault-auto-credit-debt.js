@@ -63,15 +63,15 @@ module.exports = function secureVaultAutoCreditDebt({ types: t, template }) {
 
             const replacement = template.expression.ast(`
               <View style={styles.compactPanel}>
-                <Text style={styles.compactPanelTitle}>المديونية المرتبطة</Text>
+                <Text style={styles.compactPanelTitle}>الحد الائتماني</Text>
                 <FormInput
-                  label="الرصيد / المديونية"
-                  value={String(form.credit_balance !== '' && form.credit_balance != null ? form.credit_balance : (selectedDebt ? selectedDebt.credit_limit : ''))}
+                  label="الحد الائتماني (اختياري)"
+                  value={String(form.credit_balance != null ? form.credit_balance : '')}
                   onChangeText={(value) => setField('credit_balance', String(value || '').replace(/[^0-9.]/g, ''))}
                   keyboardType="decimal-pad"
                   placeholder="0"
                 />
-                <Text style={styles.securityHint}>إذا كان الرصيد أكبر من صفر ستظهر البطاقة تلقائيًا في شاشة مديونية بطائق الائتمان، وسيتم ربطها بالبنك نفسه.</Text>
+                <Text style={styles.securityHint}>الحد يُدخل من الخزنة الآمنة، وإذا كان أكبر من صفر تظهر البطاقة تلقائيًا في شاشة مديونية بطائق الائتمان.</Text>
               </View>
             `, { plugins: ['jsx'] });
             path.replaceWith(replacement);
@@ -91,14 +91,12 @@ module.exports = function secureVaultAutoCreditDebt({ types: t, template }) {
             if (payloadDeclaration) {
               const injected = template.statements.ast(`
                 if (mode === 'card') {
-                  const linkedDebtForBalance = creditDebts.find((entry) => String(entry.id) === String(payload.credit_card_debt_id));
                   const rawCreditBalance = payload.credit_balance;
-                  const fallbackCreditBalance = linkedDebtForBalance ? Number(linkedDebtForBalance.credit_limit || 0) : 0;
                   const parsedCreditBalance = rawCreditBalance === '' || rawCreditBalance == null
-                    ? fallbackCreditBalance
+                    ? 0
                     : Number(String(rawCreditBalance).replace(/,/g, ''));
                   if (!Number.isFinite(parsedCreditBalance) || parsedCreditBalance < 0) {
-                    return { error: 'أدخل رصيد المديونية بصورة صحيحة.' };
+                    return { error: 'أدخل الحد الائتماني بصورة صحيحة.' };
                   }
                   payload.credit_balance = parsedCreditBalance;
                 }
