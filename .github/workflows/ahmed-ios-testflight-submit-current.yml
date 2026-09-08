@@ -1,0 +1,60 @@
+name: Ahmed iOS TestFlight Submit Current
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ahmed-ios-testflight-submit-current.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahmed-ios-testflight-submit-current
+  cancel-in-progress: false
+
+jobs:
+  submit-testflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Submit signed Ahmed iOS build to TestFlight
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 37m
+          script: |
+            set -eu
+            AHMED_IOS_PROJECT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$AHMED_IOS_PROJECT" ] || [ ! -d "$AHMED_IOS_PROJECT/ahmed-mobile" ]; then
+              if [ -d /home/pmsa/apps/ahmed/ahmed-mobile ]; then
+                AHMED_IOS_PROJECT=/home/pmsa/apps/ahmed
+              elif [ -d /mnt/home-storage/home/pmsa/apps/ahmed/ahmed-mobile ]; then
+                AHMED_IOS_PROJECT=/mnt/home-storage/home/pmsa/apps/ahmed
+              else
+                echo 'Ahmed project directory is unavailable.'
+                exit 1
+              fi
+            fi
+            AHMED_IOS_STAGE="$(dirname "$AHMED_IOS_PROJECT")/ahmed-ios-releases/34222899779"
+            cd "$AHMED_IOS_STAGE/source/ahmed-mobile"
+            export CI=1 EXPO_NO_TELEMETRY=1
+            test -f "$AHMED_IOS_STAGE/status.json"
+            node -e "const b=require(process.env.AHMED_IOS_STAGE + '/status.json')" 2>/dev/null || true
+            node <<'NODE'
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('app.json','utf8')).expo;
+            if (config.ios.bundleIdentifier !== 'sa.pm.ahmed' || config.version !== '1.0.19') throw new Error('Unexpected Ahmed iOS app identity');
+            const eas = JSON.parse(fs.readFileSync('eas.json','utf8'));
+            eas.submit ??= {};
+            eas.submit.production ??= {};
+            eas.submit.production.ios = { ...(eas.submit.production.ios || {}), ascAppId: '6809024498', appleTeamId: '8PY9NA9CA2' };
+            fs.writeFileSync('eas.json', JSON.stringify(eas,null,2)+'\n');
+            NODE
+            echo 'Submitting Ahmed iOS 1.0.19 (5) to App Store Connect / TestFlight...'
+            node node_modules/eas-cli/bin/run submit --platform ios --profile production --id e795f1fd-afb3-41cd-a397-682d63873d39 --non-interactive --wait
+            echo 'AHMED_TESTFLIGHT_UPLOAD_COMPLETED build=e795f1fd-afb3-41cd-a397-682d63873d39 version=1.0.19 buildNumber=5 ascAppId=6809024498'
