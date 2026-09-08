@@ -168,3 +168,5 @@ jobs:
 # Use Python-compatible icon annotations on the existing deployment server.
 
 # Build only after verifying the repaired App Store provisioning profile.
+
+# Trigger latest TestFlight build requested 2026-09-08.
