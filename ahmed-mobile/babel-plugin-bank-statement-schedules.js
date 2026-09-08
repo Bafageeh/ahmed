@@ -200,7 +200,7 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
               const componentName = t.isJSXIdentifier(opening.name) ? opening.name.name : '';
               const label = attrString(opening, 'label');
 
-              if (componentName === 'Spec' && label === 'تاريخ الكشف') {
+              if ((componentName === 'Spec' && label === 'تاريخ الكشف') || (componentName === 'MiniInfo' && label === 'الكشف')) {
                 const valueAttr = getAttr(opening, 'value');
                 if (valueAttr) valueAttr.value = t.stringLiteral('حسب جدول البنك');
                 else opening.attributes.push(t.jsxAttribute(t.jsxIdentifier('value'), t.stringLiteral('حسب جدول البنك')));
