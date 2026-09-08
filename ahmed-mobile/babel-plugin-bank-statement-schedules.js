@@ -207,7 +207,6 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
                 displayPatched = true;
               }
 
-              // Fallback for layouts already transformed by earlier vault plugins.
               if (componentName === 'FormInput' && label && label.includes('تاريخ الكشف')) {
                 path.replaceWith(t.nullLiteral());
                 formPatched = true;
@@ -227,7 +226,7 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
 
           if (!scheduleDisabled || !syncDisabled) throw programPath.buildCodeFrameError('تعذر تعطيل تنبيهات كشف البطاقة الفردية.');
           if (!cardDefaultPatched || !cardPayloadPatched) throw programPath.buildCodeFrameError('تعذر تحويل تاريخ الكشف إلى جدول البنك.');
-          if (!displayPatched || !formPatched) throw programPath.buildCodeFrameError('تعذر تحديث واجهة تاريخ الكشف في الخزنة.');
+          if (!displayPatched || !formPatched) throw programPath.buildCodeFrameError(`تشخيص واجهة الكشف: display=${displayPatched}; form=${formPatched}`);
         }
       },
     },
