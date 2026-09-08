@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AhmedSessionController;
 use App\Http\Controllers\Api\AhmedUserController;
+use App\Http\Controllers\Api\BankStatementScheduleController;
 use App\Http\Controllers\Api\CreditCardDebtController;
 use App\Http\Controllers\Api\DebtController;
 use App\Http\Controllers\Api\DebtDashboardController;
@@ -72,6 +73,8 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::put('/secure-vault/{id}', [SecureVaultController::class, 'update']);
     Route::delete('/secure-vault/{id}', [SecureVaultController::class, 'destroy']);
 
+    Route::get('/bank-statement-schedules/mine', [BankStatementScheduleController::class, 'mine']);
+
     Route::get('/monthly-incomes', [MonthlyIncomeController::class, 'index']);
     Route::post('/monthly-incomes', [MonthlyIncomeController::class, 'store']);
     Route::put('/monthly-incomes/{id}', [MonthlyIncomeController::class, 'update']);
@@ -136,6 +139,9 @@ Route::middleware('ahmed.auth')->group(function () {
     // contain unscoped bulk-import logic. Keep them inaccessible to non-admin users
     // until each external account/import flow has an explicit per-user owner.
     Route::middleware('ahmed.admin')->group(function () {
+        Route::get('/bank-statement-schedules', [BankStatementScheduleController::class, 'index']);
+        Route::put('/bank-statement-schedules', [BankStatementScheduleController::class, 'update']);
+
         Route::post('/ta3meed/investments/import-finished', [Ta3meedImportController::class, 'finished']);
         Route::post('/ta3meed/image-import', [Ta3meedImageImportController::class, 'import']);
 
