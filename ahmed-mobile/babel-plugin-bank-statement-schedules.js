@@ -26,11 +26,12 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
       (t.isIdentifier(node.right, { name: 'mode' }) && t.isStringLiteral(node.left, { value: 'card' }))
     );
   };
-  const findFormInput = (node, label) => {
+  const findFormInput = (node, labelPrefix) => {
     let match = null;
     t.traverseFast(node, (child) => {
       if (match || !t.isJSXElement(child) || !t.isJSXIdentifier(child.openingElement.name, { name: 'FormInput' })) return;
-      if (attrString(child.openingElement, 'label') === label) match = child;
+      const label = attrString(child.openingElement, 'label');
+      if (label && label.startsWith(labelPrefix)) match = child;
     });
     return match;
   };
@@ -185,16 +186,6 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
               }
             },
 
-            JSXElement(path) {
-              const opening = path.node.openingElement;
-              if (t.isJSXIdentifier(opening.name, { name: 'Spec' }) && attrString(opening, 'label') === 'تاريخ الكشف') {
-                const valueAttr = getAttr(opening, 'value');
-                if (valueAttr) valueAttr.value = t.stringLiteral('حسب جدول البنك');
-                else opening.attributes.push(t.jsxAttribute(t.jsxIdentifier('value'), t.stringLiteral('حسب جدول البنك')));
-                displayPatched = true;
-              }
-            },
-
             ConditionalExpression(path) {
               if (!containsString(path.node, 'تاريخ الكشف')) return;
               const sadadInput = findFormInput(path.node.consequent, 'رقم سداد');
@@ -204,12 +195,32 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
               formPatched = true;
             },
 
+            JSXElement(path) {
+              const opening = path.node.openingElement;
+              const componentName = t.isJSXIdentifier(opening.name) ? opening.name.name : '';
+              const label = attrString(opening, 'label');
+
+              if (componentName === 'Spec' && label === 'تاريخ الكشف') {
+                const valueAttr = getAttr(opening, 'value');
+                if (valueAttr) valueAttr.value = t.stringLiteral('حسب جدول البنك');
+                else opening.attributes.push(t.jsxAttribute(t.jsxIdentifier('value'), t.stringLiteral('حسب جدول البنك')));
+                displayPatched = true;
+              }
+
+              // Fallback for layouts already transformed by earlier vault plugins.
+              if (componentName === 'FormInput' && label && label.includes('تاريخ الكشف')) {
+                path.replaceWith(t.nullLiteral());
+                formPatched = true;
+                path.skip();
+              }
+            },
+
             StringLiteral(path) {
               if (path.node.value === 'تم حفظ البطاقة. الإشعار يعمل في نسخة التطبيق الداعمة للإشعارات.') {
                 path.node.value = 'تم حفظ البطاقة. تنبيه الكشف يعتمد على جدول البنك.';
               }
-              if (path.node.value.includes('وسيتم تنبيهك في يوم الكشف.')) {
-                path.node.value = path.node.value.replace('وسيتم تنبيهك في يوم الكشف.', 'ويتم تنبيه موعد الكشف تلقائيًا حسب جدول البنك.');
+              if (path.node.value.includes('سيتم تنبيهك في يوم الكشف')) {
+                path.node.value = path.node.value.replace(/سيتم تنبيهك في يوم الكشف\.?/g, 'يتم تنبيه موعد الكشف تلقائيًا حسب جدول البنك.');
               }
             },
           });
