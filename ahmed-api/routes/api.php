@@ -105,6 +105,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::post('/ta3meed/investments', [Ta3meedController::class, 'store']);
     Route::put('/ta3meed/investments/{id}', [Ta3meedMutationController::class, 'update']);
     Route::post('/ta3meed/investments/{id}/receive', [Ta3meedMutationController::class, 'receive']);
+    Route::post('/ta3meed/investments/{id}/cancel', [Ta3meedMutationController::class, 'cancel']);
     Route::post('/ta3meed/investments/{id}/receipts', [Ta3meedReceiptController::class, 'store']);
     Route::put('/ta3meed/receipts/{id}', [Ta3meedReceiptController::class, 'update']);
     Route::delete('/ta3meed/receipts/{id}', [Ta3meedReceiptController::class, 'destroy']);

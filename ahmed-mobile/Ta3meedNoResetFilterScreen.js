@@ -35,7 +35,7 @@ function investorKey(allocation) {
 
 function isEndedOpportunity(item) {
   const status = String(item?.status || '').trim().toLowerCase();
-  return ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done'].includes(status);
+  return ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended', 'settled', 'done'].includes(status);
 }
 
 function isPartialOpportunity(item) {
@@ -571,14 +571,16 @@ function editOpportunityForm(item) {
   };
 }
 
-function EditOpportunityModal({ visible, item, onClose, onSaved }) {
+function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) {
   const [form, setForm] = useState(() => editOpportunityForm(item));
   const [saving, setSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!visible) return;
     setForm(editOpportunityForm(item));
+    setCancelling(false);
     setError('');
   }, [visible, item]);
 
@@ -597,7 +599,7 @@ function EditOpportunityModal({ visible, item, onClose, onSaved }) {
   };
 
   const close = () => {
-    if (saving) return;
+    if (saving || cancelling) return;
     setError('');
     onClose?.();
   };
@@ -657,6 +659,34 @@ function EditOpportunityModal({ visible, item, onClose, onSaved }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const cancelOpportunity = async () => {
+    if (!item?.id || cancelling) return;
+    setCancelling(true);
+    setError('');
+    try {
+      const result = await apiJson(`/ta3meed/investments/${item.id}/cancel`, { method: 'POST' });
+      onCancelled?.(result?.data || { ...item, status: 'cancelled' });
+    } catch (e) {
+      setError(e.message || 'تعذر إلغاء الفرصة.');
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  const confirmCancelOpportunity = () => {
+    const code = String(form.code || item?.reference_number || item?.code || '').trim();
+    Alert.alert(
+      'إلغاء الفرصة',
+      code
+        ? `هل أنت متأكد من إلغاء الفرصة ${code}؟ ستُستبعد من الاستثمارات النشطة مع الاحتفاظ بسجلها.`
+        : 'هل أنت متأكد من إلغاء هذه الفرصة؟ ستُستبعد من الاستثمارات النشطة مع الاحتفاظ بسجلها.',
+      [
+        { text: 'تراجع', style: 'cancel' },
+        { text: 'تأكيد الإلغاء', style: 'destructive', onPress: cancelOpportunity },
+      ]
+    );
   };
 
   return (
@@ -823,14 +853,29 @@ function EditOpportunityModal({ visible, item, onClose, onSaved }) {
             )}
           </ScrollView>
 
+          {!isEndedOpportunity(item) ? (
+            <View style={addStyles.dangerSection}>
+              <TouchableOpacity
+                onPress={confirmCancelOpportunity}
+                disabled={saving || cancelling}
+                style={[addStyles.cancelOpportunityButton, (saving || cancelling) && addStyles.disabled]}
+                activeOpacity={0.84}
+              >
+                {cancelling
+                  ? <ActivityIndicator color="#b91c1c" size="small" />
+                  : <Text style={addStyles.cancelOpportunityText}>إلغاء الفرصة</Text>}
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <View style={addStyles.footer}>
-            <TouchableOpacity onPress={close} disabled={saving} style={addStyles.cancelButton} activeOpacity={0.82}>
-              <Text style={addStyles.cancelText}>إلغاء</Text>
+            <TouchableOpacity onPress={close} disabled={saving || cancelling} style={addStyles.cancelButton} activeOpacity={0.82}>
+              <Text style={addStyles.cancelText}>رجوع</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={save}
-              disabled={saving}
-              style={[addStyles.saveButton, saving && addStyles.disabled]}
+              disabled={saving || cancelling}
+              style={[addStyles.saveButton, (saving || cancelling) && addStyles.disabled]}
               activeOpacity={0.88}
             >
               {saving ? <ActivityIndicator color="#ffffff" size="small" /> : <Text style={addStyles.saveText}>حفظ التعديل</Text>}
@@ -890,6 +935,15 @@ export default function Ta3meedNoResetFilterScreen(props) {
     setTimeout(() => setToast(''), 2600);
   };
 
+  const handleCancelled = (cancelled) => {
+    const code = String(cancelled?.reference_number || cancelled?.code || editingItem?.reference_number || '').trim();
+    setEditOpen(false);
+    setEditingItem(null);
+    setScreenVersion((current) => current + 1);
+    setToast(code ? `تم إلغاء الفرصة ${code}` : 'تم إلغاء الفرصة');
+    setTimeout(() => setToast(''), 2600);
+  };
+
   return (
     <View style={addStyles.host}>
       <Ta3meedCompactFiltersScreen key={screenVersion} {...props} onEditOpportunity={handleEdit} />
@@ -925,6 +979,7 @@ export default function Ta3meedNoResetFilterScreen(props) {
           setEditingItem(null);
         }}
         onSaved={handleEdited}
+        onCancelled={handleCancelled}
       />
     </View>
   );
@@ -1200,6 +1255,26 @@ const addStyles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'right',
   },
+  dangerSection: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 2,
+    backgroundColor: '#ffffff',
+  },
+  cancelOpportunityButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelOpportunityText: {
+    color: '#b91c1c',
+    fontSize: 13.5,
+    fontWeight: '900',
+  },
   footer: {
     minHeight: 67,
     paddingHorizontal: 14,
@@ -1240,3 +1315,4 @@ const addStyles = StyleSheet.create({
     opacity: 0.62,
   },
 });
+

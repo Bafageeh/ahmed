@@ -115,6 +115,51 @@ class Ta3meedMutationController extends Controller
         return response()->json(['data' => $this->readInvestment($id, $userId)]);
     }
 
+    public function cancel(Request $request, int $id)
+    {
+        $userId = $this->userId($request);
+        $platform = $this->platform();
+        if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
+
+        $investmentQuery = DB::table('investment_opportunities')
+            ->where('id', $id)
+            ->where('platform_id', $platform->id);
+        $this->scopeUser($investmentQuery, 'investment_opportunities', $userId);
+        $investment = $investmentQuery->first();
+        if (! $investment) return response()->json(['message' => 'Investment not found'], 404);
+
+        $status = strtolower(trim((string) $investment->status));
+        if (in_array($status, ['cancelled', 'canceled'], true)) {
+            return response()->json(['data' => $this->readInvestment($id, $userId)]);
+        }
+
+        if (in_array($status, ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done'], true)) {
+            return response()->json(['message' => 'لا يمكن إلغاء فرصة منتهية أو مستلمة.'], 422);
+        }
+
+        DB::transaction(function () use ($id, $userId) {
+            $update = [
+                'status' => 'cancelled',
+                'updated_at' => now(),
+            ];
+            if (Schema::hasColumn('investment_opportunities', 'cancelled_at')) {
+                $update['cancelled_at'] = now();
+            }
+            DB::table('investment_opportunities')->where('id', $id)->update($update);
+
+            $allocationsQuery = DB::table('investment_opportunity_allocations')
+                ->where('opportunity_id', $id)
+                ->whereNotIn('status', ['received', 'completed']);
+            $this->scopeUser($allocationsQuery, 'investment_opportunity_allocations', $userId);
+            $allocationsQuery->update([
+                'status' => 'cancelled',
+                'updated_at' => now(),
+            ]);
+        });
+
+        return response()->json(['data' => $this->readInvestment($id, $userId)]);
+    }
+
     public function investorAccount(Request $request, string $code)
     {
         $userId = $this->userId($request);

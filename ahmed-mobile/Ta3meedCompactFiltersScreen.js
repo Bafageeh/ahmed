@@ -24,6 +24,7 @@ const STATUS_FILTERS = [
   ['overdue', 'متأخر'],
   ['partial_received', 'مستلم جزئيًا'],
   ['received', 'مستلم'],
+  ['cancelled', 'ملغاة'],
 ];
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -131,6 +132,7 @@ function categoryOf(item) {
 }
 
 function statusOf(item) {
+  if (item?.status === 'cancelled' || item?.status === 'canceled') return { key: 'cancelled', label: 'ملغاة', color: '#b91c1c', bg: '#fef2f2' };
   if (item?.status === 'received' || item?.status === 'completed') return { key: 'received', label: 'مستلم', color: '#2563eb', bg: '#eff6ff' };
   if (item?.status === 'partial_received') return { key: 'partial_received', label: 'مستلم جزئيًا', color: '#7c3aed', bg: '#f5f3ff' };
   if (item?.maturity_date && item.maturity_date < today()) return { key: 'overdue', label: 'متأخر', color: '#dc2626', bg: '#fef2f2' };
@@ -151,6 +153,7 @@ function investorKey(allocation) {
 function buildInvestors(items) {
   const map = new Map();
   items.forEach((item) => {
+    if (statusOf(item).key === 'cancelled') return;
     (item.allocations || []).forEach((allocation) => {
       const key = investorKey(allocation);
       if (!key) return;
@@ -196,7 +199,7 @@ function receivedAmountOf(item, meta, receipts, allocations) {
 
 function activeRemainingInvestmentAmount(items, selectedInvestor = 'all') {
   return (items || []).reduce((total, item) => {
-    if (statusOf(item).key === 'received') return total;
+    if (['received', 'cancelled'].includes(statusOf(item).key)) return total;
 
     const allocations = item.allocations || [];
     const selectedAllocations = selectedInvestor && selectedInvestor !== 'all'
