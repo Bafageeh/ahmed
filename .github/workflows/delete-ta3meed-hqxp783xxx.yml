@@ -1,0 +1,152 @@
+name: Delete Ta3meed HQXP783XXX
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/delete-ta3meed-hqxp783xxx.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  delete:
+    name: Delete one Ta3meed opportunity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete HQXP783XXX from production database
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          script: |
+            set -euo pipefail
+
+            PROJECT_PATH="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$PROJECT_PATH" ] || [ ! -d "$PROJECT_PATH" ]; then
+              if [ -d "/home/pmsa/apps/ahmed" ]; then
+                PROJECT_PATH="/home/pmsa/apps/ahmed"
+              elif [ -d "/mnt/home-storage/home/pmsa/apps/ahmed" ]; then
+                PROJECT_PATH="/mnt/home-storage/home/pmsa/apps/ahmed"
+              else
+                echo "ERROR: Ahmed project path not found"
+                exit 1
+              fi
+            fi
+
+            cd "$PROJECT_PATH/ahmed-api"
+
+            php <<'PHP'
+            <?php
+            require __DIR__ . '/vendor/autoload.php';
+            $app = require_once __DIR__ . '/bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+            use Illuminate\Support\Facades\DB;
+            use Illuminate\Support\Facades\Schema;
+
+            $reference = 'HQXP783XXX';
+            $platformId = DB::table('investment_platforms')->where('code', 'ta3meed')->value('id');
+
+            if (!$platformId) {
+                fwrite(STDERR, "ERROR: Ta3meed platform not found\n");
+                exit(10);
+            }
+
+            $matches = DB::table('investment_opportunities')
+                ->where('platform_id', $platformId)
+                ->where('reference_number', $reference)
+                ->get();
+
+            echo "MATCH_COUNT=" . $matches->count() . PHP_EOL;
+
+            foreach ($matches as $row) {
+                $userPart = property_exists($row, 'user_id') ? (string) $row->user_id : 'n/a';
+                echo "MATCH id={$row->id} user_id={$userPart} status={$row->status} principal={$row->principal_amount}" . PHP_EOL;
+            }
+
+            if ($matches->count() !== 1) {
+                fwrite(STDERR, "ERROR: Expected exactly one matching Ta3meed opportunity; no deletion was performed.\n");
+                exit(11);
+            }
+
+            $id = (int) $matches->first()->id;
+            $knownTables = [
+                'ta3meed_receipt_allocations',
+                'ta3meed_receipts',
+                'investment_opportunity_allocations',
+                'financial_transactions',
+            ];
+
+            DB::transaction(function () use ($id, $reference, $platformId, $knownTables) {
+                $driver = DB::connection()->getDriverName();
+
+                if ($driver === 'sqlite') {
+                    $allTables = collect(DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
+                        ->pluck('name')
+                        ->all();
+                } else {
+                    $database = DB::connection()->getDatabaseName();
+                    $allTables = DB::table('information_schema.columns')
+                        ->where('table_schema', $database)
+                        ->where('column_name', 'opportunity_id')
+                        ->pluck('table_name')
+                        ->unique()
+                        ->values()
+                        ->all();
+                }
+
+                $tablesWithOpportunityId = [];
+                foreach ($allTables as $table) {
+                    if (Schema::hasTable($table) && Schema::hasColumn($table, 'opportunity_id')) {
+                        $tablesWithOpportunityId[] = $table;
+                    }
+                }
+
+                foreach ($tablesWithOpportunityId as $table) {
+                    $count = DB::table($table)->where('opportunity_id', $id)->count();
+                    if ($count > 0) {
+                        echo "RELATED_BEFORE {$table}={$count}" . PHP_EOL;
+                    }
+                    if ($count > 0 && !in_array($table, $knownTables, true)) {
+                        throw new RuntimeException("Unknown related table {$table} contains {$count} row(s); aborting safely.");
+                    }
+                }
+
+                foreach ($knownTables as $table) {
+                    if (!Schema::hasTable($table) || !Schema::hasColumn($table, 'opportunity_id')) {
+                        continue;
+                    }
+                    $deleted = DB::table($table)->where('opportunity_id', $id)->delete();
+                    echo "DELETED {$table}={$deleted}" . PHP_EOL;
+                }
+
+                $deletedOpportunity = DB::table('investment_opportunities')
+                    ->where('id', $id)
+                    ->where('platform_id', $platformId)
+                    ->where('reference_number', $reference)
+                    ->delete();
+
+                echo "DELETED investment_opportunities={$deletedOpportunity}" . PHP_EOL;
+
+                if ($deletedOpportunity !== 1) {
+                    throw new RuntimeException('Opportunity deletion count was not exactly 1.');
+                }
+            });
+
+            $remaining = DB::table('investment_opportunities')
+                ->where('platform_id', $platformId)
+                ->where('reference_number', $reference)
+                ->count();
+
+            echo "REMAINING_MATCHES={$remaining}" . PHP_EOL;
+            if ($remaining !== 0) {
+                fwrite(STDERR, "ERROR: Verification failed; matching opportunity still exists.\n");
+                exit(12);
+            }
+
+            echo "SUCCESS: HQXP783XXX permanently deleted from the database." . PHP_EOL;
+            PHP
