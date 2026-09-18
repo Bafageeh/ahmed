@@ -22,7 +22,6 @@ jobs:
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
-          script_stop: true
           script: |
             set -euo pipefail
 
