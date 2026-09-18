@@ -22,6 +22,7 @@ jobs:
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
+          script_stop: true
           script: |
             set -euo pipefail
 
@@ -82,13 +83,29 @@ jobs:
             ];
 
             DB::transaction(function () use ($id, $reference, $platformId, $knownTables) {
-                $database = DB::connection()->getDatabaseName();
+                $driver = DB::connection()->getDriverName();
 
-                $tablesWithOpportunityId = DB::table('information_schema.columns')
-                    ->where('table_schema', $database)
-                    ->where('column_name', 'opportunity_id')
-                    ->pluck('table_name')
-                    ->all();
+                if ($driver === 'sqlite') {
+                    $allTables = collect(DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"))
+                        ->pluck('name')
+                        ->all();
+                } else {
+                    $database = DB::connection()->getDatabaseName();
+                    $allTables = DB::table('information_schema.columns')
+                        ->where('table_schema', $database)
+                        ->where('column_name', 'opportunity_id')
+                        ->pluck('table_name')
+                        ->unique()
+                        ->values()
+                        ->all();
+                }
+
+                $tablesWithOpportunityId = [];
+                foreach ($allTables as $table) {
+                    if (Schema::hasTable($table) && Schema::hasColumn($table, 'opportunity_id')) {
+                        $tablesWithOpportunityId[] = $table;
+                    }
+                }
 
                 foreach ($tablesWithOpportunityId as $table) {
                     $count = DB::table($table)->where('opportunity_id', $id)->count();
