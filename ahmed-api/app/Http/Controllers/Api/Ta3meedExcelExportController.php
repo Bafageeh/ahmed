@@ -42,7 +42,7 @@ class Ta3meedExcelExportController extends Ta3meedDataToolsController
             return response()->json(['message' => 'تعذر إنشاء ملف Excel.'], 500);
         }
 
-        $filename = 'Ta3meed_Investments_' . now()->format('Y-m-d') . '.xlsx';
+        $filename = 'استثمار_تعميد_' . now()->format('Y-m-d') . '.xlsx';
 
         return response()->download($path, $filename, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -241,7 +241,7 @@ class Ta3meedExcelExportController extends Ta3meedDataToolsController
         $paymentCells = array_map(fn ($row) => $row['cells'], $paymentRows);
 
         $summaryMetrics = [
-            ['إجمالي عدد الفرص', count($opportunities), 'integer'],
+            ['إجمالي عدد الفرص', $includedStats->count(), 'integer'],
             ['إجمالي رأس المال المستثمر', $totalInvested, 'money'],
             ['إجمالي الأرباح', $totalProfit, 'money'],
             ['إجمالي المستحق', $totalDue, 'money'],
