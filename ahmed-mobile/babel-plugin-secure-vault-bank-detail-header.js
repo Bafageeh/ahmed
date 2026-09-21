@@ -163,11 +163,30 @@ module.exports = function secureVaultBankDetailHeader({ types: t, template }) {
                       </TouchableOpacity>
                       <Text style={styles.topTitle}>البنوك</Text>
                     </View>
+                  ) : view === 'sites' ? (
+                    <View style={styles.topBar}>
+                      <TouchableOpacity
+                        style={styles.topBackButton}
+                        onPress={goBack}
+                        activeOpacity={0.72}
+                        accessibilityLabel="رجوع"
+                      >
+                        <ArrowRight size={28} strokeWidth={2.4} color="#0f172a" />
+                      </TouchableOpacity>
+                      <Text style={styles.topTitle}>مواقع أو تطبيقات</Text>
+                      <TouchableOpacity style={styles.searchButton} onPress={() => setSearchOpen((value) => !value)}><Text style={styles.searchIcon}>🔍</Text></TouchableOpacity>
+                    </View>
                   ) : (
                     <View style={styles.topBar}>
-                      <TouchableOpacity style={styles.topBackButton} onPress={goBack}><Text style={styles.topBackText}>رجوع</Text></TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.topBackButton}
+                        onPress={goBack}
+                        activeOpacity={0.72}
+                        accessibilityLabel="رجوع"
+                      >
+                        <ArrowRight size={28} strokeWidth={2.4} color="#0f172a" />
+                      </TouchableOpacity>
                       <Text style={styles.topTitle}>الخزنة الآمنة</Text>
-                      <TouchableOpacity style={styles.searchButton} onPress={() => setSearchOpen((value) => !value)}><Text style={styles.searchIcon}>🔍</Text></TouchableOpacity>
                     </View>
                   )}
                 </>
