@@ -233,7 +233,7 @@ export default function SecureVaultScreen({ onBack }) {
           <Text style={styles.topTitle}>{view === 'sites' ? 'مواقع أو تطبيقات' : 'الخزنة الآمنة'}</Text>
           <TouchableOpacity style={styles.searchButton} onPress={() => setSearchOpen((value) => !value)}><Text style={styles.searchIcon}>🔍</Text></TouchableOpacity>
         </View>
-        {view === 'sites' ? <TouchableOpacity style={styles.floatingMenuButton} onPress={startAddSite} activeOpacity={0.82} accessibilityLabel="إضافة موقع أو تطبيق"><View style={styles.addSiteFabIconWrap}><Text style={styles.addSiteFabIcon}>🔐</Text><Text style={styles.addSiteFabPlus}>+</Text></View></TouchableOpacity> : null}
+        <TouchableOpacity style={styles.floatingMenuButton} onPress={startAddSite} activeOpacity={0.82} accessibilityLabel="إضافة موقع أو تطبيق"><View style={styles.addSiteFabIconWrap}><Text style={styles.addSiteFabIcon}>🔐</Text><Text style={styles.addSiteFabPlus}>+</Text></View></TouchableOpacity>
         {menuOpen ? <View style={styles.dropdownMenu}>{menuItems.map((entry) => <TouchableOpacity key={entry.label} style={styles.dropdownItem} onPress={entry.onPress}><Text style={styles.dropdownText}>{entry.label}</Text></TouchableOpacity>)}</View> : null}
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {searchOpen && view !== 'home' ? <TextInput value={search} onChangeText={setSearch} placeholder="بحث" style={styles.searchInput} autoFocus /> : null}
