@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { ArrowRight, KeyRound, Plus } from 'lucide-react-native';
 import * as Notifications from './SafeNotifications';
 import * as SecureStore from 'expo-secure-store';
 import BankLogo from './BankLogo';
@@ -229,11 +230,11 @@ export default function SecureVaultScreen({ onBack }) {
       <StatusBar style="dark" backgroundColor="#ffffff" />
       <View style={styles.screen}>
         <View style={styles.topBar}>
-          <TouchableOpacity style={styles.topBackButton} onPress={goBack} activeOpacity={0.72} accessibilityLabel="رجوع"><Text style={styles.topBackText}>‹</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.topBackButton} onPress={goBack} activeOpacity={0.72} accessibilityLabel="رجوع"><ArrowRight size={28} strokeWidth={2.4} color="#0f172a" /></TouchableOpacity>
           <Text style={styles.topTitle}>{view === 'sites' ? 'مواقع أو تطبيقات' : 'الخزنة الآمنة'}</Text>
           <TouchableOpacity style={styles.searchButton} onPress={() => setSearchOpen((value) => !value)}><Text style={styles.searchIcon}>🔍</Text></TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.floatingMenuButton} onPress={startAddSite} activeOpacity={0.82} accessibilityLabel="إضافة موقع أو تطبيق"><View style={styles.addSiteFabIconWrap}><Text style={styles.addSiteFabIcon}>🔐</Text><Text style={styles.addSiteFabPlus}>+</Text></View></TouchableOpacity>
+        <TouchableOpacity style={styles.floatingMenuButton} onPress={startAddSite} activeOpacity={0.82} accessibilityLabel="إضافة موقع أو تطبيق"><View style={styles.addSiteFabIconWrap}><KeyRound size={28} strokeWidth={2.3} color="#ffffff" /><View style={styles.addSiteFabPlusBadge}><Plus size={15} strokeWidth={3} color="#071326" /></View></View></TouchableOpacity>
         {menuOpen ? <View style={styles.dropdownMenu}>{menuItems.map((entry) => <TouchableOpacity key={entry.label} style={styles.dropdownItem} onPress={entry.onPress}><Text style={styles.dropdownText}>{entry.label}</Text></TouchableOpacity>)}</View> : null}
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           {searchOpen && view !== 'home' ? <TextInput value={search} onChangeText={setSearch} placeholder="بحث" style={styles.searchInput} autoFocus /> : null}
@@ -399,7 +400,7 @@ const styles = StyleSheet.create({
   topBar: { height: 72, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 82 }, topTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
   topBackButton: { position: 'absolute', right: 16, top: 11, width: 50, height: 50, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 17, borderWidth: 1, borderColor: '#dbe3ee' }, topBackText: { color: '#0f172a', fontWeight: '500', fontSize: 38, lineHeight: 40, marginTop: -3 },
   searchButton: { position: 'absolute', left: 16, top: 11, width: 50, height: 50, borderRadius: 17, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#dbe3ee' }, searchIcon: { fontSize: 21 },
-  floatingMenuButton: { position: 'absolute', right: 20, bottom: 24, zIndex: 30, width: 64, height: 64, borderRadius: 32, backgroundColor: '#071326', alignItems: 'center', justifyContent: 'center', elevation: 10 }, dotsText: { color: '#fff', fontSize: 32, lineHeight: 34, fontWeight: '900' }, addSiteFabIconWrap: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' }, addSiteFabIcon: { fontSize: 27 }, addSiteFabPlus: { position: 'absolute', right: -2, bottom: -5, color: '#fff', fontSize: 24, lineHeight: 26, fontWeight: '900' },
+  floatingMenuButton: { position: 'absolute', right: 20, bottom: 24, zIndex: 30, width: 60, height: 60, borderRadius: 30, backgroundColor: '#071326', alignItems: 'center', justifyContent: 'center', elevation: 10, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } }, dotsText: { color: '#fff', fontSize: 32, lineHeight: 34, fontWeight: '900' }, addSiteFabIconWrap: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' }, addSiteFabPlusBadge: { position: 'absolute', right: -4, bottom: -4, width: 21, height: 21, borderRadius: 11, backgroundColor: '#ffffff', borderWidth: 2, borderColor: '#071326', alignItems: 'center', justifyContent: 'center' },
   dropdownMenu: { position: 'absolute', top: 152, left: 18, zIndex: 40, width: 185, backgroundColor: '#fff', borderRadius: 18, borderWidth: 1, borderColor: '#e2e8f0', overflow: 'hidden', elevation: 10 }, dropdownItem: { paddingVertical: 15, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' }, dropdownText: { color: '#0f172a', textAlign: 'right', fontWeight: '900', fontSize: 15 },
   container: { paddingHorizontal: 18, paddingTop: 34, paddingBottom: 118 }, searchInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ee', borderRadius: 18, padding: 14, textAlign: 'right', fontSize: 16, color: '#0f172a', marginBottom: 12 }, message: { color: '#075985', textAlign: 'right', fontWeight: '800', lineHeight: 20, marginBottom: 10 }, loadingText: { color: '#64748b', textAlign: 'center', marginVertical: 12 },
   homeWrap: { paddingTop: 88, gap: 22 }, homeCard: { minHeight: 150, flexDirection: 'row-reverse', alignItems: 'center', backgroundColor: '#fff', borderRadius: 30, padding: 22, gap: 16, borderWidth: 1, borderColor: '#edf2f7', elevation: 3 }, homeIconBox: { width: 92, height: 92, borderRadius: 26, backgroundColor: '#eef5ff', alignItems: 'center', justifyContent: 'center' }, homeEmoji: { fontSize: 48 }, homeTextBlock: { flex: 1 }, homeTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'right' }, homeSubtitle: { color: '#64748b', fontSize: 14, textAlign: 'right', marginTop: 7, lineHeight: 22 }, homeCount: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 8, fontWeight: '800' }, chevron: { color: '#315b8a', fontSize: 38 },
