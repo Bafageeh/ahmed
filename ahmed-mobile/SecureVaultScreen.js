@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -14,7 +15,8 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowRight, KeyRound, Plus } from 'lucide-react-native';
+import { ArrowRight, Check, Copy, KeyRound, Plus } from 'lucide-react-native';
+import * as Clipboard from 'expo-clipboard';
 import * as Notifications from './SafeNotifications';
 import * as SecureStore from 'expo-secure-store';
 import BankLogo from './BankLogo';
@@ -297,7 +299,51 @@ function SecretCard({ item, revealed, onReveal }) {
   return <View style={styles.secretCard}><SecretRow label="اسم المستخدم" value={revealed ? (item.username || '—') : (item.has_username ? '••••••••' : '—')} /><SecretRow label="كلمة المرور" value={revealed ? (item.password || '—') : (item.has_password ? '••••••••••' : '—')} /><TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك التشفير'}</Text></TouchableOpacity></View>;
 }
 function SiteLoginCard({ item, revealed, onReveal, onEdit, onDelete, compact = false }) {
-  return <View style={[styles.siteCard, compact && styles.siteCardCompact]}><View style={styles.siteHeader}><View style={styles.siteActions}><TouchableOpacity style={styles.iconAction} onPress={onEdit}><Text>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.iconAction} onPress={onDelete}><Text>🗑️</Text></TouchableOpacity></View><View style={styles.siteTitleBlock}><Text style={styles.siteTitle}>{item.title || 'حساب'}</Text>{item.url ? <Text style={styles.siteUrl}>{item.url}</Text> : null}</View><View style={styles.siteIcon}><Text style={styles.siteIconText}>🌐</Text></View></View><SecretRow label="اسم المستخدم" value={revealed ? (item.username || '—') : (item.has_username ? '••••••••' : '—')} /><SecretRow label="كلمة المرور" value={revealed ? (item.password || '—') : (item.has_password ? '••••••••••' : '—')} /><TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك'}</Text></TouchableOpacity></View>;
+  return <View style={[styles.siteCard, compact && styles.siteCardCompact]}><View style={styles.siteHeader}><View style={styles.siteActions}><TouchableOpacity style={styles.iconAction} onPress={onEdit}><Text>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.iconAction} onPress={onDelete}><Text>🗑️</Text></TouchableOpacity></View><View style={styles.siteTitleBlock}><Text style={styles.siteTitle}>{item.title || 'حساب'}</Text>{item.url ? <Text style={styles.siteUrl}>{item.url}</Text> : null}</View><View style={styles.siteIcon}><Text style={styles.siteIconText}>🌐</Text></View></View><CredentialRow label="اسم المستخدم" item={item} field="username" revealed={revealed} /><CredentialRow label="كلمة المرور" item={item} field="password" revealed={revealed} /><TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك'}</Text></TouchableOpacity></View>;
+}
+async function copyVaultCredential(item, field, revealed) {
+  let credential = revealed ? item[field] : undefined;
+  if (credential == null) {
+    const response = await fetch(`${API_URL}/secure-vault/${item.id}`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
+    const json = await response.json();
+    if (!response.ok) throw new Error('credential unavailable');
+    credential = json.data?.[field];
+  }
+  if (credential == null || String(credential).length === 0) return 'empty';
+  const copied = await Clipboard.setStringAsync(String(credential));
+  if (copied === false) throw new Error('clipboard unavailable');
+  return 'copied';
+}
+function CredentialRow({ item, field, label, revealed }) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const copyingRef = useRef(false);
+  const hasValue = Boolean(item[`has_${field}`] || item[field]);
+  const value = revealed ? item[field] : (hasValue ? (field === 'password' ? '••••••••••' : '••••••••') : '');
+  const copying = copyStatus === 'copying';
+  useEffect(() => {
+    if (!copyStatus || copying) return undefined;
+    const timer = setTimeout(() => setCopyStatus(''), 2500);
+    return () => clearTimeout(timer);
+  }, [copyStatus]);
+  const copy = async () => {
+    if (!hasValue || copyingRef.current) return;
+    copyingRef.current = true;
+    setCopyStatus('copying');
+    try { setCopyStatus(await copyVaultCredential(item, field, revealed)); }
+    catch (error) { setCopyStatus('error'); }
+    finally { copyingRef.current = false; }
+  };
+  const feedback = copyStatus === 'copied' ? `تم نسخ ${label}` : copyStatus === 'empty' ? 'لا توجد قيمة للنسخ.' : copyStatus === 'error' ? 'تعذر النسخ، حاول مجددًا.' : '';
+  return <>
+    <View style={[styles.secretRow, styles.credentialRow]}>
+      <TouchableOpacity style={[styles.credentialCopyButton, !hasValue && styles.credentialCopyDisabled]} onPress={copy} disabled={!hasValue || copying} hitSlop={4} activeOpacity={0.72} accessibilityRole="button" accessibilityLabel={`نسخ ${label}`} accessibilityState={{ disabled: !hasValue || copying, busy: copying }}>
+        {copying ? <ActivityIndicator size="small" color="#0e7490" /> : copyStatus === 'copied' ? <Check size={19} color="#0e7490" /> : <Copy size={19} color="#315b8a" />}
+      </TouchableOpacity>
+      <Text style={styles.secretValue} numberOfLines={1}>{String(value || '—')}</Text>
+      <Text style={styles.secretLabel}>{label}</Text>
+    </View>
+    {feedback ? <Text style={[styles.credentialCopyMessage, copyStatus === 'error' && styles.credentialCopyError]} accessibilityLiveRegion="polite">{feedback}</Text> : null}
+  </>;
 }
 function BankCard({ item, creditDebts, revealed, onReveal, onEdit, onDelete }) {
   const debt = creditDebts.find((entry) => String(entry.id) === String(item.credit_card_debt_id));
@@ -396,6 +442,7 @@ function preparePayload(form, mode, creditDebts) {
 function getMenuItems(view, selectedGroup, addBank, addSite, addCard, addAccount, editCredentials, editBank) { if (view === 'home') return [{ label: 'إضافة بنك', onPress: addBank }, { label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'banks') return [{ label: 'إضافة بنك', onPress: addBank }]; if (view === 'sites') return [{ label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'bank' && selectedGroup) { const bank = selectedGroup.bank; const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password)); return [{ label: 'إضافة حساب بنكي', onPress: addAccount }, { label: 'إضافة بطاقة', onPress: addCard }, ...(bank ? [{ label: hasCredentials ? 'تعديل بيانات الدخول' : 'إضافة بيانات الدخول', onPress: editCredentials }, { label: 'تعديل البنك', onPress: editBank }] : [])]; } return []; }
 
 const styles = StyleSheet.create({
+  credentialRow: { paddingVertical: 6, gap: 8 }, credentialCopyButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#eef5ff', alignItems: 'center', justifyContent: 'center' }, credentialCopyDisabled: { opacity: 0.35 }, credentialCopyMessage: { color: '#0e7490', fontSize: 11, fontWeight: '700', textAlign: 'right', marginTop: 4 }, credentialCopyError: { color: '#be123c' },
   safe: { flex: 1, backgroundColor: '#f4f7fb', paddingTop: STATUS_TOP }, screen: { flex: 1, backgroundColor: '#f4f7fb' },
   topBar: { height: 72, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 82 }, topTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
   topBackButton: { position: 'absolute', right: 16, top: 11, width: 50, height: 50, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8fafc', borderRadius: 17, borderWidth: 1, borderColor: '#dbe3ee' }, topBackText: { color: '#0f172a', fontWeight: '500', fontSize: 38, lineHeight: 40, marginTop: -3 },
