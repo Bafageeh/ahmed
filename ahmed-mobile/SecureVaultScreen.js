@@ -15,7 +15,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowRight, Check, Copy, KeyRound, Plus } from 'lucide-react-native';
+import { ArrowRight, Check, Copy, KeyRound, LockKeyhole, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from './SafeNotifications';
 import * as SecureStore from 'expo-secure-store';
@@ -62,11 +62,13 @@ export default function SecureVaultScreen({ onBack }) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [revealedId, setRevealedId] = useState(null);
+  const [selectedSiteId, setSelectedSiteId] = useState(null);
 
   const vault = useMemo(() => buildVault(items), [items]);
   const selectedGroup = useMemo(() => vault.groups.find((group) => group.key === selectedBankKey) || null, [vault.groups, selectedBankKey]);
   const bankGroups = useMemo(() => filterBankGroups(vault.groups, search), [vault.groups, search]);
   const siteItems = useMemo(() => filterSites(vault.siteLogins, search), [vault.siteLogins, search]);
+  const selectedSite = useMemo(() => vault.siteLogins.find((item) => String(item.id) === String(selectedSiteId)) || null, [vault.siteLogins, selectedSiteId]);
 
   useEffect(() => { loadItems(); configureNotifications(); }, []);
   useEffect(() => {
@@ -154,6 +156,8 @@ export default function SecureVaultScreen({ onBack }) {
   const openForm = (mode, nextForm, id = null) => { setMenuOpen(false); setFormMode(mode); setEditingId(id); setForm({ ...emptyForm, ...nextForm }); setFormOpen(true); setMessage(''); };
   const startAddBank = () => openForm('bank', { category: 'banks', record_type: 'subscription' });
   const startAddSite = () => openForm('login', { category: 'websites', record_type: 'login', owner_group: SITE_GROUP });
+  const closeSiteDetails = () => { setSelectedSiteId(null); setRevealedId(null); setMessage(''); };
+  const showSiteDetails = (item) => { setRevealedId(null); setMessage(''); setSelectedSiteId(item.id); };
   const startBankCredentials = async () => {
     if (!selectedGroup?.bank) return;
     let full = selectedGroup.bank;
@@ -245,8 +249,9 @@ export default function SecureVaultScreen({ onBack }) {
           {view === 'home' ? <HomeView bankCount={vault.groups.length} siteCount={vault.siteLogins.length} onBanks={() => setView('banks')} onSites={() => setView('sites')} /> : null}
           {view === 'banks' ? <BanksView groups={bankGroups} onBank={openBank} /> : null}
           {view === 'bank' && selectedGroup ? <BankDetails group={selectedGroup} creditDebts={creditDebts} revealedId={revealedId} onReveal={revealItem} onEdit={startEdit} onDelete={deleteItem} onAddCard={startAddCard} onAddAccount={startAddAccount} onEditCredentials={startBankCredentials} /> : null}
-          {view === 'sites' ? <SitesView items={siteItems} revealedId={revealedId} onReveal={revealItem} onEdit={startEdit} onDelete={deleteItem} /> : null}
+          {view === 'sites' ? <SitesView items={siteItems} onSelect={showSiteDetails} /> : null}
         </ScrollView>
+        <SiteDetailsModal item={selectedSite} revealed={Boolean(selectedSite && revealedId === selectedSite.id)} message={message} onClose={closeSiteDetails} onReveal={() => selectedSite && revealItem(selectedSite)} onEdit={() => { if (selectedSite) { const item = selectedSite; closeSiteDetails(); startEdit(item); } }} onDelete={() => { if (selectedSite) { const item = selectedSite; closeSiteDetails(); deleteItem(item); } }} />
         <VaultFormModal open={formOpen} form={form} formMode={formMode} setField={setField} saving={saving} message={message} saveItem={saveItem} cancel={() => { setFormOpen(false); setEditingId(null); setForm(emptyForm); setMessage(''); }} selectedGroup={selectedGroup} groups={vault.groups} creditDebts={creditDebts} editingId={editingId} />
       </View>
     </SafeAreaView>
@@ -290,16 +295,67 @@ function BankAccountCard({ item, onEdit, onDelete, nested = false }) {
     <View style={styles.bankAccountCompactRow}><Text style={styles.bankAccountNumberValue} selectable>{accountNumber || '—'}</Text><Text style={styles.bankAccountCompactLabel}>رقم الحساب</Text></View>
   </View>;
 }
-function SitesView({ items, revealedId, onReveal, onEdit, onDelete }) {
-  return <><Text style={[styles.pageSubtitle, { marginTop: 16 }]}>حسابات المستخدمين وكلمات المرور</Text>{items.length ? items.map((item) => <SiteLoginCard key={item.id} item={item} revealed={revealedId === item.id} onReveal={() => onReveal(item)} onEdit={() => onEdit(item)} onDelete={() => onDelete(item)} />) : <EmptyCard text="لا توجد مواقع أو تطبيقات محفوظة." />}</>;
+function SitesView({ items, onSelect }) {
+  return items.length ? <View style={styles.siteGrid}>
+    {items.map((item) => <SiteTile key={item.id} item={item} onPress={() => onSelect(item)} />)}
+  </View> : <EmptyCard text="لا توجد مواقع أو تطبيقات محفوظة." />;
+}
+function siteSymbol(item) {
+  const title = String(item?.title || '').toLowerCase();
+  if (/google|gmail|جوجل/.test(title)) return '🔎';
+  if (/cpanel|سي بانل/.test(title)) return '🖥️';
+  if (/apple|icloud|أبل/.test(title)) return '🍎';
+  if (/microsoft|outlook|مايكروسوفت/.test(title)) return '🪟';
+  if (/amazon|أمازون/.test(title)) return '📦';
+  if (/facebook|فيسبوك/.test(title)) return '📘';
+  return '🌐';
+}
+function SiteTile({ item, onPress }) {
+  return <TouchableOpacity style={styles.siteTile} activeOpacity={0.78} onPress={onPress} accessibilityRole="button" accessibilityLabel={`عرض تفاصيل ${item.title || 'الحساب'}`}>
+    <View style={styles.siteTileIcon}><Text style={styles.siteTileEmoji}>{siteSymbol(item)}</Text></View>
+    <Text style={styles.siteTileName} numberOfLines={2}>{item.title || 'حساب'}</Text>
+  </TouchableOpacity>;
+}
+function SiteDetailsModal({ item, revealed, message, onClose, onReveal, onEdit, onDelete }) {
+  return <Modal visible={Boolean(item)} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <View style={styles.siteDetailsOverlay}>
+      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel="إغلاق التفاصيل" />
+      {item ? <View style={styles.siteDetailsCard}>
+        <View style={styles.siteDetailsHeader}>
+          <View style={styles.siteDetailsIcon}><Text style={styles.siteDetailsEmoji}>{siteSymbol(item)}</Text></View>
+          <Text style={styles.siteDetailsTitle} numberOfLines={2}>{item.title || 'حساب'}</Text>
+          <TouchableOpacity style={styles.siteDetailsClose} onPress={onClose} accessibilityRole="button" accessibilityLabel="إغلاق"><X size={22} color="#64748b" /></TouchableOpacity>
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false} style={styles.siteDetailsScroll} contentContainerStyle={styles.siteDetailsBody}>
+          <CredentialRow item={item} field="username" label="اسم المستخدم" revealed={revealed} />
+          <CredentialRow item={item} field="password" label="كلمة المرور" revealed={revealed} />
+          {item.url ? <View style={styles.siteDetailsInfo}>
+            <Text style={styles.siteDetailsInfoLabel}>الموقع</Text>
+            <Text style={styles.siteDetailsInfoValue} selectable>{item.url}</Text>
+          </View> : null}
+          {revealed && item.notes ? <View style={styles.siteDetailsInfo}>
+            <Text style={styles.siteDetailsInfoLabel}>ملاحظات</Text>
+            <Text style={styles.siteDetailsInfoValue} selectable>{item.notes}</Text>
+          </View> : null}
+          <TouchableOpacity style={styles.siteDetailsReveal} onPress={onReveal} activeOpacity={0.8}>
+            <LockKeyhole size={17} color="#0e7490" />
+            <Text style={styles.siteDetailsRevealText}>{revealed ? 'إخفاء البيانات' : 'فك التشفير وإظهار البيانات'}</Text>
+          </TouchableOpacity>
+          {revealed ? <Text style={styles.siteDetailsHint}>تُخفى البيانات تلقائيًا بعد 30 ثانية.</Text> : null}
+          {message ? <Text style={styles.siteDetailsMessage}>{message}</Text> : null}
+        </ScrollView>
+        <View style={styles.siteDetailsFooter}>
+          <TouchableOpacity style={styles.siteDetailsEdit} onPress={onEdit} activeOpacity={0.8}><Pencil size={18} color="#315b8a" /><Text style={styles.siteDetailsEditText}>تعديل</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.siteDetailsDelete} onPress={onDelete} activeOpacity={0.8}><Trash2 size={18} color="#be123c" /><Text style={styles.siteDetailsDeleteText}>حذف</Text></TouchableOpacity>
+        </View>
+      </View> : null}
+    </View>
+  </Modal>;
 }
 function SecretCard({ item, revealed, onReveal }) {
   const hasLogin = item.has_username || item.has_password || item.username || item.password;
   if (!hasLogin) return <View style={styles.secretCard}><Text style={styles.noLogin}>لا توجد بيانات دخول محفوظة لهذا البنك.</Text></View>;
   return <View style={styles.secretCard}><SecretRow label="اسم المستخدم" value={revealed ? (item.username || '—') : (item.has_username ? '••••••••' : '—')} /><SecretRow label="كلمة المرور" value={revealed ? (item.password || '—') : (item.has_password ? '••••••••••' : '—')} /><TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك التشفير'}</Text></TouchableOpacity></View>;
-}
-function SiteLoginCard({ item, revealed, onReveal, onEdit, onDelete, compact = false }) {
-  return <View style={[styles.siteCard, compact && styles.siteCardCompact]}><View style={styles.siteHeader}><View style={styles.siteActions}><TouchableOpacity style={styles.iconAction} onPress={onEdit}><Text>✏️</Text></TouchableOpacity><TouchableOpacity style={styles.iconAction} onPress={onDelete}><Text>🗑️</Text></TouchableOpacity></View><View style={styles.siteTitleBlock}><Text style={styles.siteTitle}>{item.title || 'حساب'}</Text>{item.url ? <Text style={styles.siteUrl}>{item.url}</Text> : null}</View><View style={styles.siteIcon}><Text style={styles.siteIconText}>🌐</Text></View></View><CredentialRow label="اسم المستخدم" item={item} field="username" revealed={revealed} /><CredentialRow label="كلمة المرور" item={item} field="password" revealed={revealed} /><TouchableOpacity style={styles.revealButton} onPress={onReveal}><Text style={styles.revealText}>{revealed ? 'إخفاء' : 'فك'}</Text></TouchableOpacity></View>;
 }
 async function copyVaultCredential(item, field, revealed) {
   let credential = revealed ? item[field] : undefined;
@@ -442,6 +498,32 @@ function preparePayload(form, mode, creditDebts) {
 function getMenuItems(view, selectedGroup, addBank, addSite, addCard, addAccount, editCredentials, editBank) { if (view === 'home') return [{ label: 'إضافة بنك', onPress: addBank }, { label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'banks') return [{ label: 'إضافة بنك', onPress: addBank }]; if (view === 'sites') return [{ label: 'إضافة موقع أو تطبيق', onPress: addSite }]; if (view === 'bank' && selectedGroup) { const bank = selectedGroup.bank; const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password)); return [{ label: 'إضافة حساب بنكي', onPress: addAccount }, { label: 'إضافة بطاقة', onPress: addCard }, ...(bank ? [{ label: hasCredentials ? 'تعديل بيانات الدخول' : 'إضافة بيانات الدخول', onPress: editCredentials }, { label: 'تعديل البنك', onPress: editBank }] : [])]; } return []; }
 
 const styles = StyleSheet.create({
+  siteGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', columnGap: 11, rowGap: 14, paddingTop: 8 },
+  siteTile: { width: '31%', minHeight: 132, backgroundColor: '#ffffff', borderRadius: 24, borderWidth: 1, borderColor: '#e8eef6', alignItems: 'center', justifyContent: 'center', padding: 10, elevation: 2, shadowColor: '#64748b', shadowOpacity: 0.06, shadowRadius: 4 },
+  siteTileIcon: { width: 65, height: 65, backgroundColor: '#eff5ff', borderRadius: 21, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  siteTileEmoji: { fontSize: 32, textAlign: 'center' },
+  siteTileName: { color: '#0f172a', fontSize: 14, fontWeight: '900', textAlign: 'center', lineHeight: 20 },
+  siteDetailsOverlay: { flex: 1, backgroundColor: 'rgba(7,19,38,0.55)', paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+  siteDetailsCard: { width: '100%', maxWidth: 460, maxHeight: '86%', backgroundColor: '#ffffff', borderRadius: 28, overflow: 'hidden', elevation: 12, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 18 },
+  siteDetailsHeader: { flexDirection: 'row-reverse', alignItems: 'center', padding: 20, gap: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  siteDetailsIcon: { width: 58, height: 58, borderRadius: 19, backgroundColor: '#eff5ff', alignItems: 'center', justifyContent: 'center' },
+  siteDetailsEmoji: { fontSize: 30 },
+  siteDetailsTitle: { flex: 1, fontWeight: '900', fontSize: 21, color: '#0f172a', textAlign: 'right' },
+  siteDetailsClose: { width: 38, height: 38, borderRadius: 14, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' },
+  siteDetailsScroll: { flexGrow: 0, maxHeight: 460 },
+  siteDetailsBody: { paddingHorizontal: 19, paddingTop: 12, paddingBottom: 18 },
+  siteDetailsInfo: { backgroundColor: '#f8fafc', borderRadius: 14, padding: 13, marginTop: 11, gap: 6 },
+  siteDetailsInfoLabel: { color: '#64748b', fontWeight: '800', fontSize: 12, textAlign: 'right' },
+  siteDetailsInfoValue: { color: '#0f172a', fontWeight: '700', fontSize: 14, textAlign: 'right' },
+  siteDetailsReveal: { alignSelf: 'flex-end', flexDirection: 'row-reverse', alignItems: 'center', gap: 8, backgroundColor: '#ecfeff', borderColor: '#cffafe', borderWidth: 1, paddingHorizontal: 15, paddingVertical: 10, borderRadius: 99, marginTop: 15 },
+  siteDetailsRevealText: { color: '#0e7490', fontSize: 13, fontWeight: '900' },
+  siteDetailsHint: { color: '#94a3b8', fontSize: 11, textAlign: 'right', marginTop: 7 },
+  siteDetailsMessage: { color: '#0e7490', textAlign: 'right', fontSize: 12, marginTop: 10, fontWeight: '700' },
+  siteDetailsFooter: { flexDirection: 'row-reverse', padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
+  siteDetailsEdit: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 12, borderRadius: 15, backgroundColor: '#eef5ff' },
+  siteDetailsDelete: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 9, paddingVertical: 12, borderRadius: 15, backgroundColor: '#fff1f2' },
+  siteDetailsEditText: { color: '#315b8a', fontWeight: '900', fontSize: 15 },
+  siteDetailsDeleteText: { color: '#be123c', fontWeight: '900', fontSize: 15 },
   credentialRow: { paddingVertical: 6, gap: 8 }, credentialCopyButton: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#eef5ff', alignItems: 'center', justifyContent: 'center' }, credentialCopyDisabled: { opacity: 0.35 }, credentialCopyMessage: { color: '#0e7490', fontSize: 11, fontWeight: '700', textAlign: 'right', marginTop: 4 }, credentialCopyError: { color: '#be123c' },
   safe: { flex: 1, backgroundColor: '#f4f7fb', paddingTop: STATUS_TOP }, screen: { flex: 1, backgroundColor: '#f4f7fb' },
   topBar: { height: 72, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 82 }, topTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
