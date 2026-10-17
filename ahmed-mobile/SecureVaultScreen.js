@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Image,
   Modal,
   Platform,
   SafeAreaView,
@@ -15,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowRight, Check, Copy, KeyRound, LockKeyhole, Pencil, Plus, Trash2, X } from 'lucide-react-native';
+import { ArrowRight, Check, Copy, Globe2, KeyRound, LockKeyhole, Monitor, Pencil, Plus, Trash2, X } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from './SafeNotifications';
 import * as SecureStore from 'expo-secure-store';
@@ -26,6 +27,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const NOTIFICATION_CHANNEL = 'card-statements';
 const STATUS_TOP = Platform.OS === 'android' ? (NativeStatusBar.currentHeight || 0) : 0;
 const SITE_GROUP = 'sites';
+const SITE_ICON_BASE = `${API_URL.replace(/\/api\/?$/, '')}/site-icons/`;
 
 if (Notifications.isAvailable) {
   Notifications.setNotificationHandler({
@@ -300,19 +302,37 @@ function SitesView({ items, onSelect }) {
     {items.map((item) => <SiteTile key={item.id} item={item} onPress={() => onSelect(item)} />)}
   </View> : <EmptyCard text="لا توجد مواقع أو تطبيقات محفوظة." />;
 }
-function siteSymbol(item) {
-  const title = String(item?.title || '').toLowerCase();
-  if (/google|gmail|جوجل/.test(title)) return '🔎';
-  if (/cpanel|سي بانل/.test(title)) return '🖥️';
-  if (/apple|icloud|أبل/.test(title)) return '🍎';
-  if (/microsoft|outlook|مايكروسوفت/.test(title)) return '🪟';
-  if (/amazon|أمازون/.test(title)) return '📦';
-  if (/facebook|فيسبوك/.test(title)) return '📘';
-  return '🌐';
+function siteLogoSlug(item) {
+  const label = String(item?.title || '').toLowerCase();
+  const address = String(item?.url || '').toLowerCase();
+  const name = `${label} ${address}`;
+  if (/hik[\s-]?connect|hikvision|هيك.?كونكت/.test(name)) return 'hik-connect';
+  if (/mystc|(^|[^a-z])stc([^a-z]|$)|الاتصالات السعودية/.test(name)) return 'stc';
+  if (/samsung|سامسونج/.test(name)) return 'samsung';
+  if (/apple|icloud|ابل|أبل|آبل/.test(name)) return 'apple';
+  if (/go.?daddy|جودادي|جو دادي/.test(name)) return 'godaddy';
+  if (/mobily|موبايلي/.test(name)) return 'mobily';
+  if (/chat[\s-]?gpt|openai|شات جي بي تي/.test(name)) return 'chatgpt';
+  if (/expo|اكسبو|إكسبو/.test(name)) return 'expo';
+  if (/alfursan|al.?fursan|الفرسان|saudia/.test(name)) return 'alfursan';
+  if (/google|gmail|جوجل|قوقل/.test(name)) return 'google';
+  if (/sahara|صحارى|صحاري/.test(name)) return 'sahara';
+  if (/cpanel|c[\s-]?panel|سي بانل/.test(name)) return 'cpanel';
+  return null;
+}
+function SiteBrandLogo({ item, size = 58 }) {
+  const slug = siteLogoSlug(item);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [slug]);
+  const isWorkDevice = /جهاز العمل|work device|work pc|computer/i.test(String(item?.title || ''));
+  if (!slug || failed) return isWorkDevice
+    ? <Monitor size={size * 0.63} color="#315b8a" strokeWidth={1.9} />
+    : <Globe2 size={size * 0.63} color="#315b8a" strokeWidth={1.9} />;
+  return <Image source={{ uri: `${SITE_ICON_BASE}${slug}.png` }} style={{ width: size, height: size }} resizeMode="contain" onError={() => setFailed(true)} accessibilityLabel={`شعار ${item?.title || ''}`} />;
 }
 function SiteTile({ item, onPress }) {
   return <TouchableOpacity style={styles.siteTile} activeOpacity={0.78} onPress={onPress} accessibilityRole="button" accessibilityLabel={`عرض تفاصيل ${item.title || 'الحساب'}`}>
-    <View style={styles.siteTileIcon}><Text style={styles.siteTileEmoji}>{siteSymbol(item)}</Text></View>
+    <View style={styles.siteTileIcon}><SiteBrandLogo item={item} size={55} /></View>
     <Text style={styles.siteTileName} numberOfLines={2}>{item.title || 'حساب'}</Text>
   </TouchableOpacity>;
 }
@@ -322,7 +342,7 @@ function SiteDetailsModal({ item, revealed, message, onClose, onReveal, onEdit, 
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} accessibilityLabel="إغلاق التفاصيل" />
       {item ? <View style={styles.siteDetailsCard}>
         <View style={styles.siteDetailsHeader}>
-          <View style={styles.siteDetailsIcon}><Text style={styles.siteDetailsEmoji}>{siteSymbol(item)}</Text></View>
+          <View style={styles.siteDetailsIcon}><SiteBrandLogo item={item} size={49} /></View>
           <Text style={styles.siteDetailsTitle} numberOfLines={2}>{item.title || 'حساب'}</Text>
           <TouchableOpacity style={styles.siteDetailsClose} onPress={onClose} accessibilityRole="button" accessibilityLabel="إغلاق"><X size={22} color="#64748b" /></TouchableOpacity>
         </View>
