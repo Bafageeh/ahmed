@@ -250,7 +250,7 @@ export default function SecureVaultScreen({ onBack }) {
           {loading ? <Text style={styles.loadingText}>جاري تحميل الخزنة...</Text> : null}
           {view === 'home' ? <HomeView bankCount={vault.groups.length} siteCount={vault.siteLogins.length} onBanks={() => setView('banks')} onSites={() => setView('sites')} /> : null}
           {view === 'banks' ? <BanksView groups={bankGroups} onBank={openBank} /> : null}
-          {view === 'bank' && selectedGroup ? <BankDetails group={selectedGroup} creditDebts={creditDebts} revealedId={revealedId} onReveal={revealItem} onEdit={startEdit} onDelete={deleteItem} onAddCard={startAddCard} onAddAccount={startAddAccount} onEditCredentials={startBankCredentials} /> : null}
+          {view === 'bank' && selectedGroup ? <BankDetails group={selectedGroup} creditDebts={creditDebts} revealedId={revealedId} onReveal={revealItem} onHideSecrets={() => setRevealedId(null)} onEdit={startEdit} onDelete={deleteItem} onAddCard={startAddCard} onAddAccount={startAddAccount} onEditCredentials={startBankCredentials} /> : null}
           {view === 'sites' ? <SitesView items={siteItems} onSelect={showSiteDetails} /> : null}
         </ScrollView>
         <SiteDetailsModal item={selectedSite} revealed={Boolean(selectedSite && revealedId === selectedSite.id)} message={message} onClose={closeSiteDetails} onReveal={() => selectedSite && revealItem(selectedSite)} onEdit={() => { if (selectedSite) { const item = selectedSite; closeSiteDetails(); startEdit(item); } }} onDelete={() => { if (selectedSite) { const item = selectedSite; closeSiteDetails(); deleteItem(item); } }} />
@@ -269,7 +269,7 @@ function HomeView({ bankCount, siteCount, onBanks, onSites }) {
 function BanksView({ groups, onBank }) {
   return <><Text style={styles.pageTitle}>البنوك</Text><Text style={styles.pageSubtitle}>اختر بنكًا لعرض حساب الدخول والبطاقات</Text>{groups.length ? <View style={styles.bankGrid}>{groups.map((group) => <TouchableOpacity key={group.key} style={styles.bankTile} activeOpacity={0.84} onPress={() => onBank(group)}><View style={styles.bankLogoBox}><BankLogo bankName={group.displayName} size={66} /></View><Text style={styles.bankTileName}>{cleanBankName(group.displayName)}</Text></TouchableOpacity>)}</View> : <EmptyCard text="لا توجد بنوك محفوظة." />}</>;
 }
-function BankDetails({ group, creditDebts, revealedId, onReveal, onEdit, onDelete, onAddCard, onAddAccount, onEditCredentials }) {
+function BankDetails({ group, creditDebts, revealedId, onReveal, onHideSecrets, onEdit, onDelete, onAddCard, onAddAccount, onEditCredentials }) {
   const [accountsOpen, setAccountsOpen] = useState(false);
   const bank = group.bank;
   const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password));
@@ -564,6 +564,18 @@ const styles = StyleSheet.create({
   bankSectionTileName: { color: '#0f172a', fontWeight: '900', fontSize: 15, textAlign: 'center', lineHeight: 22, marginTop: 11 },
   bankSectionTileNameActive: { color: '#174d7b' },
   bankSectionBody: { paddingBottom: 7 },
+  bankPopupOverlay: { flex: 1, backgroundColor: 'rgba(7,19,38,0.55)', paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  bankPopupCard: { width: '100%', maxWidth: 470, maxHeight: '86%', minHeight: 220, borderRadius: 27, backgroundColor: '#fff', overflow: 'hidden', elevation: 16, shadowColor: '#000', shadowOpacity: 0.17, shadowRadius: 16 },
+  bankPopupHeader: { minHeight: 78, paddingHorizontal: 18, paddingVertical: 12, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: '#eef2f7', gap: 10 },
+  bankPopupHeading: { flex: 1, flexDirection: 'row-reverse', alignItems: 'center', gap: 11 },
+  bankPopupIcon: { height: 47, width: 47, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eff6ff' },
+  bankPopupTitle: { flex: 1, color: '#0f172a', textAlign: 'right', fontWeight: '900', fontSize: 19 },
+  bankPopupClose: { width: 38, height: 38, borderRadius: 13, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  bankPopupActionRow: { paddingHorizontal: 18, paddingTop: 13, alignItems: 'flex-start' },
+  bankPopupActionButton: { backgroundColor: '#eef6ff', borderWidth: 1, borderColor: '#dbeafe', borderRadius: 999, paddingHorizontal: 15, paddingVertical: 9 },
+  bankPopupActionText: { color: '#245f91', fontSize: 14, fontWeight: '900' },
+  bankPopupScroll: { flexGrow: 0, flexShrink: 1 },
+  bankPopupBody: { paddingHorizontal: 18, paddingTop: 12, paddingBottom: 22 },
   sectionHeader: { marginTop: 22, marginBottom: 10, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'space-between' }, sectionTitle: { color: '#0f172a', fontSize: 21, fontWeight: '900', textAlign: 'right' }, sectionAction: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ee', borderRadius: 999, paddingHorizontal: 13, paddingVertical: 8 }, sectionActionText: { color: '#315b8a', fontWeight: '900', fontSize: 13 },
   secretCard: { backgroundColor: '#fff', borderRadius: 24, padding: 16, borderWidth: 1, borderColor: '#edf2f7' }, secretRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, marginTop: 8, gap: 12 }, secretLabel: { color: '#64748b', fontSize: 13, fontWeight: '800', textAlign: 'right' }, secretValue: { flex: 1, color: '#0f172a', fontSize: 14, fontWeight: '800', textAlign: 'left' }, revealButton: { alignSelf: 'flex-start', backgroundColor: '#ecfeff', borderWidth: 1, borderColor: '#cffafe', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, marginTop: 10 }, revealText: { color: '#0e7490', fontWeight: '900', fontSize: 12 }, noLogin: { color: '#94a3b8', textAlign: 'center', paddingVertical: 12 },
   accountsDropdown: { backgroundColor: '#fff', borderRadius: 26, borderWidth: 1, borderColor: '#e6edf5', overflow: 'hidden', elevation: 2 }, accountsDropdownHeader: { minHeight: 94, padding: 16, flexDirection: 'row-reverse', alignItems: 'center', gap: 12 }, accountsDropdownIcon: { width: 54, height: 54, borderRadius: 17, backgroundColor: '#eef5ff', alignItems: 'center', justifyContent: 'center' }, accountsDropdownIconText: { fontSize: 27 }, accountsDropdownText: { flex: 1 }, accountsDropdownTitle: { color: '#0f172a', fontSize: 18, fontWeight: '900', textAlign: 'right' }, accountsDropdownSubtitle: { color: '#94a3b8', fontSize: 12, textAlign: 'right', marginTop: 5 }, accountsDropdownMeta: { alignItems: 'center', gap: 7 }, accountsCountBadge: { backgroundColor: '#eef6ff', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 }, accountsCountText: { color: '#315b8a', fontSize: 12, fontWeight: '900' }, accountsChevron: { color: '#0f172a', fontSize: 23, fontWeight: '900', lineHeight: 24 }, accountsDropdownBody: { paddingHorizontal: 12, paddingBottom: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingTop: 12 },

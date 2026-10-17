@@ -85,6 +85,24 @@ module.exports = function secureVaultBankDetailHeader({ types: t, template }) {
                   { key: 'accounts', label: 'الحسابات البنكية', Icon: Landmark },
                   { key: 'cards', label: 'البطاقات', Icon: CreditCard },
                 ];
+                const activeSection = sections.find((section) => section.key === openSection);
+                const ActiveIcon = activeSection ? activeSection.Icon : null;
+                const sectionAction = openSection === 'login' ? (bank ? onEditCredentials : null)
+                  : openSection === 'phone' ? (bank ? onPhoneBanking : null)
+                  : openSection === 'accounts' ? onAddAccount
+                  : openSection === 'cards' ? onAddCard : null;
+                const sectionActionLabel = openSection === 'login' ? (hasCredentials ? 'تعديل' : 'إضافة')
+                  : openSection === 'phone' ? (phoneBanking ? 'تعديل' : 'إضافة')
+                  : openSection === 'accounts' ? 'إضافة حساب'
+                  : openSection === 'cards' ? 'إضافة بطاقة' : '';
+                const closeSection = () => {
+                  setOpenSection(null);
+                  if (onHideSecrets) onHideSecrets();
+                };
+                const runSectionAction = (action) => {
+                  closeSection();
+                  if (action) setTimeout(() => action(), 300);
+                };
                 return <>
                   <View style={styles.bankSectionGrid}>
                     {sections.map(({ key, label, Icon }) => (
@@ -95,7 +113,7 @@ module.exports = function secureVaultBankDetailHeader({ types: t, template }) {
                         accessibilityRole="button"
                         accessibilityLabel={label}
                         accessibilityState={{ expanded: openSection === key }}
-                        onPress={() => setOpenSection((current) => current === key ? null : key)}
+                        onPress={() => setOpenSection(key)}
                       >
                         <View style={[styles.bankSectionTileIcon, openSection === key && styles.bankSectionTileIconActive]}>
                           <Icon size={34} strokeWidth={1.9} color={openSection === key ? '#ffffff' : '#245f91'} />
@@ -104,26 +122,39 @@ module.exports = function secureVaultBankDetailHeader({ types: t, template }) {
                       </TouchableOpacity>
                     ))}
                   </View>
-                  {openSection === 'login' ? <View style={styles.bankSectionBody}>
-                    <SectionHeader title="بيانات الدخول" action={bank ? (hasCredentials ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onEditCredentials : undefined} />
-                    {bank ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} /> : <EmptyCard text="لا يوجد سجل أساسي لهذا البنك." />}
-                  </View> : null}
-                  {openSection === 'phone' ? <View style={styles.bankSectionBody}>
-                    <SectionHeader title="الهاتف المصرفي" action={bank ? (phoneBanking ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onPhoneBanking : undefined} />
-                    {phoneBanking ? <PhoneBankingCard item={phoneBanking} revealed={revealedId === phoneBanking.id} onReveal={() => onReveal(phoneBanking)} /> : <EmptyCard text="لا توجد بيانات هاتف مصرفي محفوظة لهذا البنك." />}
-                  </View> : null}
-                  {openSection === 'accounts' ? <View style={styles.bankSectionBody}>
-                    <SectionHeader title="الحسابات البنكية" action="إضافة حساب" onAction={onAddAccount} />
-                    {group.accounts.length ? group.accounts.map((account) => (
-                      <BankAccountCard key={account.id} item={account} onEdit={() => onEdit(account)} onDelete={() => onDelete(account)} />
-                    )) : <EmptyCard text="لا توجد حسابات بنكية محفوظة لهذا البنك." />}
-                  </View> : null}
-                  {openSection === 'cards' ? <View style={styles.bankSectionBody}>
-                    <SectionHeader title="البطاقات" action="إضافة بطاقة" onAction={onAddCard} />
-                    {group.cards.length ? group.cards.map((card) => (
-                      <BankCard key={card.id} item={card} creditDebts={creditDebts} revealed={revealedId === card.id} onReveal={() => onReveal(card)} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />
-                    )) : <EmptyCard text="لا توجد بطاقات محفوظة لهذا البنك." />}
-                  </View> : null}
+                  <Modal visible={Boolean(openSection)} transparent animationType="fade" onRequestClose={closeSection} statusBarTranslucent>
+                    <View style={styles.bankPopupOverlay}>
+                      <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={closeSection} accessibilityLabel="إغلاق تفاصيل البنك" />
+                      <View style={styles.bankPopupCard}>
+                        <View style={styles.bankPopupHeader}>
+                          <View style={styles.bankPopupHeading}>
+                            <View style={styles.bankPopupIcon}>{ActiveIcon ? <ActiveIcon size={25} color="#245f91" strokeWidth={2} /> : null}</View>
+                            <Text style={styles.bankPopupTitle} numberOfLines={1}>{activeSection ? activeSection.label : ''}</Text>
+                          </View>
+                          <TouchableOpacity style={styles.bankPopupClose} onPress={closeSection} accessibilityRole="button" accessibilityLabel="إغلاق"><X size={23} color="#475569" /></TouchableOpacity>
+                        </View>
+                        {sectionAction ? <View style={styles.bankPopupActionRow}>
+                          <TouchableOpacity style={styles.bankPopupActionButton} onPress={() => runSectionAction(sectionAction)} activeOpacity={0.82}>
+                            <Text style={styles.bankPopupActionText}>{sectionActionLabel}</Text>
+                          </TouchableOpacity>
+                        </View> : null}
+                        <ScrollView style={styles.bankPopupScroll} contentContainerStyle={styles.bankPopupBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                          {openSection === 'login' ? (bank
+                            ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} />
+                            : <EmptyCard text="لا يوجد سجل أساسي لهذا البنك." />) : null}
+                          {openSection === 'phone' ? (phoneBanking
+                            ? <PhoneBankingCard item={phoneBanking} revealed={revealedId === phoneBanking.id} onReveal={() => onReveal(phoneBanking)} />
+                            : <EmptyCard text="لا توجد بيانات هاتف مصرفي محفوظة لهذا البنك." />) : null}
+                          {openSection === 'accounts' ? (group.accounts.length
+                            ? group.accounts.map((account) => <BankAccountCard key={account.id} item={account} onEdit={() => runSectionAction(() => onEdit(account))} onDelete={() => runSectionAction(() => onDelete(account))} />)
+                            : <EmptyCard text="لا توجد حسابات بنكية محفوظة لهذا البنك." />) : null}
+                          {openSection === 'cards' ? (group.cards.length
+                            ? group.cards.map((card) => <BankCard key={card.id} item={card} creditDebts={creditDebts} revealed={revealedId === card.id} onReveal={() => onReveal(card)} onEdit={() => runSectionAction(() => onEdit(card))} onDelete={() => runSectionAction(() => onDelete(card))} />)
+                            : <EmptyCard text="لا توجد بطاقات محفوظة لهذا البنك." />) : null}
+                        </ScrollView>
+                      </View>
+                    </View>
+                  </Modal>
                   {bank ? <TouchableOpacity style={styles.deleteBankButton} onPress={() => onDelete(bank)}><Text style={styles.deleteBankText}>حذف البنك</Text></TouchableOpacity> : null}
                 </>;
               `, { plugins: ['jsx'] });
