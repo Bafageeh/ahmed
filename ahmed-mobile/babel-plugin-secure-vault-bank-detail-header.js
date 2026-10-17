@@ -75,18 +75,55 @@ module.exports = function secureVaultBankDetailHeader({ types: t, template }) {
               }
 
               const body = template.statements.ast(`
-                const [accountsOpen, setAccountsOpen] = useState(false);
+                const [openSection, setOpenSection] = useState(null);
                 const bank = group.bank;
                 const phoneBanking = group.phoneBanking || null;
                 const hasCredentials = Boolean(bank && (bank.has_username || bank.has_password || bank.username || bank.password));
+                const sections = [
+                  { key: 'login', label: 'بيانات الدخول', Icon: LogIn },
+                  { key: 'phone', label: 'الهاتف المصرفي', Icon: Phone },
+                  { key: 'accounts', label: 'الحسابات البنكية', Icon: Landmark },
+                  { key: 'cards', label: 'البطاقات', Icon: CreditCard },
+                ];
                 return <>
-                  <SectionHeader title="بيانات الدخول" action={bank ? (hasCredentials ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onEditCredentials : undefined} />
-                  {bank ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} /> : <EmptyCard text="لا يوجد سجل أساسي لهذا البنك." />}
-                  <SectionHeader title="الهاتف المصرفي" action={bank ? (phoneBanking ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onPhoneBanking : undefined} />
-                  {phoneBanking ? <PhoneBankingCard item={phoneBanking} revealed={revealedId === phoneBanking.id} onReveal={() => onReveal(phoneBanking)} /> : <EmptyCard text="لا توجد بيانات هاتف مصرفي محفوظة لهذا البنك." />}
-                  <BankAccountsDropdown accounts={group.accounts} open={accountsOpen} onToggle={() => setAccountsOpen((value) => !value)} onAddAccount={onAddAccount} onEdit={onEdit} onDelete={onDelete} />
-                  <SectionHeader title="البطاقات" action="إضافة بطاقة" onAction={onAddCard} />
-                  {group.cards.length ? group.cards.map((card) => <BankCard key={card.id} item={card} creditDebts={creditDebts} revealed={revealedId === card.id} onReveal={() => onReveal(card)} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />) : <EmptyCard text="لا توجد بطاقات محفوظة لهذا البنك." />}
+                  <View style={styles.bankSectionGrid}>
+                    {sections.map(({ key, label, Icon }) => (
+                      <TouchableOpacity
+                        key={key}
+                        style={[styles.bankSectionTile, openSection === key && styles.bankSectionTileActive]}
+                        activeOpacity={0.8}
+                        accessibilityRole="button"
+                        accessibilityLabel={label}
+                        accessibilityState={{ expanded: openSection === key }}
+                        onPress={() => setOpenSection((current) => current === key ? null : key)}
+                      >
+                        <View style={[styles.bankSectionTileIcon, openSection === key && styles.bankSectionTileIconActive]}>
+                          <Icon size={34} strokeWidth={1.9} color={openSection === key ? '#ffffff' : '#245f91'} />
+                        </View>
+                        <Text numberOfLines={2} style={[styles.bankSectionTileName, openSection === key && styles.bankSectionTileNameActive]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {openSection === 'login' ? <View style={styles.bankSectionBody}>
+                    <SectionHeader title="بيانات الدخول" action={bank ? (hasCredentials ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onEditCredentials : undefined} />
+                    {bank ? <SecretCard item={bank} revealed={revealedId === bank.id} onReveal={() => onReveal(bank)} /> : <EmptyCard text="لا يوجد سجل أساسي لهذا البنك." />}
+                  </View> : null}
+                  {openSection === 'phone' ? <View style={styles.bankSectionBody}>
+                    <SectionHeader title="الهاتف المصرفي" action={bank ? (phoneBanking ? 'تعديل' : 'إضافة') : ''} onAction={bank ? onPhoneBanking : undefined} />
+                    {phoneBanking ? <PhoneBankingCard item={phoneBanking} revealed={revealedId === phoneBanking.id} onReveal={() => onReveal(phoneBanking)} /> : <EmptyCard text="لا توجد بيانات هاتف مصرفي محفوظة لهذا البنك." />}
+                  </View> : null}
+                  {openSection === 'accounts' ? <View style={styles.bankSectionBody}>
+                    <SectionHeader title="الحسابات البنكية" action="إضافة حساب" onAction={onAddAccount} />
+                    {group.accounts.length ? group.accounts.map((account) => (
+                      <BankAccountCard key={account.id} item={account} onEdit={() => onEdit(account)} onDelete={() => onDelete(account)} />
+                    )) : <EmptyCard text="لا توجد حسابات بنكية محفوظة لهذا البنك." />}
+                  </View> : null}
+                  {openSection === 'cards' ? <View style={styles.bankSectionBody}>
+                    <SectionHeader title="البطاقات" action="إضافة بطاقة" onAction={onAddCard} />
+                    {group.cards.length ? group.cards.map((card) => (
+                      <BankCard key={card.id} item={card} creditDebts={creditDebts} revealed={revealedId === card.id} onReveal={() => onReveal(card)} onEdit={() => onEdit(card)} onDelete={() => onDelete(card)} />
+                    )) : <EmptyCard text="لا توجد بطاقات محفوظة لهذا البنك." />}
+                  </View> : null}
                   {bank ? <TouchableOpacity style={styles.deleteBankButton} onPress={() => onDelete(bank)}><Text style={styles.deleteBankText}>حذف البنك</Text></TouchableOpacity> : null}
                 </>;
               `, { plugins: ['jsx'] });
