@@ -52,6 +52,7 @@ jobs:
             print("SULFA_PREFLIGHT_SAVED_PRIVATELY")
             PY
             /usr/local/bin/php <<'PHP'
+            <?php
             $case='/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023';
             $pub=<<<'PUBLIC_KEY'
             -----BEGIN PUBLIC KEY-----
