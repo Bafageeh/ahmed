@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import StatsDashboardScreen from './StatsDashboardScreen';
+import AccountsHomeScreen from './AccountsHomeScreen';
 import Ta3meedScreen from './Ta3meedNoResetFilterScreen';
 import Ta3meedInvestorAccountsScreen from './Ta3meedInvestorAccountsScreen';
 import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
@@ -31,7 +32,7 @@ const FINANCE_NET_PROFIT_AFTER_STUCK_PATHS = [
 
 const tabs = [
   { key: 'wealth', label: 'ثروتي', icon: 'wealth' },
-  { key: 'accounts', label: 'حساباتي', icon: 'wealth' },
+  { key: 'accounts', label: 'حساباتي', icon: 'wallet' },
   { key: 'reports', label: '', icon: 'reports', center: true, accessibilityLabel: 'تقارير' },
   { key: 'investments', label: 'استثماراتي', icon: 'investments' },
   { key: 'more', label: 'مزيد', icon: 'more' },
@@ -109,24 +110,7 @@ function ScreenWrap({ children, refreshControl }) { return <SafeAreaView style={
 function TopBar({ title, onBack, right }) { return <View style={styles.simpleTopBar}><TouchableOpacity style={styles.simpleBackButton} onPress={onBack}><UiIcon name="back" size={24} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.simpleTopTitle}>{title}</Text>{right || <View style={styles.simpleBackButton} />}</View>; }
 
 function AccountsScreen({ goTo }) {
-  return <ScreenWrap>
-    <Header badge="حساباتي" title="#S-120 حساباتي" subtitle="مركز الحسابات والدخل والقيم المستوردة من Finance." icon="wealth" />
-    <TouchableOpacity style={styles.financeHeroButton} activeOpacity={0.88} onPress={() => goTo('financeImports')}>
-      <View style={styles.financeHeroIcon}><UiIcon name="stats" size={28} color="#0f766e" /></View>
-      <View style={styles.financeHeroTextBlock}>
-        <Text style={styles.financeHeroTitle}>قيم Finance المستوردة</Text>
-        <Text style={styles.financeHeroText}>اضغط هنا لعرض جميع القيم المقروءة من مشروع Finance</Text>
-      </View>
-      <UiIcon name="back" size={22} color="#0f766e" />
-    </TouchableOpacity>
-    <View style={styles.grid}>
-      <Quick title="دخل شهري مستقبلي" text="إدارة مصادر الدخل المتوقعة" icon="reports" onPress={() => goTo('futureMonthlyIncome')} />
-      <Quick title="دخل شهري حقيقي" text="الدخل الفعلي المحقق" icon="wealth" onPress={() => goTo('actualMonthlyIncome')} />
-      <Quick title="مصروفاتي" text="إدخال ومتابعة المصروفات الشهرية والسنوية" icon="reports" onPress={() => goTo('personalExpenses')} />
-      <Quick title="ديوني" text="متابعة الأقساط والرصيد المتبقي" icon="payments" onPress={() => goTo('debts')} />
-      <Quick title="ثروتي" text="العودة إلى ملخص الثروة" icon="wealth" onPress={() => goTo('wealth')} />
-    </View>
-  </ScreenWrap>;
+  return <AccountsHomeScreen goTo={goTo} />;
 }
 
 function ReportsScreen({ goTo, openInvestments }) {
