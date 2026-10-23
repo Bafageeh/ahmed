@@ -1,0 +1,57 @@
+name: Ahmed Daleli Income Preflight
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-daleli-income-preflight.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 5m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            CASE="/home/pmsa/secure-backups/ahmed/daleli-income-20261023"
+            export DALELI_CASE="$CASE" DALELI_AHMED_ROOT="$ROOT"
+            mkdir -p "$CASE"
+            chmod 700 "$CASE"
+            python3 - <<'PYTHON'
+            import os,pathlib,json,hashlib,subprocess,re
+            case=pathlib.Path(os.environ['DALELI_CASE']);root=pathlib.Path(os.environ['DALELI_AHMED_ROOT']);com=pathlib.Path('/home/pmsa/apps/com')
+            report={'ahmed_sources':{},'com_root_exists':com.exists(),'com_sources':{},'com_source_paths':[],'endpoints':{}}
+            for rel in ['ahmed-api/app/Http/Controllers/Api/MonthlyIncomeController.php','ahmed-mobile/FutureMonthlyIncomeScreen.js','ahmed-mobile/futureMonthlyIncomeData.js','ahmed-mobile/AppShell.js']:
+             p=root/rel;report['ahmed_sources'][rel]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+            if com.exists():
+             paths=[com/'com-api/routes/api.php',com/'com-api/routes/web.php',com/'com-mobile/app/index.tsx',com/'com-mobile/src/app/index.tsx']
+             for base in ['api','public/api','com-api/public/api']:
+              for rel in ['v1/integrations/ahmed/summary/index.php','integrations/ahmed/summary/index.php']:paths.append(com/base/rel)
+             for p in (com/'com-api/app').rglob('*.php'):
+              if re.search(r'summary|profit|hosting|expense',p.name,re.I):paths.append(p)
+             for p in paths:
+              if not p.is_file():continue
+              rel=str(p.relative_to(com));data=p.read_bytes();report['com_source_paths'].append(rel)
+              if len(data)<500000:report['com_sources'][rel]={'sha256':hashlib.sha256(data).hexdigest(),'content':data.decode('utf-8','replace')}
+            for name,url in [('integration','https://com.pm.sa/api/v1/integrations/ahmed/summary/')]:
+             result=subprocess.run(['curl','-sS','-L','--max-time','18','-H','Accept: application/json','-H','Cache-Control: no-cache',url],stdout=subprocess.PIPE,stderr=subprocess.PIPE,universal_newlines=True)
+             try:report['endpoints'][name]=json.loads(result.stdout)
+             except:report['endpoints'][name]={'error':True,'body_prefix':result.stdout[:250]}
+            (case/'preflight.json').write_text(json.dumps(report,ensure_ascii=False));os.chmod(str(case/'preflight.json'),0o600)
+            print('DALELI_INCOME_PREFLIGHT_PRIVATE_READ_COMPLETED')
+            PYTHON
+            /usr/local/bin/php <<'PHP'
+            <?php
+            $body=gzencode(file_get_contents(getenv('DALELI_CASE').'/preflight.json'),9);$key=random_bytes(32);$iv=random_bytes(12);$cipher=openssl_encrypt($body,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
+            $pub=base64_decode('LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUF5NHJvbzhJanBhbUc5Umt6eGVtTApNTkFFbER1cWNEQkZXVk9lazErcE1yY1FNNlMxMmdPRzRwTmkycUVXc0lXZkpRSGM3ZjhlWmYxdlFrYm9WdmgvClY5dEpJWm1hcWdlcTI1TjVSRXpBTmgxYmtySU5TV1VWNGJlbXcrdmtpSm1ZNC9KU2RmQzR6MUJxcy9jUVZBNS8KUWNZMlVXT1JuUEdsdFA4R0V2R0JUYkZ3bEY5Y213MXpnYjVrRFlwaXRKQlhtQWx4ZXRqZWRzajhrL0xKejJLcwpTVmRtSTA3VTM2eDBXQURSRmNFVGU2WkxZekJ5WHVqalUydmZpcXN0SE9jTmpKeis2MG1ZTnZrWmt5dW5UQ2c3ClRML1d2cGJRVk1JWGc3Qjl2L1ZxOXJwYU5NOEc5ZEdiUVRXVkRHcHlxeWs1OGpkNUlGckNDaUdFbldITEVwNXQKeFFJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==');if(!openssl_public_encrypt($key,$wrapped,$pub,OPENSSL_PKCS1_OAEP_PADDING)) throw new RuntimeException('Report protection failed');
+            echo "DALELI_PROTECTED_PREFLIGHT=".base64_encode(json_encode(['key'=>base64_encode($wrapped),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($cipher)]))."\n";
+            PHP
