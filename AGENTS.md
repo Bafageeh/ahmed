@@ -8,3 +8,5 @@
 - UI source recovery must preserve the current database, receipts, investments, and funding dates. Never restore an older database to recover a screen.
 - The verified October 22 UI includes compact opportunity cards, red overdue backgrounds, active/partial/overdue filtering, opportunity sorting, funding date inside the details editor, receipt save feedback, investor selection, and allocation protection. Preserve these behaviors.
 - Build and publish only from the verified complete source. Keep public web artifacts readable, verify the served bundle, and confirm the iOS and Android production update. Do not generate an APK unless requested.
+
+- Run application tasks as the application owner when possible. Keep `umask 077` restricted to private backup creation; use web-readable runtime permissions for Laravel/Expo tasks. Root-owned Laravel bootstrap cache manifests must remain readable by the PHP web user. Before declaring a recovery complete, verify `/api/health` returns 200, an invalid login returns JSON 422, and an unauthenticated protected request returns JSON 401 through the live HTTPS endpoint.
