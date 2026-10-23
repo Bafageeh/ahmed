@@ -54,52 +54,34 @@ jobs:
             printf 'GIT_ALL_COMMITS_START\n'
             git log --all -35 --format='%h %ad %s' --date=iso
             printf 'GIT_UNREACHABLE_START\n'
-            git fsck --no-reflogs --unreachable 2>/dev/null | head -100 || true
+            git fsck --no-reflogs --unreachable 2>/dev/null | awk '$2 == "commit" { print }' | head -40 || true
             python3 - <<'PY'
-            import os, json, subprocess, pathlib, datetime, sqlite3
+            import os, json, pathlib, datetime, sqlite3
             root = pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"])
-            archive = pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
-            skip = {".git", "node_modules", "vendor", ".expo", ".expo-shared", ".cache", ".metro-cache", "Pods", ".gradle", "logs", "framework", "sessions"}
-            tracked = set(subprocess.check_output(["git", "-C", str(root), "ls-files"], text=True).splitlines())
-            candidates = []
-            exports = []
-            for base, dirs, files in os.walk(root):
-                dirs[:] = [d for d in dirs if d not in skip]
-                for name in files:
-                    p = pathlib.Path(base) / name
-                    rel = str(p.relative_to(root))
-                    low = name.lower()
-                    try: st = p.stat()
-                    except OSError: continue
-                    record = {"path": rel, "bytes": st.st_size, "modified": datetime.datetime.fromtimestamp(st.st_mtime, datetime.timezone.utc).isoformat()}
-                    is_backup = any(x in low for x in [".bak", ".backup", ".orig", ".save", "snapshot", "backup"]) or low.endswith((".tgz", ".tar.gz", ".zip"))
-                    is_untracked_source = rel not in tracked and p.suffix in {".js", ".jsx", ".ts", ".tsx", ".php", ".json", ".map"} and not any(x in rel for x in ["assets/", "storage/"])
-                    if is_backup or is_untracked_source:
-                        candidates.append(record)
-                    if low.endswith(".map") or ("dist" in rel or "webapp" in rel or "mobile-web" in rel) and p.suffix in {".html", ".js", ".json"}:
-                        exports.append(record)
-            print("RECOVERY_CANDIDATES", json.dumps(sorted(candidates, key=lambda x:x["modified"], reverse=True)[:220], ensure_ascii=False))
-            print("WEB_EXPORTS", json.dumps(sorted(exports, key=lambda x:x["modified"], reverse=True)[:45], ensure_ascii=False))
-            siblings = []
-            parent = root.parent
-            for base, dirs, files in os.walk(parent):
-                depth = len(pathlib.Path(base).relative_to(parent).parts)
-                dirs[:] = [d for d in dirs if d not in skip and (depth > 0 or "ahmed" in d.lower() or "backup" in d.lower()) and not (pathlib.Path(base)/d == root) and not (pathlib.Path(base)/d == archive)]
-                if depth >= 3: dirs[:] = []
-                for name in files:
-                    if not any(x in name.lower() for x in ["ahmed", "backup", "ta3meed"]): continue
-                    p=pathlib.Path(base)/name
-                    try: st=p.stat()
-                    except OSError: continue
-                    siblings.append({"path":str(p),"bytes":st.st_size,"modified":datetime.datetime.fromtimestamp(st.st_mtime,datetime.timezone.utc).isoformat()})
-            print("RELATED_BACKUPS", json.dumps(sorted(siblings,key=lambda x:x["modified"],reverse=True)[:120],ensure_ascii=False))
+            case = pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
+            backups = pathlib.Path("/home/pmsa/secure-backups/ahmed")
+            print("SECURE_BACKUP_DIRS", json.dumps([{"name":p.name,"modified":datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc).isoformat()} for p in sorted(backups.iterdir()) if p.is_dir()],ensure_ascii=False) if backups.is_dir() else "missing")
+            for p in sorted(backups.glob("*")):
+                if p.is_dir() and any(x in p.name.lower() for x in ["202610", "2026-10"]):
+                    files=[]
+                    for base, dirs, names in os.walk(str(p)):
+                        dirs[:] = [d for d in dirs if d not in {"node_modules","vendor",".git","storage"}]
+                        for n in names:
+                            q=pathlib.Path(base)/n
+                            if q.suffix not in {".js",".jsx",".ts",".tsx",".php",".json",".zip",".gz",".sh",".py"}: continue
+                            try: st=q.stat()
+                            except OSError: continue
+                            files.append({"path":str(q.relative_to(p)),"bytes":st.st_size})
+                    print("BACKUP_MANIFEST",p.name,json.dumps(files[:110],ensure_ascii=False))
             db=root/"ahmed-api/database/database.sqlite"
             if db.is_file():
                 src=sqlite3.connect("file:"+str(db)+"?mode=ro",uri=True)
-                dst=sqlite3.connect(str(archive/"database.sqlite"))
-                src.backup(dst)
-                dst.close()
-                src.close()
-                print("SQLITE_BACKUP_PRESERVED")
+                dst=sqlite3.connect(str(case/"database.sqlite"))
+                if hasattr(src,"backup"):
+                    src.backup(dst)
+                    print("SQLITE_BACKUP_PRESERVED")
+                else:
+                    print("SQLITE_BACKUP_API_UNAVAILABLE; source archive preserved")
+                dst.close();src.close()
             PY
-            printf 'AUDIT_COMPLETE\n'
+                        printf 'AUDIT_COMPLETE\n'
