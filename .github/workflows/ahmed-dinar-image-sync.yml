@@ -14,70 +14,110 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  inspect-dinar-data:
+  import-verified-dinar-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect only Dinar records using protected data transfer
+      - name: Match and import the private Dinar observation plan
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
-          command_timeout: 5m
+          command_timeout: 8m
           script: |
             set -eu
             umask 022
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            export AHMED_PROJECT_ROOT="$ROOT"
+            CASE="/home/pmsa/secure-backups/ahmed/dinar-sync-20261023"
+            export AHMED_DINAR_ROOT="$ROOT" AHMED_DINAR_CASE="$CASE" AHMED_DINAR_COMMIT="${{ github.sha }}"
+            test -f "$CASE/server-private.pem"
+            if [ -f "$CASE/complete.json" ]; then echo "DINAR_IMAGES_ALREADY_IMPORTED"; exit 0; fi
+            git -C "$ROOT" fetch origin main
             python3 - <<'PY'
-            import os,pathlib,sqlite3,json,hashlib
-            root=pathlib.Path(os.environ["AHMED_PROJECT_ROOT"])
-            case=pathlib.Path("/home/pmsa/secure-backups/ahmed/dinar-sync-20261023")
-            case.mkdir(parents=True,exist_ok=True,mode=0o700);os.chmod(str(case),0o700)
-            conn=sqlite3.connect("file:"+str(root/"ahmed-api/database/database.sqlite")+"?mode=ro",uri=True);conn.row_factory=sqlite3.Row
-            tables=[r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'dinar_%' ORDER BY name")]
-            payload={"tables":{},"schemas":{},"indexes":{},"users":[],"source_files":{},"ddl":{}}
-            for table in tables:
-                payload["ddl"][table]=conn.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name=?",(table,)).fetchone()[0]
-                payload["schemas"][table]=[dict(r) for r in conn.execute('PRAGMA table_info("'+table+'")')]
-                payload["indexes"][table]=[dict(r) for r in conn.execute('PRAGMA index_list("'+table+'")')]
-                if any(r["name"]=="user_id" for r in payload["schemas"][table]):
-                    payload["tables"][table]=[dict(r) for r in conn.execute('SELECT * FROM "'+table+'" WHERE user_id=1 ORDER BY id')]
-            payload["users"]=[dict(r) for r in conn.execute("SELECT id,name,username,is_admin FROM users WHERE id=1")]
-            for name in ["ahmed-api/app/Http/Controllers/Api/DinarInvestmentController.php","ahmed-api/app/Http/Controllers/Api/TenantDinarInvestmentController.php","ahmed-mobile/DinarInvestmentsScreen.js","ahmed-mobile/dinarInvestmentMath.js","ahmed-mobile/AppShell.js"]:
-                content=(root/name).read_bytes();payload["source_files"][name]={"sha256":hashlib.sha256(content).hexdigest(),"content":content.decode("utf-8")}
-            out=case/"preflight.json";out.write_text(json.dumps(payload,ensure_ascii=True));os.chmod(str(out),0o600)
-            conn.close()
-            print("DINAR_PREFLIGHT_SAVED_PRIVATELY")
+            import os,pathlib,subprocess
+            root=pathlib.Path(os.environ['AHMED_DINAR_ROOT']);case=pathlib.Path(os.environ['AHMED_DINAR_CASE'])
+            stage=case/'staged';stage.mkdir(exist_ok=True,mode=0o700);os.chmod(str(stage),0o700)
+            for name in ['import-dinar-observations.py','verify-dinar-observations.php']:
+                data=subprocess.check_output(['git','-C',str(root),'show',os.environ['AHMED_DINAR_COMMIT']+':scripts/'+name])
+                out=stage/name;out.write_bytes(data);os.chmod(str(out),0o600)
             PY
             /usr/local/bin/php <<'PHP'
             <?php
-            $case='/home/pmsa/secure-backups/ahmed/dinar-sync-20261023';
-            $pub=<<<'PUBLIC_KEY'
-            -----BEGIN PUBLIC KEY-----
-            MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAtFgcobV5bJX6UCjeQTQ9
-            mHMm1dDUWN0xf7BspASfmPFXo5UdbHH0Yw6Mk6Fwq8gAHkVIBRI0zPEiXFjkqbGn
-            1T5HtPrFcGISM3Pig6UVg4184OT3f+xgrxRnj952sGkc6k+ZPliro6eTY98B+sw+
-            DqUtJklpX6iHHmHqy+vvVXX5+CaEPkR8ABWcl1dhVIsIDUhtvBf2X6OC05Ku42zf
-            fQdSbvJj4kKgge7K58crOH3OevEW5/i7D1v/CzIZPH38K9aeriZhLCyJoQtNIaKV
-            Rfn0VpRGgEchZpf9mO6lldQ9RFSkV8b48UNtHNrxW9a9HjDHoU4z8txChJH3uURy
-            f9ZfE3vmz6l73b972Z4JEcnGbK8Hlf3WZpfn6aUZFWM+hBX8+VKRbtxYdubGNoyY
-            Yqcolu6f89bMG80jws34mfR4f0Za+N4lo1x/ThlhTa6KI+/uI2sjEaS/UevN0AyE
-            Ki0b0IiQSD42w0o/JADpr/Pyy8iYFhx7UiMYQBLvJf5BAgMBAAE=
-            -----END PUBLIC KEY-----
-            PUBLIC_KEY;
-            if(!is_file($case.'/server-private.pem')) {
-                $rsa=openssl_pkey_new(['private_key_type'=>OPENSSL_KEYTYPE_RSA,'private_key_bits'=>3072]);
-                if(!$rsa||!openssl_pkey_export($rsa,$private)) throw new RuntimeException('Unable to prepare protected transfer');
-                file_put_contents($case.'/server-private.pem',$private);chmod($case.'/server-private.pem',0600);
-                file_put_contents($case.'/server-public.pem',openssl_pkey_get_details($rsa)['key']);
-            }
-            $key=random_bytes(32);$iv=random_bytes(12);
-            $body=openssl_encrypt(gzencode(file_get_contents($case.'/preflight.json'),9),'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
-            if($body===false||!openssl_public_encrypt($key,$sealed,$pub,OPENSSL_PKCS1_OAEP_PADDING)) throw new RuntimeException('Protected transfer failed');
-            $envelope=base64_encode(json_encode(['key'=>base64_encode($sealed),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($body)]));
-            foreach(str_split($envelope,7000) as $index=>$chunk) echo 'DINAR_ENCRYPTED_'.str_pad((string)$index,3,'0',STR_PAD_LEFT).'='.$chunk.PHP_EOL;
-            echo 'DINAR_SERVER_PUBLIC_KEY='.base64_encode(file_get_contents($case.'/server-public.pem')).PHP_EOL;
+            $case=getenv('AHMED_DINAR_CASE');
+            $encoded='eyJrZXkiOiAiWUJSTWdsUW44NkcvTDFxaDdhMUxTNnd6ZlB2RU4yMlBvZjlPaTVXaHdMRWE5OGI5YUI0Zzcza24wcmhoUm1nNFFoelBjU3htUHVGYUtXUVNGL3R0dlRHWWszajdmL3V3ZFpxRjMxWVJONHJYUTB4cWNKbzVXMVBIaC9mOTNGUThyMnRMTHI5RHprNXF4K0VKT0xBRkZHVkQ3clhIWmNKUmZtTHBjb0hHdExFUUJPb3dYbnNjeUEwWlhoWmZUTUhSY3psNXVYcXh4ak1PNCswRjZ0RmlpRVdxd1htMVhzellxNDhuVTUvVGFXVWF6ZDBoQk5YNXNJOEZUK3JmUk53ZFVEc0VlV1Z4SDR3WjJVMVVKL0YxMDN2MXpYNFdiWlo4blRZS1RES3FzUXpvMENMYjBpajFRTlZ3UTd5QVAyQTIzY24xQ2lrL1VVem5IOWtqMkRvY0NEYUlDclRuN053MG8zTVpEeHNUZHhxMUJ2K0swQ200K3V0R3ZmbkVLRUlzVzBPVmt3TVhZQ2ZFUWNqOHBlZzZ2WUJnSEZWY25BQmxpa1pvOEtUUElEMFNqaHpOTDZaMHNWQXFOSEt3U25vQU1iK2g1SVppUEpRalZMYWFMb3NpWGZ2RkZManR3RW5YeVZaMmhMZ2R4QTRhSlowNEVNejNzWUpQRVZlNDkzQUoiLCAiaXYiOiAibXBnWkxJbEhpaTBVZ2dBRyIsICJ0YWciOiAiTU5vYkpXVHhqT20relMzNU9yVUk1Zz09IiwgImNpcGhlcnRleHQiOiAiaktuWXZiMXpBcWJMeG9FSXBEejdXbG9xTndpS2tEM2R0Nk1NMmp6R3JhcmRINHpieGUyZ2lzUHM5QUVscjFUSFlSczlPVlJWUWhKK1ViZm5rM2FSakJIZmNOaWdCR1NQSlVDVHVaeFZPaFhqenZieHUvS2JxUkFBbU1qNHltVTB0VS96Ym9ZRmJBSkd3VlpHVGhEdzhjRyt4TDRKSno0OW1uL3J2SklJcC9wQVNLZ1Z0bW9YTndUODE1WDhNNzBIYVFCR0w0SE5JWnA0TTROY1BzRnJ4V29RaXNTUm9CT0lhb25hQ0JhYWE5dWtmSUJveEM1ZkRIL09WM2ZBNVZpc1QvMnVoNytJRGROeDZPTzAvd001WGw1dGxhTjVnYmFvM0oxRkEzWVk1bnNTTEVKc1F3TVZYUUJ6TTlEemQrR0EvbkltQkY3a0t6N3ZwN0oxdWVFSGcwMlJZb05MdUNaTjFsbnVHa05tcm5kb2NWeUNoaFZ3Y1pxamVaaXhtSXZVKy9hRW1laW0wMkkvQTJuY1lQNVpRb3R1emozY2V1emxwVGVxS3hYWUxYSnVWbkVoTVlsTFd0U2tsdEk2R2F5VVJpSmVVaUxoOXZ3OUpVOXdUZEs2TUN1M3IwaDBQUXZ2T0thQUpYMlMxSXcwU25Bd0UyVjlLbmF6V1hhMmR3MU5aT2pPUDNKdndCakRmN1ZzeTNVS0NoenFhQUhkeVpQeWtUSEZmTERYVDBMcUUzVzZMZmFnVVY3N2VWS2xIYUNwekNIS3I1ZnJSZWNGWVJxcXlKQWdFbm94cko1eHNwekZsRW9zenUrb01IMzJVeWpjMFk1UnhCNlF1YzNGQzBheHR1ZFd6a2swUVVPZm50ZDNHT1JGeTZ2d3pQTUZROEw0S3RXQTdoUTc5TldabUc5dDNtWTdzTHUzcEdzaFJkSmtIQ1JkeGdzWnZyTzZWVENmZ2tsb2cxT1hhWkxjdkZPWEJQOFhsZGRuVU94OUhVeTRzbTRFNU9tTlE2cGJsVUk5alM2V2IrSlhSUVdENGlvR3dLTzF6N003NW1qSTdjSlV5L2dBL09RVURLeENXQm5nWHg1TXRSM3VSMWhlNnB5NUdBZ1VGcm9lbTM1Z0ZIODN1KzJTL0xUdXMzM3ZmbDQ1MHVaNXV5a0VLcUI2bEJDWHZHcFJNSWZjbEM5dUxkSFUwTGdUMzBmZVpDeWI0RWxhSEFIeWhMYjY4Y1J2c0h6ZHR4WFY1UDB1RmM1cmxNN3FDdFJrKzFONGxnWFJadndsamxSUjVjc04zUkdmcTVMTTFVWldVR2VsWDdnL1hxb29aN083NHlTUGU1Ti82UHhzSS9iNkZSWlkvaXBHNkJpMDdaWjk2UFJjNWZSY0xVTFRtRE1laDQxU05pTkE4b3ZjU2RzVyt3Q0JyZW9rRFM3ZjVFU0YrWUdCYTN3ZFFHNE4rU3NwUm85dlZ5aG9IWkM1aWNjYUpnVUs1Uk5wVjRMeGNkbHhJQytNU0IvV1FRL3R6czMxNW85SDBVV0E5R0JETzZKNVE0VFNkQmttRTJybGNCRjd3Ylc2VXBuZnBOSzZ0ZWc5a2pLVjZld0xaVXJ5MG8zamhCT1JVamtxUUhsUlR0TlJBK0psTG0yZkpndEpRYXB3VU8vMGNLdEJSVEhpaW9WUUc2eG8zTXBabm1UZGlraUVoc0RIRjJ4RDAxV1ZQc0R3UktGazk1NTdqUHVWOHlBUFFIbis2bjFjR0RDclp3cFh1K2h2V2x6WVJ1QkZRdWI3ZzQxZm9sSFh0enFqVTNnQWZ4Mmlud3QwbkJzVGpkNXlueWRKZXFvNlB3bVk3eDBaYmx1Mjh1QTJzS0RBZTBWZTc3UThnaDZuMGdhZUsxb0J0Q0xNaThEV3E4S29NRlQvdURKN2ZHajUzS2taQWg1MWEzMzNRcTFUWE53NHFKY3piWW80MUpEa21XU01aMFdnNzdEZlZEdU4rL1ZTYzFJM2pZWm9BbXUwdmZwdDNxM0xFM2dHb0JaZFVJQVVWNnhPK0hVQ2RXRWJRU0dzM3BMOTVHd2NiTmJxcittc0tjTnN5RkR2SWhqN2lLOXlGZnQ4RHlqbE5EOFpld2o5dHBjTm1FMWUyUXI3S0lLdjJYV00yU3hzTHc0M01pS29XVnBBaU92MXBrZks5d0RFYlB3UjFOeEhnWFRoV1JjWHJkaG9TdTlSRzdneHcxYjA5Ync2TklRVXkwalZEOVExSWpBd0tMenh0VExoaHAzYkZoYUFLZi82dzF5d0wwVFhaZS9UZFVJU3RrSXkyM1NNQ3g5S2p1aE1tNXJKQWlXVnVieUFTb2h3WjI5TXBKYzREY2VBVkNDamk1VktnNnJyTVhXWWFwVU1wTnBSbGhJNzFWZ0M4MGcvcmtBblI5cjduR0MxVS9jNzVueDhWcSthTERjbHIvL2hMdzAxakNoc203eGdtSzNKUEZVaCtXVmVCclV2Wm9MQitaZGR0SW9VMmNDYnNReklTMEF4bndUYlNjejNDVHY1MGo5SjlObEMwV3Q5TGxadmxBOWFKVis5QTFLQllGRkVjMkpRTEdIT2tSNDdZbDBaQXhrL0R6WXpNVGlzYmFPa3pITE5SMnhGa1JFYWFmb1F2V0ZWL2hrN1dyTCtlTUxXVldFRGpYY3ZUSDNuV3NlY0lHaTk1VngzNWxDMWh2MUhYNjBOVVptSnliQkxVN2l2TlVBTHMyMkRLalNCL2VuUVlUOTBrZDVuaVRlWTRIZ3NKaTZiWDRkdHd2Wll5VCtGeVFQYjZMazFPSVF4NE5McjQyYUhjMWRqNEhxbld4Nmk0R0lKcWRZRnlQUk9OMHlXbzNTQ3hlN1FsaUVuMUNRcjR4SVNCQ3ArampZeGxCSy9YbFZFRzMra0VFR1kzSWM0cEYrSWRwV0dEYUNlMCtUYkdXM2dCZU5MVHFqdjV6U2N0TmlOZk1VbUE3YXZ3VHFTQ0VCZVRKekpzTWZoMnEzaTlIdm96UElxSE16Yll4R09iRXcrTmJpY3MrSDNseWFQNkt3QnJyTVNpWGdOK3Z2YVdhR2NZeE5mUS8zY01STEwxdElrTVE3ME0wRndhRjFpRDJXNXRUbmpHK3cxQ0J1NjN5dlErcnZjeDI3bm8yWml5cVFIMVhrQXlWR2xQTXRhTVEvWm95VnphVzB5YTg4NDQzejlnOG9WQkUzTzRrUTdkOTFtckZxUjF4cGRWR29xbWZiQzd6NHRBRlM4SG5GRmE0NlV4OStxbjA4WFhBRXVkQVZBUDN5K0d6UEJQNTdDcjRBWFBZUUUxc2JTcjZQVTJVY0RaRTNZMHdsdHVtci9rM1pYd1d0aGo3eVlLVy9RdUoyb2FjTDNScmpvL01SSzBNbVJmd2xMT0dlcWJVMUx0SXEwODhsd2hoQlFpWVpSUnE3U2wwOGtaaXk4S1duU1JmR0hsRWZMOTVoWDBsNUl2aG9IS3FoVE9ENFM2TTY0VW44dDJ4NEIraDNCZzBxUTVObFdPdUtlYTl0eEdoZ3BoRCtwWjU0dEVyd2tKdHRVQS9HRWNrd3QrQ0dUYmRiWlNVVDdmSmgwNXRXSmdTU0lIZXdWMXR0SHlnSTU0M1NOajhMZTI1NnhTU1dYdmlMUUZweFdKTi8rY2xXUjdkQ01VcG5pUml1b3I4cmxaYmgrVExXVW5Rc3B1djBoYis3Z2xLaCtvNkRQM3NhYW05SnFwMjJrSi83VHUrY2gwcVBnaTQ2eFpncnpDMFZIcDJSa1R2Rmd5bmJiL3A0dmZRSXhDOUFRaTB5VDVQSmRTd0xuK2hjeXo3a0lFYnNXS1QrUXN6MmUwZGlDTjVrMW03aWdidXM3dDNqRmJWbFAxdFZLaER4b0JoYm5NSVpnRXFFbHpFSTk4YnZJSnRIeFRobzQ0QlpyYVJmbEJwWVRkc1ZKaUZvTllXOFpBTHp5ZEFLeXBsM1M2aU00VFl6TWRXZTdSVk9rdFl4Zm9VM2ZtNGVHM000T2YxMnlyZTM1SnBLWDdJNEtWLzVBejU5dGNoZExQMjBOMmlPRGhPOUpKd3MvSmJ0UXVoQVFCell1d09XSi9uTFdEbysxc3pPdm1STUdxVExocmVFSmh0OG1uZ2VoQzMwYUZKRHdaT1M3WGl6WHdJUm5Db0tIODg5NFVncm8xdElET3Y2T2JmSFFCVlhrZTl6NDBQRDg1K0pCSFJ0VFFqNVlhMGhJOHNzb2xwS1kvamhpL3FMUFN2NWVWWVRnckpFbm5JSlVxOXZQMXhLUjdYbzNvT0FrYjgza1VjREF3REdHK3lNMDFmV3Rkczl3UFo5UTQyTlQ4VWR1aW9BV1R3VU5xOTJHcHNsRzhUK0pXUjJjczhDN2lTNUR5dWMrTE1KcFdNVFlkTk9VMnh5VHFMV3pSUkx0ZjJLV3N4dVFSQ2dOMDRYbEFjZDF4cHlPa25GdWswaVA0MlVyMk9XaE9SOVBwRjl0N1dZTHkzWmhyaVU1cWRCZlp0MjRQdTRDaEUyc1B3WENIemgxazRXZUpCSmJ1ZVJyWjB3TG55SWVpZGlBUGlqTjRpdzlTM2p1SnRLeFBORDVDcUt1Qi94L1RXbzFVYmZRZVlOZjhPQnVFcFI5akVweWlPcnBDNFp6TmRpY01EU3JoekE3L2NBZW1EamtZeUk4YmZuaCtTS2JPSWJGdS9BQndDcmdhSzRIa2ZyNXFuUExMWEIwbTUzTEc5MERvVFp6K2ZLTlI4Y0gyVnFHY1FpYzlTZnRSdTNqNzVKRXhzMTB1Z2tMelZhZ0R3YUJuY2dyVHE2R1JFZWplMXoyNXRWbVVvaEJqL1hqRDN2ekMvRm1HcDFIR2V0UHFnNTJJSEZBUHVjeTZmYnp5L2lTN2VaTnZqb09pL1R0YkRQeWZXWFBZSGFJVXdWMEh2dWsvMW83NFFzTWh3WjFqUE5OTlZGNWJ4dDIzK0dmdVV1bW9YQVIvN0dEZXp5a0wyNVRVaEJLYTU4Q3dzT25KYXdIL21Sc3ljMVpzQUdpOTNNQUNLMkNPekZ6UThBczY4QnVsQmt1SEtWNFZtQ3RCUStQYTRRNTdhOFdZTHRhSHRIRjVQZUJwMC9MTGNTekJOMmJrUjdXelVDQ2FqMU4yZGV1bjhxUXl6V1dVVFZNVG5rTnNVU21SUm5iRlB3Y2pCWGMwd1JDV29IZ1dwMnNKa3Q5aXFrUHVpbWdFQSs5cDhQeGNrNCt2anZDdmlVZ3BJWEt2ekhQQVR6Z3Bsa2t3VzdXdkc1TnphK01zNWRUUmEzbTBQSVltNi96cGxBalZLLzRFZDA0Z2RJTkJXNE9BQVAxdWVYa0ltSEgrSW1VdlkzL1Z5Y0dPN1U9In0=';
+            $envelope=json_decode(base64_decode($encoded,true),true,512,JSON_THROW_ON_ERROR);
+            if(!openssl_private_decrypt(base64_decode($envelope['key'],true),$key,file_get_contents($case.'/server-private.pem'),OPENSSL_PKCS1_OAEP_PADDING)) throw new RuntimeException('Unable to open protected observation plan');
+            $body=openssl_decrypt(base64_decode($envelope['ciphertext'],true),'aes-256-gcm',$key,OPENSSL_RAW_DATA,base64_decode($envelope['iv'],true),base64_decode($envelope['tag'],true));
+            if($body===false) throw new RuntimeException('Observation authentication failed');
+            $plan=gzdecode($body);json_decode($plan,true,512,JSON_THROW_ON_ERROR);
+            file_put_contents($case.'/import-plan.json',$plan);chmod($case.'/import-plan.json',0600);
+            echo "DINAR_PRIVATE_PLAN_AUTHENTICATED\n";
             PHP
+            /usr/local/bin/php -l "$CASE/staged/verify-dinar-observations.php"
+            python3 - <<'PY'
+            import os,pathlib,json,hashlib,sqlite3
+            root=pathlib.Path(os.environ['AHMED_DINAR_ROOT']);case=pathlib.Path(os.environ['AHMED_DINAR_CASE'])
+            plan=json.loads((case/'import-plan.json').read_text())
+            allowed={'ahmed-api/app/Http/Controllers/Api/DinarInvestmentController.php','ahmed-api/app/Http/Controllers/Api/TenantDinarInvestmentController.php','ahmed-mobile/DinarInvestmentsScreen.js','ahmed-mobile/dinarInvestmentMath.js','ahmed-mobile/AppShell.js'}
+            assert {x['path'] for x in plan['source_files']}==allowed
+            for item in plan['source_files']: assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['sha256'],'Concurrent application source edit'
+            clone=case/'isolated-test.sqlite'
+            if clone.exists(): clone.unlink()
+            original=sqlite3.connect('file:'+str(root/'ahmed-api/database/database.sqlite')+'?mode=ro',uri=True)
+            original.execute('BEGIN');copy=sqlite3.connect(str(clone));copy.executescript('\n'.join(original.iterdump()));copy.close();original.rollback();original.close();os.chmod(str(clone),0o600)
+            print('DINAR_UNCHANGED_APPLICATION_SOURCE_AND_ISOLATED_DATABASE_READY')
+            PY
+            python3 "$CASE/staged/import-dinar-observations.py" --database "$CASE/isolated-test.sqlite" --plan "$CASE/import-plan.json"
+            python3 "$CASE/staged/import-dinar-observations.py" --database "$CASE/isolated-test.sqlite" --plan "$CASE/import-plan.json" --result "$CASE/repeat-test.json"
+            /usr/local/bin/php "$CASE/staged/verify-dinar-observations.php" "$ROOT" "$CASE/isolated-test.sqlite" "$CASE/import-plan.json" "$CASE/isolated-api.json"
+            cd "$ROOT/ahmed-mobile"
+            node <<'JS'
+            const fs=require('fs'),path=require('path'),assert=require('assert');
+            const babel=require('@babel/core'),generate=require('@babel/generator').default;
+            const root=process.env.AHMED_DINAR_ROOT,folder=process.env.AHMED_DINAR_CASE;
+            const plan=JSON.parse(fs.readFileSync(path.join(folder,'import-plan.json'),'utf8'));
+            const payload=JSON.parse(fs.readFileSync(path.join(folder,'isolated-api.json'),'utf8'));
+            const math=require(path.join(root,'ahmed-mobile/dinarInvestmentMath.js'));
+            const capital=payload.data.reduce((sum,item)=>sum+math.dinarRemainingInvestment(item),0);
+            const pending=payload.data.reduce((sum,item)=>sum+math.dinarExpectedDistributions(item)-math.dinarGrossPaidDistributions(item),0);
+            assert(Math.abs(capital-plan.expected.total_investment)<0.001,'Dinar screen capital differs');
+            assert(Math.abs(pending-plan.expected.remaining_distributions)<0.001,'Dinar screen distributions differ');
+            const filename=path.join(root,'ahmed-mobile/AppShell.js');
+            const ast=babel.parseSync(fs.readFileSync(filename,'utf8'),{filename,configFile:path.join(root,'ahmed-mobile/babel.config.js'),babelrc:false});
+            const screen=ast.program.body.find(n=>n.type==='FunctionDeclaration'&&n.id.name==='FutureMonthlyIncomeScreen');
+            const declaration=screen.body.body.filter(n=>n.type==='VariableDeclaration').flatMap(n=>n.declarations).find(n=>n.id.name==='loadDinarIncome');
+            assert(declaration,'Actual future income loader missing');
+            const run=new Function('fetch','API_URL','ahmedUserHeaders','dinarRemainingInvestment','setDinarMonthlyIncome','return ('+generate(declaration.init).code+')();');
+            let income=null;
+            (async()=>{
+              await run(async()=>({ok:true,json:async()=>payload}),'https://ahmed.pm.sa/api',x=>x,math.dinarRemainingInvestment,x=>{income=x;});
+              assert(Math.abs(income-plan.expected.monthly_income)<0.001,'Future monthly income did not follow Dinar current capital');
+              console.log('DINAR_EXISTING_UI_MATH_AND_FUTURE_MONTHLY_INCOME_VERIFIED');
+            })().catch(error=>{console.error(error.message);process.exitCode=1;});
+            JS
+            python3 - <<'PY'
+            import os,pathlib,json,hashlib
+            root=pathlib.Path(os.environ['AHMED_DINAR_ROOT']);case=pathlib.Path(os.environ['AHMED_DINAR_CASE'])
+            result=json.loads((case/'repeat-test.json').read_text());assert result['updated']==0 and result['inserted']==0,'Repeat import changed records'
+            for item in json.loads((case/'import-plan.json').read_text())['source_files']:
+                assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['sha256'],'Application source changed during tests'
+            print('DINAR_REPEAT_IMPORT_AND_SOURCE_PRESERVATION_VERIFIED')
+            PY
+            python3 "$CASE/staged/import-dinar-observations.py" --database "$ROOT/ahmed-api/database/database.sqlite" --plan "$CASE/import-plan.json" --backup "$CASE/database-before-import.sql" --result "$CASE/import-result.json"
+            /usr/local/bin/php "$CASE/staged/verify-dinar-observations.php" "$ROOT" "$ROOT/ahmed-api/database/database.sqlite" "$CASE/import-plan.json" "$CASE/live-api.json"
+            python3 - <<'PY'
+            import os,pathlib,json,subprocess,hashlib
+            root=pathlib.Path(os.environ['AHMED_DINAR_ROOT']);case=pathlib.Path(os.environ['AHMED_DINAR_CASE'])
+            for item in json.loads((case/'import-plan.json').read_text())['source_files']:
+                assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['sha256'],'Application source changed'
+            for name,url,data,expected in [('health','https://ahmed.pm.sa/api/health',None,200),('invalid-login','https://ahmed.pm.sa/api/ahmed/session',{'username':'__dinar_sync_health_check__','password':'not-a-real-password'},422),('protected-session','https://ahmed.pm.sa/api/ahmed/session',None,401)]:
+                out=case/(name+'.json');cmd=['curl','-sS','--max-time','30','-H','Accept: application/json','-o',str(out),'-w','%{http_code}',url]
+                if data is not None:cmd+=['-H','Content-Type: application/json','--data',json.dumps(data)]
+                actual=int(subprocess.check_output(cmd,universal_newlines=True));json.loads(out.read_text());os.chmod(str(out),0o600)
+                assert actual==expected,'Unexpected authentication response';print('DINAR_HTTP_VERIFIED',name,actual)
+            result={'complete':True,'source_commit':os.environ['AHMED_DINAR_COMMIT'],'import':json.loads((case/'import-result.json').read_text()),'application_source_changed':False,'database_restored':False,'monthly_income_connection_verified':True}
+            (case/'complete.json').write_text(json.dumps(result));os.chmod(str(case/'complete.json'),0o600)
+            print('DINAR_IMAGES_SYNC_COMPLETED',json.dumps(result,sort_keys=True))
+            PY
