@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  diagnose-login:
+  repair-login-runtime:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect HTTP login failure and runtime file permissions
+      - name: Repair runtime cache ownership and verify HTTP authentication responses
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -23,45 +23,43 @@ jobs:
           command_timeout: 5m
           script: |
             set -eu
-            umask 077
+            umask 022
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
             export AHMED_RECOVERY_ROOT="$ROOT"
             export AHMED_RECOVERY_CASE="$(dirname "$ROOT")/ahmed-recovery-20261023T092158Z"
             python3 - <<'PY'
-            import os,pathlib,subprocess,json,stat,re
+            import os,pathlib,json,stat,subprocess,time,re
             root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"]);case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])/"login-diagnostic";case.mkdir(exist_ok=True)
-            for name in ["ahmed-api/.env","ahmed-api/bootstrap/cache","ahmed-api/storage","ahmed-api/storage/logs","ahmed-api/storage/framework","ahmed-api/storage/framework/cache","ahmed-api/public/index.php","public/index.php","ahmed-api/public/.htaccess","public/.htaccess"]:
-                p=root/name
-                if p.exists():
-                    st=p.stat();print("PERMISSION",json.dumps({"path":name,"mode":oct(stat.S_IMODE(st.st_mode)),"uid":st.st_uid,"gid":st.st_gid,"bytes":st.st_size}))
-            for p in (root/"ahmed-api/bootstrap/cache").glob("*"):
-                if p.is_file(): print("BOOTSTRAP_CACHE_FILE",p.name,oct(stat.S_IMODE(p.stat().st_mode)),p.stat().st_uid,p.stat().st_gid)
-            probes=[
-                ("health","https://ahmed.pm.sa/api/health",None),
-                ("invalid-login","https://ahmed.pm.sa/api/ahmed/session",json.dumps({"username":"__ahmed_recovery_health_probe_20261023__","password":"not-a-real-account-password"}))
-            ]
-            for name,url,data in probes:
-                out=case/(name+".body");header=case/(name+".headers")
-                cmd=["curl","-sS","--max-time","30","-H","Accept: application/json","-D",str(header),"-o",str(out),"-w","%{http_code} %{content_type}",url]
-                if data is not None: cmd.extend(["-H","Content-Type: application/json","--data",data])
-                result=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-                report={"probe":name,"http":result.stdout.decode(),"exit":result.returncode}
-                body=out.read_text(errors="replace") if out.exists() else ""
-                try:
-                    obj=json.loads(body)
-                    if isinstance(obj,dict): report["json_keys"]=list(obj);report["message"]=obj.get("message")
-                except ValueError: report["html_title"]=(re.search(r"<title>(.*?)</title>",body,re.S).group(1).strip() if re.search(r"<title>(.*?)</title>",body,re.S) else None)
-                print("HTTP_PROBE",json.dumps(report,ensure_ascii=False))
-            for name in ["ahmed-api/storage/logs/laravel.log","ahmed-api/error_log","public/error_log","ahmed-api/public/error_log"]:
-                p=root/name
-                if not p.is_file(): continue
-                with p.open(errors="replace") as f:
-                    f.seek(max(0,p.stat().st_size-50000));lines=f.read().splitlines()
-                messages=[line for line in lines if any(x in line for x in [".ERROR:","PHP Fatal","PHP Warning","Permission denied","failed to open stream"])]
-                for line in messages[-8:]:
-                    line=line.split("(SQL:")[0].split('{"exception":')[0]
-                    line=re.sub(r"Bearer\s+\S+","Bearer [redacted]",line)
-                    print("RECENT_SERVER_ERROR",name,line[:1000])
-            print("DISK",subprocess.check_output(["df","-h",str(root)],universal_newlines=True))
+            api=root/"ahmed-api";owner=(api/".env").stat();changes=[]
+            for directory in [api/"bootstrap/cache",api/"storage/framework",api/"storage/logs"]:
+                for base,dirs,files in os.walk(str(directory)):
+                    p=pathlib.Path(base);st=p.stat()
+                    if st.st_uid==0:
+                        changes.append({"path":str(p.relative_to(root)),"uid":st.st_uid,"gid":st.st_gid,"mode":stat.S_IMODE(st.st_mode)})
+                        os.chown(str(p),owner.st_uid,owner.st_gid)
+                        os.chmod(str(p),0o755)
+                    for name in files:
+                        q=p/name
+                        if q.is_symlink() or name==".gitignore": continue
+                        st=q.stat()
+                        if st.st_uid!=0: continue
+                        changes.append({"path":str(q.relative_to(root)),"uid":st.st_uid,"gid":st.st_gid,"mode":stat.S_IMODE(st.st_mode)})
+                        os.chown(str(q),owner.st_uid,owner.st_gid)
+                        os.chmod(str(q),0o644 if q.parent==api/"bootstrap/cache" and q.name in {"packages.php","services.php"} else 0o640)
+            (case/"runtime-permission-changes.json").write_text(json.dumps(changes))
+            print("RUNTIME_PERMISSIONS_CORRECTED",len(changes))
+            for name,url,data,expected in [
+                ("health","https://ahmed.pm.sa/api/health",None,200),
+                ("invalid-login","https://ahmed.pm.sa/api/ahmed/session",{"username":"__ahmed_recovery_health_probe_20261023__","password":"not-a-real-account-password"},422),
+                ("protected-session","https://ahmed.pm.sa/api/ahmed/session",None,401)
+            ]:
+                out=case/(name+"-after.body")
+                cmd=["curl","-sS","--max-time","30","-H","Accept: application/json","-o",str(out),"-w","%{http_code}",url]
+                if data is not None: cmd.extend(["-H","Content-Type: application/json","--data",json.dumps(data)])
+                response=subprocess.check_output(cmd,universal_newlines=True).strip()
+                payload=json.loads(out.read_text())
+                assert int(response)==expected,"Unexpected HTTP status "+name+" "+response
+                print("LOGIN_HTTP_VERIFIED",json.dumps({"probe":name,"status":int(response),"json":True,"message":payload.get("message")},ensure_ascii=False))
+            (case/"http-login-restored.json").write_text(json.dumps({"health":200,"invalid_credentials":422,"unauthenticated_session":401,"password_changed":False,"existing_sessions_changed":False,"permission_files_changed":len(changes)}))
             PY
