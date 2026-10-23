@@ -1,0 +1,81 @@
+name: Sulfa Image Data Sync
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-sulfa-image-sync.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahmed-sulfa-image-sync
+  cancel-in-progress: false
+
+jobs:
+  inspect-sulfa-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect only Sulfa records using protected data transfer
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 5m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_PROJECT_ROOT="$ROOT"
+            python3 - <<'PY'
+            import os,pathlib,sqlite3,json,hashlib
+            root=pathlib.Path(os.environ["AHMED_PROJECT_ROOT"])
+            case=pathlib.Path("/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023")
+            case.mkdir(parents=True,exist_ok=True,mode=0o700);os.chmod(str(case),0o700)
+            conn=sqlite3.connect("file:"+str(root/"ahmed-api/database/database.sqlite")+"?mode=ro",uri=True);conn.row_factory=sqlite3.Row
+            tables=[r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'sulfa_%' ORDER BY name")]
+            payload={"tables":{},"schemas":{},"indexes":{},"users":[],"source_files":{}}
+            for table in tables:
+                payload["schemas"][table]=[dict(r) for r in conn.execute('PRAGMA table_info("'+table+'")')]
+                payload["indexes"][table]=[dict(r) for r in conn.execute('PRAGMA index_list("'+table+'")')]
+                if any(r["name"]=="user_id" for r in payload["schemas"][table]):
+                    payload["tables"][table]=[dict(r) for r in conn.execute('SELECT * FROM "'+table+'" WHERE user_id=1 ORDER BY id')]
+            payload["users"]=[dict(r) for r in conn.execute("SELECT id,name,username,is_admin FROM users WHERE id=1")]
+            for name in ["ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php","ahmed-mobile/SulfaInvestmentScreen.js"]:
+                content=(root/name).read_bytes();payload["source_files"][name]={"sha256":hashlib.sha256(content).hexdigest(),"content":content.decode("utf-8")}
+            out=case/"preflight.json";out.write_text(json.dumps(payload,ensure_ascii=True));os.chmod(str(out),0o600)
+            conn.close()
+            print("SULFA_PREFLIGHT_SAVED_PRIVATELY")
+            PY
+            /usr/local/bin/php <<'PHP'
+            $case='/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023';
+            $pub=<<<'PUBLIC_KEY'
+            -----BEGIN PUBLIC KEY-----
+            MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAtFgcobV5bJX6UCjeQTQ9
+            mHMm1dDUWN0xf7BspASfmPFXo5UdbHH0Yw6Mk6Fwq8gAHkVIBRI0zPEiXFjkqbGn
+            1T5HtPrFcGISM3Pig6UVg4184OT3f+xgrxRnj952sGkc6k+ZPliro6eTY98B+sw+
+            DqUtJklpX6iHHmHqy+vvVXX5+CaEPkR8ABWcl1dhVIsIDUhtvBf2X6OC05Ku42zf
+            fQdSbvJj4kKgge7K58crOH3OevEW5/i7D1v/CzIZPH38K9aeriZhLCyJoQtNIaKV
+            Rfn0VpRGgEchZpf9mO6lldQ9RFSkV8b48UNtHNrxW9a9HjDHoU4z8txChJH3uURy
+            f9ZfE3vmz6l73b972Z4JEcnGbK8Hlf3WZpfn6aUZFWM+hBX8+VKRbtxYdubGNoyY
+            Yqcolu6f89bMG80jws34mfR4f0Za+N4lo1x/ThlhTa6KI+/uI2sjEaS/UevN0AyE
+            Ki0b0IiQSD42w0o/JADpr/Pyy8iYFhx7UiMYQBLvJf5BAgMBAAE=
+            -----END PUBLIC KEY-----
+            PUBLIC_KEY;
+            if(!is_file($case.'/server-private.pem')) {
+                $rsa=openssl_pkey_new(['private_key_type'=>OPENSSL_KEYTYPE_RSA,'private_key_bits'=>3072]);
+                if(!$rsa||!openssl_pkey_export($rsa,$private)) throw new RuntimeException('Unable to prepare protected transfer');
+                file_put_contents($case.'/server-private.pem',$private);chmod($case.'/server-private.pem',0600);
+                file_put_contents($case.'/server-public.pem',openssl_pkey_get_details($rsa)['key']);
+            }
+            $key=random_bytes(32);$iv=random_bytes(12);
+            $body=openssl_encrypt(gzencode(file_get_contents($case.'/preflight.json'),9),'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
+            if($body===false||!openssl_public_encrypt($key,$sealed,$pub,OPENSSL_PKCS1_OAEP_PADDING)) throw new RuntimeException('Protected transfer failed');
+            $envelope=base64_encode(json_encode(['key'=>base64_encode($sealed),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($body)]));
+            foreach(str_split($envelope,7000) as $index=>$chunk) echo 'SULFA_ENCRYPTED_'.str_pad((string)$index,3,'0',STR_PAD_LEFT).'='.$chunk.PHP_EOL;
+            echo 'SULFA_SERVER_PUBLIC_KEY='.base64_encode(file_get_contents($case.'/server-public.pem')).PHP_EOL;
+            PHP
