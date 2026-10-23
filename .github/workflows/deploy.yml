@@ -1,16 +1,6 @@
 name: Deploy Ahmed
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'ahmed-api/**'
-      - 'public/**'
-      - 'scripts/deploy-ahmed.sh'
-      - 'scripts/restart-ahmed-expo-clean.sh'
-      - 'scripts/patch-secure-vault-mada-rules.py'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 jobs:
