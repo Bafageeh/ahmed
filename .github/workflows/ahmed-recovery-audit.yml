@@ -13,7 +13,7 @@ jobs:
   preserve-and-audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Preserve current files and inspect recovery sources
+      - name: Prepare and inspect source recovery without modifying production
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -25,63 +25,70 @@ jobs:
             set -eu
             umask 077
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
-            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then
-              ROOT="/home/pmsa/apps/ahmed"
-            fi
-            test -d "$ROOT/.git"
-            CASE="$(dirname "$ROOT")/ahmed-recovery-$(date -u +%Y%m%dT%H%M%SZ)"
-            mkdir -p "$CASE"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            CASE="$(dirname "$ROOT")/ahmed-recovery-20261023T092158Z"
+            test -f "$CASE/current-source-and-git.tar.gz"
             export AHMED_RECOVERY_ROOT="$ROOT"
             export AHMED_RECOVERY_CASE="$CASE"
-            printf 'RECOVERY_COPY=%s\n' "$CASE"
-            tar -C "$ROOT" -czf "$CASE/current-source-and-git.tar.gz" \
-              --exclude='./ahmed-mobile/node_modules' \
-              --exclude='./ahmed-api/vendor' \
-              --exclude='./ahmed-api/storage/logs' \
-              --exclude='./ahmed-api/storage/framework' \
-              --exclude='./ahmed-mobile/.expo' \
-              --exclude='./ahmed-mobile/.expo-shared' \
-              --exclude='./ahmed-mobile/.metro-cache' \
-              --exclude='./ahmed-mobile/android/.gradle' \
-              --exclude='./ahmed-mobile/android/app/build' \
-              --exclude='./ahmed-mobile/ios/Pods' .
-            printf 'SOURCE_AND_GIT_PRESERVED\n'
-            cd "$ROOT"
-            printf 'GIT_STATUS_START\n'
-            git status --short | head -100
-            printf 'GIT_REFLOG_START\n'
-            git reflog --all --date=iso --format='%h %gd %gs' -60
-            printf 'GIT_ALL_COMMITS_START\n'
-            git log --all -35 --format='%h %ad %s' --date=iso
-            printf 'GIT_UNREACHABLE_START\n'
-            git fsck --no-reflogs --unreachable 2>/dev/null | awk '$2 == "commit" { print }' | head -40 || true
             python3 - <<'PY'
-            import os, json, pathlib, datetime, sqlite3
-            root = pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"])
-            case = pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
-            backups = pathlib.Path("/home/pmsa/secure-backups/ahmed")
-            print("SECURE_BACKUP_DIRS", json.dumps([{"name":p.name,"modified":datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc).isoformat()} for p in sorted(backups.iterdir()) if p.is_dir()],ensure_ascii=False) if backups.is_dir() else "missing")
-            for p in sorted(backups.glob("*")):
-                if p.is_dir():
-                    files=[]
-                    for base, dirs, names in os.walk(str(p)):
-                        dirs[:] = [d for d in dirs if d not in {"node_modules","vendor",".git","storage"}]
-                        for n in names:
-                            q=pathlib.Path(base)/n
-                            if q.suffix in {".sqlite", ".db"} or "web-build" in str(q) or "web-stage" in str(q): continue
-                            try: st=q.stat()
-                            except OSError: continue
-                            files.append({"path":str(q.relative_to(p)),"bytes":st.st_size})
-                    print("BACKUP_MANIFEST",p.name,json.dumps(files[:110],ensure_ascii=False))
-            db=root/"ahmed-api/database/database.sqlite"
-            if db.is_file():
-                src=sqlite3.connect("file:"+str(db)+"?mode=ro",uri=True)
-                dst=sqlite3.connect(str(case/"database.sqlite"))
-                if hasattr(src,"backup"):
-                    src.backup(dst)
-                    print("SQLITE_BACKUP_PRESERVED")
+            import os, json, pathlib, hashlib, subprocess, gzip, base64, sqlite3
+            root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"])
+            case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
+            backups=pathlib.Path("/home/pmsa/secure-backups/ahmed")
+            ui=backups/"funding-date-label-1792684447832/ui"
+            assert ui.is_dir()
+            tracked=set(subprocess.check_output(["git","-C",str(root),"ls-files"],universal_newlines=True).splitlines())
+            wanted={}
+            origins={}
+            config_names={"package.json","package-lock.json","app.json","eas.json","index.js","metro.config.js"}
+            for base,dirs,names in os.walk(str(ui)):
+                dirs[:]=[d for d in dirs if d not in {"node_modules",".git",".expo","dist-web","android","ios","assets"}]
+                for name in names:
+                    p=pathlib.Path(base)/name
+                    rel=p.relative_to(ui)
+                    key="ahmed-mobile/"+str(rel)
+                    if key not in tracked and name not in {"Ta3meedInvestorControls.js","Ta3meedOpportunityCard.js"}: continue
+                    if p.suffix not in {".js",".jsx",".ts",".tsx",".json",".md"}: continue
+                    data=p.read_bytes()
+                    if len(rel.parts)==1 and name in config_names:
+                        current=root/key
+                        print("BUILD_CONFIG_COMPARE",key,json.dumps({"snapshot_equal_current":current.is_file() and data==current.read_bytes(),"snapshot_bytes":len(data),"current_bytes":current.stat().st_size if current.is_file() else None}))
+                        continue
+                    wanted[key]=data
+                    origins[key]=str(p)
+            for folder in ["investor-profit-20261021T194515Z","investor-picker-1792615386132"]:
+                stage=backups/folder/"staged"
+                for p in stage.rglob("*"):
+                    if p.is_file() and str(p.relative_to(stage)).startswith("ahmed-api/") and p.suffix==".php":
+                        key=str(p.relative_to(stage))
+                        wanted[key]=p.read_bytes()
+                        origins[key]=str(p)
+            prepared=case/"prepared"
+            prepared.mkdir(exist_ok=True)
+            bundle=[]
+            for key,data in sorted(wanted.items()):
+                live=root/key
+                current=live.read_bytes() if live.is_file() else b""
+                if key in tracked:
+                    original=subprocess.check_output(["git","-C",str(root),"show","HEAD:"+key])
                 else:
-                    print("SQLITE_BACKUP_API_UNAVAILABLE; source archive preserved")
-                dst.close();src.close()
+                    original=b""
+                if data==original and data==current: continue
+                target=prepared/key
+                target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_bytes(data)
+                item={"path":key,"content":data.decode("utf-8"),"sha256":hashlib.sha256(data).hexdigest(),"current_sha256":hashlib.sha256(current).hexdigest() if live.is_file() else None,"origin":origins[key],"bytes":len(data),"differs_current":data!=current,"differs_git":data!=original}
+                bundle.append(item)
+                print("PREPARED_SOURCE",json.dumps({k:v for k,v in item.items() if k!="content"},ensure_ascii=False))
+            (case/"source-recovery-plan.json").write_text(json.dumps(bundle,ensure_ascii=True))
+            raw=gzip.compress(json.dumps(bundle,ensure_ascii=True).encode("utf-8"))
+            encoded=base64.b64encode(raw).decode("ascii")
+            for i in range(0,len(encoded),8000):
+                print("SOURCE_BUNDLE_%03d="%int(i/8000)+encoded[i:i+8000])
+            for name in ["deployment-proof.json","build-input-hashes.json","deploy-baseline.json","native-channel-after.json","native-update.json"]:
+                p=backups/"funding-date-label-1792684447832"/name
+                if p.is_file():
+                    obj=json.loads(p.read_text())
+                    print("PUBLISH_PROOF",name,json.dumps(obj,ensure_ascii=False)[:18000])
+            print("PREPARED_SOURCE_COUNT",len(bundle))
             PY
-                        printf 'AUDIT_COMPLETE\n'
