@@ -62,13 +62,13 @@ jobs:
             backups = pathlib.Path("/home/pmsa/secure-backups/ahmed")
             print("SECURE_BACKUP_DIRS", json.dumps([{"name":p.name,"modified":datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc).isoformat()} for p in sorted(backups.iterdir()) if p.is_dir()],ensure_ascii=False) if backups.is_dir() else "missing")
             for p in sorted(backups.glob("*")):
-                if p.is_dir() and any(x in p.name.lower() for x in ["202610", "2026-10"]):
+                if p.is_dir():
                     files=[]
                     for base, dirs, names in os.walk(str(p)):
                         dirs[:] = [d for d in dirs if d not in {"node_modules","vendor",".git","storage"}]
                         for n in names:
                             q=pathlib.Path(base)/n
-                            if q.suffix not in {".js",".jsx",".ts",".tsx",".php",".json",".zip",".gz",".sh",".py"}: continue
+                            if q.suffix in {".sqlite", ".db"} or "web-build" in str(q) or "web-stage" in str(q): continue
                             try: st=q.stat()
                             except OSError: continue
                             files.append({"path":str(q.relative_to(p)),"bytes":st.st_size})
