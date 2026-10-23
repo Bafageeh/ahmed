@@ -30,7 +30,7 @@ jobs:
             umask 022
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            CASE="/home/pmsa/secure-backups/ahmed/sulfa-income-20261023"
+            CASE="/home/pmsa/secure-backups/ahmed/sulfa-income-outstanding-20261023"
             export AHMED_INCOME_ROOT="$ROOT" AHMED_INCOME_CASE="$CASE" AHMED_INCOME_COMMIT="${{ github.sha }}"
             mkdir -p "$CASE"
             chmod 700 "$CASE"
@@ -41,8 +41,8 @@ jobs:
             root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE'])
             name='ahmed-mobile/AppShell.js'
             content=subprocess.check_output(['git','-C',str(root),'show',os.environ['AHMED_INCOME_COMMIT']+':'+name])
-            assert hashlib.sha256(content).hexdigest()=='b59743f9f9cdcf2b1e8b3491223019b4fb328ad3b17376a4b6a0e06d337570fc'
-            assert hashlib.sha256((root/name).read_bytes()).hexdigest() in ['02beaa006f41b5ece481585252c61e8255f6420db67e51fac701e8b686f5e20a','b59743f9f9cdcf2b1e8b3491223019b4fb328ad3b17376a4b6a0e06d337570fc'],'Concurrent AppShell edit'
+            assert hashlib.sha256(content).hexdigest()=='394f31bb82c429c1385d8951b62d6c7b92004fbcfe2657a8ca83c6c603729e36'
+            assert hashlib.sha256((root/name).read_bytes()).hexdigest() in ['b59743f9f9cdcf2b1e8b3491223019b4fb328ad3b17376a4b6a0e06d337570fc','394f31bb82c429c1385d8951b62d6c7b92004fbcfe2657a8ca83c6c603729e36'],'Concurrent AppShell edit'
             previous=pathlib.Path('/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023')
             for item in json.loads((previous/'import-plan.json').read_text())['source_files']:
                 assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['target_sha256'],'Sulfa summary source changed'
@@ -64,7 +64,7 @@ jobs:
             $request->attributes->set('ahmed_user_id',1);
             $response=(new App\Http\Controllers\Api\SulfaInvestmentController)->show($request);
             $data=$response->getData(true)['data'];
-            if(!isset($data['platform_snapshot']['total_investments'])) throw new RuntimeException('Updated capital unavailable');
+            if(!isset($data['platform_snapshot']['outstanding_investments'])) throw new RuntimeException('Updated capital unavailable');
             file_put_contents($case.'/api-data.json',json_encode($data,JSON_THROW_ON_ERROR));chmod($case.'/api-data.json',0600);
             echo "SULFA_INCOME_CURRENT_ACCOUNT_DATA_READ\n";
             PHP
@@ -82,18 +82,18 @@ jobs:
             assert(declaration,'Missing actual income loader');
             const run=new Function('fetch','API_URL','ahmedUserHeaders','setSulfaMonthlyIncome','return ('+generate(declaration.init).code+')();');
             const data=JSON.parse(fs.readFileSync(path.join(folder,'api-data.json'),'utf8'));
-            const expected=Math.round(Number(data.platform_snapshot.total_investments)*105/12000*100)/100;
+            const expected=Math.round(Number(data.platform_snapshot.outstanding_investments)*105/12000*100)/100;
             let actual=null;
             (async()=>{
               await run(async()=>({ok:true,json:async()=>({data})}),'https://ahmed.pm.sa/api',x=>x,x=>{actual=x;});
-              assert.strictEqual(actual,expected,'Monthly income ignored the current full portfolio');
+              assert.strictEqual(actual,expected,'Monthly income ignored the current outstanding portfolio');
               console.log('SULFA_INCOME_ACTUAL_API_AND_COMPILED_LOADER_VERIFIED');
             })().catch(error=>{console.error(error.message);process.exitCode=1;});
             JS
             python3 - <<'PY'
             import os,pathlib,hashlib,tempfile
             root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);live=root/'ahmed-mobile/AppShell.js'
-            old=live.read_bytes();assert hashlib.sha256(old).hexdigest() in ['02beaa006f41b5ece481585252c61e8255f6420db67e51fac701e8b686f5e20a','b59743f9f9cdcf2b1e8b3491223019b4fb328ad3b17376a4b6a0e06d337570fc']
+            old=live.read_bytes();assert hashlib.sha256(old).hexdigest() in ['b59743f9f9cdcf2b1e8b3491223019b4fb328ad3b17376a4b6a0e06d337570fc','394f31bb82c429c1385d8951b62d6c7b92004fbcfe2657a8ca83c6c603729e36']
             backup=case/'AppShell.before.js'
             if not backup.exists(): backup.write_bytes(old);os.chmod(str(backup),0o600)
             owner=live.stat();fd,temp=tempfile.mkstemp(prefix='.sulfa-income-',dir=str(live.parent))
@@ -137,7 +137,7 @@ jobs:
             bundle=subprocess.check_output(['curl','-fsS','--max-time','180','http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0']).decode('utf-8')
             match=re.search(r'\bloadSulfaIncome\s*=',bundle);assert match,'Income loader missing from the Expo bundle'
             loader=bundle[match.start():match.start()+6000]
-            assert 'platform_snapshot' in loader and 'total_investments' in loader and 'setSulfaMonthlyIncome' in loader and 'Math.round' in loader,'Expo delivered an old income loader'
+            assert 'platform_snapshot' in loader and 'outstanding_investments' in loader and 'setSulfaMonthlyIncome' in loader and 'Math.round' in loader,'Expo delivered an old income loader'
             print('SULFA_INCOME_EXPO_GO_DELIVERY_VERIFIED')
             PY
             if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/web-build" > "$CASE/web-build.log" 2>&1; then tail -60 "$CASE/web-build.log"; exit 1; fi
@@ -173,7 +173,7 @@ jobs:
             print('SULFA_INCOME_PUBLIC_WEB_VERIFIED')
             PY
             if [ ! -f "$CASE/native-update.json" ]; then
-              if ! npx eas-cli update --channel production --platform all --environment production --message "Use current Sulfa investment total in future monthly income" --non-interactive --json > "$CASE/native-update.json" 2> "$CASE/native-update.log"; then rm -f "$CASE/native-update.json"; tail -50 "$CASE/native-update.log"; exit 1; fi
+              if ! npx eas-cli update --channel production --platform all --environment production --message "Use outstanding Sulfa investment in future monthly income" --non-interactive --json > "$CASE/native-update.json" 2> "$CASE/native-update.log"; then rm -f "$CASE/native-update.json"; tail -50 "$CASE/native-update.log"; exit 1; fi
             fi
             python3 - <<'PY'
             import os,pathlib,json,subprocess
