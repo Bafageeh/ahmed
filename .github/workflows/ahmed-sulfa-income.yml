@@ -135,9 +135,9 @@ jobs:
             python3 - <<'PY'
             import subprocess,re
             bundle=subprocess.check_output(['curl','-fsS','--max-time','180','http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0']).decode('utf-8')
-            at=bundle.find('const loadSulfaIncome =');assert at>=0
-            loader=bundle[at:at+3500]
-            assert 'platform_snapshot' in loader and 'total_investments' in loader and 'snapshotAmount !== null' in loader and 'Math.round' in loader,'Expo delivered an old income loader'
+            match=re.search(r'\bloadSulfaIncome\s*=',bundle);assert match,'Income loader missing from the Expo bundle'
+            loader=bundle[match.start():match.start()+6000]
+            assert 'platform_snapshot' in loader and 'total_investments' in loader and 'setSulfaMonthlyIncome' in loader and 'Math.round' in loader,'Expo delivered an old income loader'
             print('SULFA_INCOME_EXPO_GO_DELIVERY_VERIFIED')
             PY
             if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/web-build" > "$CASE/web-build.log" 2>&1; then tail -60 "$CASE/web-build.log"; exit 1; fi
