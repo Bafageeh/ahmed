@@ -261,10 +261,23 @@ function FutureMonthlyIncomeScreen({ goTo }) {
   };
   const loadSulfaIncome = async () => {
     try {
-      const response = await fetch(`${API_URL}/sulfa/investment`, { headers: { Accept: 'application/json' } });
+      const response = await fetch(`${API_URL}/sulfa/investment`, {
+        headers: ahmedUserHeaders({ Accept: 'application/json' }),
+      });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'sulfa fetch failed');
       const data = json.data || {};
+      const snapshotAmount = data.platform_snapshot?.total_investments;
+      const totalInvestment = Number(snapshotAmount);
+      if (
+        snapshotAmount !== undefined &&
+        snapshotAmount !== null &&
+        Number.isFinite(totalInvestment) &&
+        totalInvestment >= 0
+      ) {
+        setSulfaMonthlyIncome(Math.round(((totalInvestment * 0.105) / 12) * 100) / 100);
+        return;
+      }
       const monthlyProfit = Number(data.monthly_profit);
       if (Number.isFinite(monthlyProfit)) {
         setSulfaMonthlyIncome(monthlyProfit);
