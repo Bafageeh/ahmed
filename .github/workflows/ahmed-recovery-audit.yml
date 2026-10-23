@@ -10,10 +10,10 @@ permissions:
   contents: read
 
 jobs:
-  verify-recovery:
+  diagnose-login:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify production source, web, Expo and installed app channel
+      - name: Inspect HTTP login failure and runtime file permissions
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -26,40 +26,42 @@ jobs:
             umask 077
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            CASE="$(dirname "$ROOT")/ahmed-recovery-20261023T092158Z"
             export AHMED_RECOVERY_ROOT="$ROOT"
-            export AHMED_RECOVERY_CASE="$CASE"
-            test -f "$CASE/restoration-complete.json"
-            cd "$ROOT"
-            git fetch origin main
-            cd "$ROOT/ahmed-mobile"
-            npx eas-cli channel:view production --json > "$CASE/production-channel-recovered.json"
+            export AHMED_RECOVERY_CASE="$(dirname "$ROOT")/ahmed-recovery-20261023T092158Z"
             python3 - <<'PY'
-            import pathlib,os,json,subprocess,hashlib,urllib.request,re
-            root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"])
-            case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
-            head=subprocess.check_output(["git","-C",str(root),"rev-parse","origin/main"],universal_newlines=True).strip()
-            files=subprocess.check_output(["git","-C",str(root),"ls-tree","-r","--name-only","origin/main"],universal_newlines=True).splitlines()
-            checked=0;mismatches=[]
-            for key in files:
-                if not key.startswith(("ahmed-mobile/","ahmed-api/app/","ahmed-api/routes/","ahmed-api/database/migrations/")): continue
-                if "/dist-web/" in key or pathlib.Path(key).suffix not in {".js",".jsx",".ts",".tsx",".php",".json"}: continue
-                p=root/key
-                expected=subprocess.check_output(["git","-C",str(root),"show","origin/main:"+key])
-                if not p.is_file() or hashlib.sha256(p.read_bytes()).digest()!=hashlib.sha256(expected).digest(): mismatches.append(key)
-                checked+=1
-            assert not mismatches,"Repository/source mismatch: "+json.dumps(mismatches)
-            channel=json.loads((case/"production-channel-recovered.json").read_text())
-            page=channel.get("currentPage",channel)
-            groups=[u for branch in page["updateBranches"] for group in branch["updateGroups"] for u in group if u["runtimeVersion"]=="1.0.19"]
-            expected="c6fe9244-2738-4066-9fca-38a9dc38dabd"
-            assert groups and groups[0]["group"]==expected,"Production update channel not recovered"
-            assert {x["platform"] for x in groups if x["group"]==expected}=={"android","ios"}
-            index=subprocess.check_output(["curl","-fsS","--max-time","20","https://ahmed.pm.sa/webapp/?recovery=20261023"])
-            assert b"index-9ac1dfa2cf81c19d8518b35bad1e9609.js" in index
-            status=subprocess.check_output(["curl","-fsS","--max-time","5","http://127.0.0.1:8082/status"])
-            assert b"packager-status:running" in status
-            result={"verified":True,"repository_source_files_checked":checked,"source_matches_repository":True,"source_commit":head,"production_group":expected,"production_platforms":["android","ios"],"web_live":True,"expo_running":True,"database_restored":False}
-            (case/"final-verification.json").write_text(json.dumps(result))
-            print("FINAL_RECOVERY_VERIFICATION",json.dumps(result))
+            import os,pathlib,subprocess,json,stat,re
+            root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"]);case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])/"login-diagnostic";case.mkdir(exist_ok=True)
+            for name in ["ahmed-api/.env","ahmed-api/bootstrap/cache","ahmed-api/storage","ahmed-api/storage/logs","ahmed-api/storage/framework","ahmed-api/storage/framework/cache","ahmed-api/public/index.php","public/index.php","ahmed-api/public/.htaccess","public/.htaccess"]:
+                p=root/name
+                if p.exists():
+                    st=p.stat();print("PERMISSION",json.dumps({"path":name,"mode":oct(stat.S_IMODE(st.st_mode)),"uid":st.st_uid,"gid":st.st_gid,"bytes":st.st_size}))
+            for p in (root/"ahmed-api/bootstrap/cache").glob("*"):
+                if p.is_file(): print("BOOTSTRAP_CACHE_FILE",p.name,oct(stat.S_IMODE(p.stat().st_mode)),p.stat().st_uid,p.stat().st_gid)
+            probes=[
+                ("health","https://ahmed.pm.sa/api/health",None),
+                ("invalid-login","https://ahmed.pm.sa/api/ahmed/session",json.dumps({"username":"__ahmed_recovery_health_probe_20261023__","password":"not-a-real-account-password"}))
+            ]
+            for name,url,data in probes:
+                out=case/(name+".body");header=case/(name+".headers")
+                cmd=["curl","-sS","--max-time","30","-H","Accept: application/json","-D",str(header),"-o",str(out),"-w","%{http_code} %{content_type}",url]
+                if data is not None: cmd.extend(["-H","Content-Type: application/json","--data",data])
+                result=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+                report={"probe":name,"http":result.stdout.decode(),"exit":result.returncode}
+                body=out.read_text(errors="replace") if out.exists() else ""
+                try:
+                    obj=json.loads(body)
+                    if isinstance(obj,dict): report["json_keys"]=list(obj);report["message"]=obj.get("message")
+                except ValueError: report["html_title"]=(re.search(r"<title>(.*?)</title>",body,re.S).group(1).strip() if re.search(r"<title>(.*?)</title>",body,re.S) else None)
+                print("HTTP_PROBE",json.dumps(report,ensure_ascii=False))
+            for name in ["ahmed-api/storage/logs/laravel.log","ahmed-api/error_log","public/error_log","ahmed-api/public/error_log"]:
+                p=root/name
+                if not p.is_file(): continue
+                with p.open(errors="replace") as f:
+                    f.seek(max(0,p.stat().st_size-50000));lines=f.read().splitlines()
+                messages=[line for line in lines if any(x in line for x in [".ERROR:","PHP Fatal","PHP Warning","Permission denied","failed to open stream"])]
+                for line in messages[-8:]:
+                    line=line.split("(SQL:")[0].split('{"exception":')[0]
+                    line=re.sub(r"Bearer\s+\S+","Bearer [redacted]",line)
+                    print("RECENT_SERVER_ERROR",name,line[:1000])
+            print("DISK",subprocess.check_output(["df","-h",str(root)],universal_newlines=True))
             PY
