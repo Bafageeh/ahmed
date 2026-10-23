@@ -10,85 +10,56 @@ permissions:
   contents: read
 
 jobs:
-  preserve-and-audit:
+  verify-recovery:
     runs-on: ubuntu-latest
     steps:
-      - name: Prepare and inspect source recovery without modifying production
+      - name: Verify production source, web, Expo and installed app channel
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
-          command_timeout: 10m
+          command_timeout: 5m
           script: |
             set -eu
             umask 077
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
             CASE="$(dirname "$ROOT")/ahmed-recovery-20261023T092158Z"
-            test -f "$CASE/current-source-and-git.tar.gz"
             export AHMED_RECOVERY_ROOT="$ROOT"
             export AHMED_RECOVERY_CASE="$CASE"
+            test -f "$CASE/restoration-complete.json"
+            cd "$ROOT"
+            git fetch origin main
+            cd "$ROOT/ahmed-mobile"
+            npx eas-cli channel:view production --json > "$CASE/production-channel-recovered.json"
             python3 - <<'PY'
-            import os, json, pathlib, hashlib, subprocess, gzip, base64, sqlite3
+            import pathlib,os,json,subprocess,hashlib,urllib.request,re
             root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"])
             case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
-            backups=pathlib.Path("/home/pmsa/secure-backups/ahmed")
-            ui=backups/"funding-date-label-1792684447832/ui"
-            assert ui.is_dir()
-            tracked=set(subprocess.check_output(["git","-C",str(root),"ls-files"],universal_newlines=True).splitlines())
-            wanted={}
-            origins={}
-            config_names={"package.json","package-lock.json","app.json","eas.json","index.js","metro.config.js"}
-            for base,dirs,names in os.walk(str(ui)):
-                dirs[:]=[d for d in dirs if d not in {"node_modules",".git",".expo","dist-web","android","ios","assets"}]
-                for name in names:
-                    p=pathlib.Path(base)/name
-                    rel=p.relative_to(ui)
-                    key="ahmed-mobile/"+str(rel)
-                    if key not in tracked and name not in {"Ta3meedInvestorControls.js","Ta3meedOpportunityCard.js"}: continue
-                    if p.suffix not in {".js",".jsx",".ts",".tsx",".json",".md"}: continue
-                    data=p.read_bytes()
-                    if len(rel.parts)==1 and name in config_names:
-                        current=root/key
-                        print("BUILD_CONFIG_COMPARE",key,json.dumps({"snapshot_equal_current":current.is_file() and data==current.read_bytes(),"snapshot_bytes":len(data),"current_bytes":current.stat().st_size if current.is_file() else None}))
-                        continue
-                    wanted[key]=data
-                    origins[key]=str(p)
-            for folder in ["investor-profit-20261021T194515Z","investor-picker-1792615386132"]:
-                stage=backups/folder/"staged"
-                for p in stage.rglob("*"):
-                    if p.is_file() and str(p.relative_to(stage)).startswith("ahmed-api/") and p.suffix==".php":
-                        key=str(p.relative_to(stage))
-                        wanted[key]=p.read_bytes()
-                        origins[key]=str(p)
-            prepared=case/"prepared"
-            prepared.mkdir(exist_ok=True)
-            bundle=[]
-            for key,data in sorted(wanted.items()):
-                live=root/key
-                current=live.read_bytes() if live.is_file() else b""
-                if key in tracked:
-                    original=subprocess.check_output(["git","-C",str(root),"show","HEAD:"+key])
-                else:
-                    original=b""
-                if data==original and data==current: continue
-                target=prepared/key
-                target.parent.mkdir(parents=True,exist_ok=True)
-                target.write_bytes(data)
-                item={"path":key,"content":data.decode("utf-8"),"sha256":hashlib.sha256(data).hexdigest(),"current_sha256":hashlib.sha256(current).hexdigest() if live.is_file() else None,"origin":origins[key],"bytes":len(data),"differs_current":data!=current,"differs_git":data!=original}
-                bundle.append(item)
-                print("PREPARED_SOURCE",json.dumps({k:v for k,v in item.items() if k!="content"},ensure_ascii=False))
-            (case/"source-recovery-plan.json").write_text(json.dumps(bundle,ensure_ascii=True))
-            raw=gzip.compress(json.dumps(bundle,ensure_ascii=True).encode("utf-8"))
-            encoded=base64.b64encode(raw).decode("ascii")
-            for i in range(0,len(encoded),8000):
-                print("SOURCE_BUNDLE_%03d="%int(i/8000)+encoded[i:i+8000])
-            for name in ["deployment-proof.json","build-input-hashes.json","deploy-baseline.json","native-channel-after.json","native-update.json"]:
-                p=backups/"funding-date-label-1792684447832"/name
-                if p.is_file():
-                    obj=json.loads(p.read_text())
-                    print("PUBLISH_PROOF",name,json.dumps(obj,ensure_ascii=False)[:18000])
-            print("PREPARED_SOURCE_COUNT",len(bundle))
+            head=subprocess.check_output(["git","-C",str(root),"rev-parse","origin/main"],universal_newlines=True).strip()
+            files=subprocess.check_output(["git","-C",str(root),"ls-tree","-r","--name-only","origin/main"],universal_newlines=True).splitlines()
+            checked=0;mismatches=[]
+            for key in files:
+                if not key.startswith(("ahmed-mobile/","ahmed-api/app/","ahmed-api/routes/","ahmed-api/database/migrations/")): continue
+                if "/dist-web/" in key or pathlib.Path(key).suffix not in {".js",".jsx",".ts",".tsx",".php",".json"}: continue
+                p=root/key
+                expected=subprocess.check_output(["git","-C",str(root),"show","origin/main:"+key])
+                if not p.is_file() or hashlib.sha256(p.read_bytes()).digest()!=hashlib.sha256(expected).digest(): mismatches.append(key)
+                checked+=1
+            assert not mismatches,"Repository/source mismatch: "+json.dumps(mismatches)
+            channel=json.loads((case/"production-channel-recovered.json").read_text())
+            page=channel.get("currentPage",channel)
+            groups=[u for branch in page["updateBranches"] for group in branch["updateGroups"] for u in group if u["runtimeVersion"]=="1.0.19"]
+            expected="c6fe9244-2738-4066-9fca-38a9dc38dabd"
+            assert groups and groups[0]["group"]==expected,"Production update channel not recovered"
+            assert {x["platform"] for x in groups if x["group"]==expected}=={"android","ios"}
+            index=subprocess.check_output(["curl","-fsS","--max-time","20","https://ahmed.pm.sa/webapp/?recovery=20261023"])
+            assert b"index-9ac1dfa2cf81c19d8518b35bad1e9609.js" in index
+            status=subprocess.check_output(["curl","-fsS","--max-time","5","http://127.0.0.1:8082/status"])
+            assert b"packager-status:running" in status
+            result={"verified":True,"repository_source_files_checked":checked,"source_matches_repository":True,"source_commit":head,"production_group":expected,"production_platforms":["android","ios"],"web_live":True,"expo_running":True,"database_restored":False}
+            (case/"final-verification.json").write_text(json.dumps(result))
+            print("FINAL_RECOVERY_VERIFICATION",json.dumps(result))
             PY
