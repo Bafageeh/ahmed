@@ -26,18 +26,21 @@ class MonthlyIncomeController extends Controller
         // COM currently points to the administrator's external account. It must
         // never be exposed as a fixed value in another user's monthly income.
         if ($screen === 'future' && $this->isAdmin($request)) {
+            $comIncome = $this->fetchComMonthlyPersonNet();
             $items->prepend((object) [
                 'id' => 'fixed-com-monthly-person-net',
                 'user_id' => $userId,
                 'screen' => 'future',
-                'name' => 'صافي الشخص الشهري من COM',
-                'amount' => $this->fetchComMonthlyPersonNet(),
+                'name' => 'ربحي الخاص من مؤسسة دليلي',
+                'amount' => $comIncome['amount'],
+                'sync_status' => $comIncome['sync_status'],
+                'synced_at' => $comIncome['synced_at'],
                 'readonly' => true,
                 'display_source' => 'com',
                 'external_app_key' => 'com',
                 'source_key' => 'com_monthly_person_net',
                 'created_at' => null,
-                'updated_at' => now()->toDateTimeString(),
+                'updated_at' => $comIncome['synced_at'],
             ]);
         }
 
@@ -142,22 +145,29 @@ class MonthlyIncomeController extends Controller
         return (int) ($user->id ?? 0) === (int) (DB::table('users')->orderBy('id')->value('id') ?: 0);
     }
 
-    private function fetchComMonthlyPersonNet(): float
+    private function fetchComMonthlyPersonNet(): array
     {
         try {
-            $response = Http::timeout(10)->acceptJson()->get($this->comSummaryUrl);
+            $response = Http::connectTimeout(3)->timeout(10)->acceptJson()
+                ->withHeaders(['Cache-Control' => 'no-cache'])->get($this->comSummaryUrl);
+            $response->throw();
             $json = $response->json();
             $data = is_array($json) ? ($json['data'] ?? $json) : [];
             $income = is_array($data['income'] ?? null) ? $data['income'] : [];
             $value = $income['com_monthly_person_net'] ?? $data['com_monthly_person_net'] ?? null;
 
-            if (is_numeric($value)) {
-                return round((float) $value, 2);
+            if (is_numeric($value) && is_finite((float) $value)) {
+                return [
+                    'amount' => round((float) $value, 2),
+                    'sync_status' => 'fresh',
+                    'synced_at' => $data['synced_at'] ?? now()->toIso8601String(),
+                ];
             }
         } catch (\Throwable $exception) {
-            // keep fallback below for the administrator account only
+            // Preserve the manual income response and report this source as
+            // unavailable instead of silently substituting an old fixed amount.
         }
 
-        return 614.95;
+        return ['amount' => null, 'sync_status' => 'unavailable', 'synced_at' => null];
     }
 }

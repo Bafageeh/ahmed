@@ -50,6 +50,7 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
   const mutation = useRef(false);
   const mounted = useRef(true);
   const lastRefresh = useRef(0);
+  const appActive = useRef(AppState.currentState !== 'background' && AppState.currentState !== 'inactive');
 
   const reloadAll = useCallback((showSpinner = true) => {
     if (pending.current) return pending.current;
@@ -76,9 +77,13 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
     mounted.current = true;
     reloadAll(false);
     const subscription = AppState.addEventListener('change', (state) => {
+      appActive.current = state === 'active';
       if (state === 'active' && Date.now() - lastRefresh.current > 60000 && !mutation.current) reloadAll(false);
     });
-    return () => { mounted.current = false; subscription.remove(); };
+    const timer = setInterval(() => {
+      if (appActive.current && !mutation.current && Date.now() - lastRefresh.current >= 60000) reloadAll(false);
+    }, 60000);
+    return () => { mounted.current = false; subscription.remove(); clearInterval(timer); };
   }, [reloadAll]);
   useEffect(() => {
     if (!notice) return undefined;
@@ -190,7 +195,8 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
         <View style={s.detailIdentity}><View style={[s.detailIcon, { backgroundColor: selected.tint }]}><UiIcon name={selected.icon} color={selected.color} size={28} /></View><Text style={s.detailName}>{selected.name}</Text><Text style={s.detailType}>{selected.kind === 'automatic' ? 'مصدر تلقائي · يُحدّث من الحساب المرتبط' : 'مصدر دخل يدوي'}</Text></View>
         <View style={s.detailAmounts}><View style={s.detailAmountCell}><Text style={s.detailAmountLabel}>التقدير السنوي</Text><Text style={s.detailAmountValue}>{displayAmount(selected.amount == null ? null : selected.amount * 12)}</Text><Text style={s.currency}>ر.س</Text></View><View style={s.detailDivider} /><View style={s.detailAmountCell}><Text style={s.detailAmountLabel}>الدخل الشهري</Text><Text style={[s.detailAmountValue, { color: '#157B6E' }]}>{displayAmount(selected.amount)}</Text><Text style={s.currency}>ر.س</Text></View></View>
         <View style={s.formulaBox}><Text style={s.formulaTitle}>طريقة الحساب</Text><Text style={s.formulaText}>{selected.formula}</Text>{selected.capital != null ? <View style={s.capitalRow}><Text style={s.capitalValue}>{displayAmount(selected.capital)} ر.س</Text><Text style={s.capitalLabel}>المبلغ المعتمد</Text></View> : null}</View>
-        {selected.stale ? <Text style={s.errorText}>تعذر تحديث هذا المصدر. القيمة المعروضة هي آخر قيمة متاحة.</Text> : null}
+        {selected.syncedAt ? <Text style={s.detailHint}>تحديث المصدر: {new Date(selected.syncedAt).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short' })}</Text> : null}
+        {selected.stale ? <Text style={s.errorText}>{selected.amount == null ? 'لا تتوفر قيمة حديثة لهذا المصدر. أعد التحديث لاحقًا.' : 'تعذر تحديث هذا المصدر. القيمة المعروضة هي آخر قيمة متاحة.'}</Text> : null}
         {!!detailError && <Text accessibilityLiveRegion="polite" style={s.errorText}>{detailError}</Text>}
         {selected.kind === 'manual' && !selected.readonly ? confirmDelete ? <View style={s.deleteBox}><Text style={s.deleteQuestion}>حذف «{selected.name}» من مصادر الدخل؟</Text><Pressable accessibilityRole="button" disabled={saving} onPress={deleteIncome} style={pressStyle([s.primaryButton, s.deleteButton])}>{saving ? <ActivityIndicator color="#FFF" /> : <Text style={s.primaryText}>تأكيد الحذف</Text>}</Pressable><Pressable disabled={saving} accessibilityRole="button" onPress={() => setConfirmDelete(false)} style={s.cancelButton}><Text style={s.cancelText}>إلغاء</Text></Pressable></View> : <View style={s.manualActions}><Pressable accessibilityRole="button" onPress={() => setConfirmDelete(true)} style={pressStyle(s.deleteOutline)}><UiIcon name="delete" size={19} color="#AD4551" /><Text style={s.deleteText}>حذف</Text></Pressable><Pressable accessibilityRole="button" onPress={() => openForm(selected)} style={pressStyle([s.primaryButton, s.editButton])}><Text style={s.primaryText}>تعديل المصدر</Text><UiIcon name="edit" size={18} color="#FFF" /></Pressable></View> : <Text style={s.detailHint}>تتحدث هذه القيمة عند تحديث بيانات المصدر.</Text>}
       </> : null}

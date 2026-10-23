@@ -5,8 +5,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { createRequire } = require('node:module');
-const mobile = path.resolve(__dirname, '../ahmed-mobile');
-const mobileRequire = createRequire(path.join(mobile, 'package.json'));
+const mobile = process.env.AHMED_TEST_MOBILE || path.resolve(__dirname, '../ahmed-mobile');
+const mobileRequire = createRequire(path.join(process.env.AHMED_TEST_DEPENDENCIES || mobile, 'package.json'));
 const babel = mobileRequire('@babel/core');
 const code = babel.transformSync(fs.readFileSync(path.join(mobile, 'futureMonthlyIncomeData.js'), 'utf8'), {
   configFile: false, babelrc: false,
@@ -34,11 +34,13 @@ const { fetchFutureIncomeData, sulfaIncomeValue, ta3meedIncomeCapital, parseInco
   assert(Number.isNaN(parseIncomeAmount('1.2.3')));
   const requests = [];
   let failDinar = false;
+  let comAmount = 20;
+  let comStatus = 'fresh';
   const fetcher = async (url, options) => {
     requests.push({ url, options });
     if (url.includes('/dinar/') && failDinar) throw new Error('offline');
     let json = { data: [] };
-    if (url.includes('monthly-incomes?')) json = { data: [{ id: 1, name: 'Test rent', amount: 250 }, { id: 'fixed-com-monthly-person-net', source_key: 'com_monthly_person_net', amount: 20 }] };
+    if (url.includes('monthly-incomes?')) json = { data: [{ id: 1, name: 'Test rent', amount: 250 }, { id: 'fixed-com-monthly-person-net', source_key: 'com_monthly_person_net', amount: comAmount, sync_status: comStatus, synced_at: '2026-10-23T00:00:00Z' }] };
     if (url.includes('/moneymoon/')) json = { data: [{ status: 'active', principal_amount: 2000 }, { status: 'received', principal_amount: 1000 }, { status: 'completed', principal_amount: 1000 }] };
     if (url.includes('/ta3meed/')) json = { data: { summary: { ta3meed: 3000 } } };
     if (url.includes('/dinar/')) json = { data: [{ investment_amount: 5000, payments: [{ is_paid: 1, total_principal: 1000 }, { is_paid: 0, total_principal: 1000 }] }] };
@@ -58,6 +60,18 @@ const { fetchFutureIncomeData, sulfaIncomeValue, ta3meedIncomeCapital, parseInco
   assert.equal(result.values.com.amount, 20);
   assert.equal(Object.values(result.values).reduce((sum, row) => sum + row.amount, 0) + result.manual[0].amount, 530);
   for (const { url, options: request } of requests) assert.equal(request.headers.Authorization, url.startsWith('https://finance.') ? undefined : 'Bearer fixture-session');
+  assert.equal(result.values.com.syncedAt, '2026-10-23T00:00:00Z');
+  comAmount = 0;
+  result = await fetchFutureIncomeData(options);
+  assert.equal(result.values.com.amount, 0, 'A real zero must remain a valid current value');
+  comAmount = 99;
+  result = await fetchFutureIncomeData(options);
+  assert.equal(result.values.com.amount, 99, 'A changed source must update without a fixed fallback');
+  comStatus = 'unavailable'; comAmount = null;
+  result = await fetchFutureIncomeData(options);
+  assert(result.failed.includes('com'));
+  assert.equal(result.values.com, undefined, 'A missing source must not masquerade as a current zero');
+  assert.equal(result.manual.length, 1, 'COM failure must not prevent manual income loading');
   failDinar = true;
   result = await fetchFutureIncomeData({ ...options, includeFinance: false });
   assert(result.failed.includes('dinar'));

@@ -7,7 +7,7 @@ export const FUTURE_INCOME_SOURCES = [
   { id: 'sulfa', name: 'استثمار سلفة', icon: 'sulfa', color: '#24856D', tint: '#EAF8F0', caption: 'الاستثمار القائم', formula: 'الاستثمار القائم في سلفة × 10.5% ÷ 12' },
   { id: 'tokenize', name: 'متوسط ربح ترميز', icon: 'tokenize', color: '#AA7D30', tint: '#FBF4E4', caption: 'متوسط الفرص القائمة', formula: 'مجموع ربح كل فرصة قائمة مقسومًا على مدتها بالأشهر' },
   { id: 'finance', name: 'ربح أحمد الصافي', icon: 'stats', color: '#398490', tint: '#EAF6F7', caption: 'من Finance', formula: 'صافي ربح أحمد الشهري بعد خصم المبالغ العالقة، كما يرد من Finance' },
-  { id: 'com', name: 'صافي الشخص من COM', icon: 'reports', color: '#6D77A1', tint: '#EFF1F8', caption: 'من COM', formula: 'صافي الشخص الشهري الوارد من حساب COM المرتبط' },
+  { id: 'com', name: 'ربحي الخاص من مؤسسة دليلي', icon: 'wallet', color: '#6D77A1', tint: '#EFF1F8', caption: 'مؤسسة دليلي', formula: 'حصتي الشهرية من صافي ربح مؤسسة دليلي، محسوبة من بيانات المؤسسة الحالية' },
 ];
 
 export const incomeNumber = (value) => {
@@ -74,7 +74,13 @@ export async function fetchFutureIncomeData({ apiUrl, headers, includeFinance = 
       const json = await request(`${apiUrl}/monthly-incomes?screen=future`);
       if (!Array.isArray(json.data)) throw new Error('INVALID_INCOME_LIST');
       const com = json.data.find((row) => row.source_key === 'com_monthly_person_net' || row.id === 'fixed-com-monthly-person-net');
-      if (includeFinance) values.com = { amount: incomeNumber(com?.amount) };
+      if (includeFinance) {
+        if (com && com.amount != null && Number.isFinite(Number(com.amount)) && !['unavailable', 'error'].includes(com.sync_status)) {
+          values.com = { amount: Number(com.amount), syncedAt: com.synced_at || null };
+        } else {
+          failed.push('com');
+        }
+      }
       manual = json.data.filter((row) => row.source_key !== 'com_monthly_person_net' && row.id !== 'fixed-com-monthly-person-net');
     }),
     run('moneymoon', async () => {

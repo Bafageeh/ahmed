@@ -1,0 +1,213 @@
+name: Ahmed Live Daleli Income
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-daleli-income.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-daleli-income
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the guarded live Daleli income connection
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 15m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            CASE="/home/pmsa/secure-backups/ahmed/daleli-income-live-20261023"
+            export AHMED_INCOME_ROOT="$ROOT" AHMED_INCOME_CASE="$CASE" AHMED_INCOME_COMMIT="${{ github.sha }}"
+            export DALELI_AHMED_ROOT="$ROOT" DALELI_CASE="$CASE" DALELI_STAGED="$CASE/staged" DALELI_COM_APP_PATH="/home/pmsa/apps/com/com-api"
+            mkdir -p "$CASE"
+            chmod 700 "$CASE"
+            if [ -f "$CASE/complete.json" ]; then echo "DALELI_INCOME_ALREADY_PUBLISHED"; exit 0; fi
+            git -C "$ROOT" fetch origin main
+            python3 - <<'PYTHON'
+            import os,pathlib,json,hashlib,subprocess
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);com=pathlib.Path('/home/pmsa/apps/com')
+            proof=json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/daleli-income-20261023/preflight.json').read_text())
+            expected={'ahmed-api/app/Http/Controllers/Api/MonthlyIncomeController.php': '8a975fbec6fd9bb87f7eb025ff6a7531eb2c3a626a6172940b2cb6b01353b039', 'ahmed-mobile/FutureMonthlyIncomeScreen.js': '3ba7e48087f8886183c46398e53d3ef7b9c1037c15d603e2af189ccf0fafd4ae', 'ahmed-mobile/futureMonthlyIncomeData.js': 'b90f8b9b1692eba0ed8d7d1f218771066302a06b7658a15eb73b50cb5daf08c3', 'integrations/daleli/ahmed-summary.php': 'b62c51ba2eba1889c8874782e76454fc6897bea0ae230a0820eff7bee3eccd1a', 'scripts/test-daleli-income.php': '0d2f27c1716eb749ec8ce99e21bbc17f3e05c28589c6d2ff2ab8e22721329be6', 'scripts/test-future-income-data.cjs': 'd51d7c7e5546dfccb90e8f054a4b2743e447e47ca35d7bb977c37a048f5d8f94'}
+            for rel,digest in expected.items():
+             content=subprocess.check_output(['git','-C',str(root),'show',os.environ['AHMED_INCOME_COMMIT']+':'+rel]);assert hashlib.sha256(content).hexdigest()==digest,'Committed file changed'
+             out=case/'staged'/rel;out.parent.mkdir(parents=True,exist_ok=True);out.write_bytes(content);os.chmod(str(out),0o600)
+            for rel,item in proof['ahmed_sources'].items():
+             allowed={item['sha256']}
+             if rel in expected:allowed.add(expected[rel])
+             assert hashlib.sha256((root/rel).read_bytes()).hexdigest() in allowed,'Concurrent Ahmed source edit: '+rel
+            for rel,item in proof['com_sources'].items():
+             allowed={item['sha256']}
+             if rel.endswith('summary/index.php'):allowed.add(expected['integrations/daleli/ahmed-summary.php'])
+             assert hashlib.sha256((com/rel).read_bytes()).hexdigest() in allowed,'Concurrent COM source edit: '+rel
+            baseline=json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/funding-date-label-1792684447832/build-input-hashes.json').read_text())
+            for rel,digest in baseline.items():
+             if rel in {'.env','AppShell.js','SulfaInvestmentScreen.js','ta3meed/Ta3meedTenantInvestorAccounts.js'}:continue
+             assert hashlib.sha256((root/'ahmed-mobile'/rel).read_bytes()).hexdigest()==digest,'Existing development changed: '+rel
+            for relpath,hashkey in [('sulfa-sync-20261023','target_sha256'),('dinar-sync-20261023','sha256')]:
+             for item in json.loads((pathlib.Path('/home/pmsa/secure-backups/ahmed')/relpath/'import-plan.json').read_text())['source_files']:
+              if item['path']=='ahmed-mobile/AppShell.js':continue
+              assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item[hashkey],'Investment source changed'
+            assert 'const profit = Math.round((total - manual) * 100) / 100;' in (root/'ahmed-mobile/ta3meed/Ta3meedTenantInvestorAccounts.js').read_text()
+            print('DALELI_INCOME_ALL_EXISTING_SOURCE_GUARDS_PASSED')
+            PYTHON
+            /usr/local/bin/php -l "$CASE/staged/ahmed-api/app/Http/Controllers/Api/MonthlyIncomeController.php"
+            /usr/local/bin/php -l "$CASE/staged/integrations/daleli/ahmed-summary.php"
+            /usr/local/bin/php "$CASE/staged/scripts/test-daleli-income.php"
+            cd "$ROOT/ahmed-mobile"
+            AHMED_TEST_MOBILE="$CASE/staged/ahmed-mobile" AHMED_TEST_DEPENDENCIES="$ROOT/ahmed-mobile" node "$CASE/staged/scripts/test-future-income-data.cjs"
+            node <<'JS'
+            const fs=require('fs'),path=require('path'),babel=require('@babel/core');
+            const root=process.env.AHMED_INCOME_ROOT,staged=process.env.DALELI_STAGED;
+            for(const name of ['FutureMonthlyIncomeScreen.js','futureMonthlyIncomeData.js'])babel.transformSync(fs.readFileSync(path.join(staged,'ahmed-mobile',name),'utf8'),{filename:path.join(root,'ahmed-mobile',name),configFile:path.join(root,'ahmed-mobile/babel.config.js'),babelrc:false});
+            console.log('DALELI_INCOME_COMPILED_NATIVE_COMPONENT_VERIFIED');
+            JS
+            /usr/local/bin/php "$CASE/staged/integrations/daleli/ahmed-summary.php" > "$CASE/candidate-summary.json"
+            chmod 600 "$CASE/candidate-summary.json"
+            python3 - <<'PYTHON'
+            import os,pathlib,json
+            case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);value=json.loads((case/'candidate-summary.json').read_text())
+            assert value.get('data',{}).get('source')=='COM_LIVE_DATABASE','The staged aggregate could not be computed'
+            income=value['data']['income'];actual=float(income['com_monthly_person_net']);expected=round((float(income['com_hosting_annual_income'])-float(income['com_annual_expenses']))/24,2)
+            assert abs(actual-expected)<0.011,'The integration differs from the COM summary formula'
+            print('DALELI_INCOME_REQUESTED_LIVE_PROFIT_AGGREGATE_VERIFIED')
+            PYTHON
+            python3 - <<'PYTHON'
+            import os,pathlib,json,hashlib,tempfile
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);com=pathlib.Path('/home/pmsa/apps/com')
+            proof=json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/daleli-income-20261023/preflight.json').read_text());expected={'ahmed-api/app/Http/Controllers/Api/MonthlyIncomeController.php': '8a975fbec6fd9bb87f7eb025ff6a7531eb2c3a626a6172940b2cb6b01353b039', 'ahmed-mobile/FutureMonthlyIncomeScreen.js': '3ba7e48087f8886183c46398e53d3ef7b9c1037c15d603e2af189ccf0fafd4ae', 'ahmed-mobile/futureMonthlyIncomeData.js': 'b90f8b9b1692eba0ed8d7d1f218771066302a06b7658a15eb73b50cb5daf08c3', 'integrations/daleli/ahmed-summary.php': 'b62c51ba2eba1889c8874782e76454fc6897bea0ae230a0820eff7bee3eccd1a', 'scripts/test-daleli-income.php': '0d2f27c1716eb749ec8ce99e21bbc17f3e05c28589c6d2ff2ab8e22721329be6', 'scripts/test-future-income-data.cjs': 'd51d7c7e5546dfccb90e8f054a4b2743e447e47ca35d7bb977c37a048f5d8f94'}
+            changes=[]
+            for rel,item in proof['com_sources'].items():
+             if rel.endswith('summary/index.php'):changes.append((com/rel,case/'staged/integrations/daleli/ahmed-summary.php',item['sha256'],'com/'+rel))
+            for rel in ['ahmed-api/app/Http/Controllers/Api/MonthlyIncomeController.php','ahmed-mobile/FutureMonthlyIncomeScreen.js','ahmed-mobile/futureMonthlyIncomeData.js']:
+             changes.append((root/rel,case/'staged'/rel,proof['ahmed_sources'][rel]['sha256'],'ahmed/'+rel))
+            for live,source,before,rel in changes:
+             digest=hashlib.sha256(live.read_bytes()).hexdigest();assert digest in {before,hashlib.sha256(source.read_bytes()).hexdigest()},'Source changed during verification'
+            for live,source,before,rel in changes:
+             old=live.read_bytes();owner=live.stat();backup=case/'before'/rel;backup.parent.mkdir(parents=True,exist_ok=True)
+             if not backup.exists():backup.write_bytes(old);os.chmod(str(backup),0o600)
+             fd,temp=tempfile.mkstemp(prefix='.daleli-income-',dir=str(live.parent))
+             try:
+              with os.fdopen(fd,'wb') as stream:stream.write(source.read_bytes());stream.flush();os.fsync(stream.fileno())
+              os.chmod(temp,0o644);os.chown(temp,owner.st_uid,owner.st_gid);os.replace(temp,str(live))
+             finally:
+              if os.path.exists(temp):os.unlink(temp)
+            print('DALELI_INCOME_ONLY_SCOPED_INTEGRATION_AND_INCOME_FILES_UPDATED')
+            PYTHON
+            python3 - <<'PYTHON'
+            import os,pathlib,json,subprocess,time
+            case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);data=None
+            for attempt in range(8):
+             result=subprocess.run(['curl','-fsS','--max-time','25','-H','Cache-Control: no-cache','https://com.pm.sa/api/v1/integrations/ahmed/summary/'],stdout=subprocess.PIPE,universal_newlines=True)
+             if result.returncode==0:
+              data=json.loads(result.stdout)
+              if data.get('data',{}).get('source')=='COM_LIVE_DATABASE':break
+             time.sleep(2)
+            assert data and data['data']['source']=='COM_LIVE_DATABASE','COM is still serving the static integration'
+            (case/'live-summary.json').write_text(json.dumps(data));os.chmod(str(case/'live-summary.json'),0o600)
+            print('DALELI_INCOME_PUBLIC_HTTPS_SOURCE_IS_LIVE')
+            PYTHON
+            /usr/local/bin/php <<'PHP'
+            <?php
+            $root=getenv('DALELI_AHMED_ROOT');$case=getenv('DALELI_CASE');require $root.'/ahmed-api/vendor/autoload.php';$app=require $root.'/ahmed-api/bootstrap/app.php';$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            $method=new ReflectionMethod(App\Http\Controllers\Api\MonthlyIncomeController::class,'fetchComMonthlyPersonNet');$actual=$method->invoke(new App\Http\Controllers\Api\MonthlyIncomeController);$source=json_decode(file_get_contents($case.'/live-summary.json'),true)['data']['income']['com_monthly_person_net'];
+            if($actual['sync_status']!=='fresh'||abs($actual['amount']-$source)>0.001)throw new RuntimeException('Ahmed did not read the current requested COM profit');
+            echo "DALELI_INCOME_AHMED_LIVE_READER_VERIFIED\n";
+            PHP
+            RUNTIME="$(dirname "$ROOT")"
+            mkdir -p "$RUNTIME/.cache" "$RUNTIME/.tmp"
+            export CI=1 BROWSER=none EXPO_NO_TELEMETRY=1 EXPO_NO_DEVTOOLS=1 REACT_NATIVE_PACKAGER_HOSTNAME=ahmed.pm.sa
+            export XDG_CACHE_HOME="$RUNTIME/.cache" TMPDIR="$RUNTIME/.tmp" TMP="$RUNTIME/.tmp" TEMP="$RUNTIME/.tmp"
+            python3 - <<'PY'
+            import os,pathlib,subprocess,signal,time
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT'])
+            pids=subprocess.run(['lsof','-tiTCP:8082','-sTCP:LISTEN'],stdout=subprocess.PIPE,universal_newlines=True).stdout.split()
+            for pid in pids:
+                assert os.path.realpath('/proc/'+pid+'/cwd')==str(root/'ahmed-mobile')
+                command=pathlib.Path('/proc/'+pid+'/cmdline').read_bytes().replace(b'\0',b' ').decode()
+                assert 'expo start' in command and '8082' in command
+            for pid in pids: os.kill(int(pid),signal.SIGTERM)
+            remaining=''
+            for attempt in range(20):
+                remaining=subprocess.run(['lsof','-tiTCP:8082','-sTCP:LISTEN'],stdout=subprocess.PIPE,universal_newlines=True).stdout.strip()
+                if not remaining: break
+                time.sleep(0.5)
+            assert not remaining,'Expo port did not close'
+            PY
+            nohup npx expo start --clear --go --host lan --port 8082 > "$CASE/expo-income.log" 2>&1 </dev/null &
+            echo $! > "$RUNTIME/ahmed-expo-8082.pid"
+            READY=0
+            for ATTEMPT in $(seq 1 45); do
+              if curl -fsS --max-time 2 http://127.0.0.1:8082/status | grep -q 'packager-status:running'; then READY=1; break; fi
+              sleep 1
+            done
+            if [ "$READY" -ne 1 ]; then tail -50 "$CASE/expo-income.log"; exit 1; fi
+            python3 - <<'PY'
+            import subprocess,re
+            bundle=subprocess.check_output(['curl','-fsS','--max-time','180','http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0']).decode('utf-8')
+            decoded=re.sub(r'\\u([0-9a-fA-F]{4})',lambda m:chr(int(m.group(1),16)),bundle)
+            for marker in ['future-income-redesign-v1','ربحي الخاص من مؤسسة دليلي','sync_status','syncedAt','setInterval']:
+                assert marker in decoded,'Expo delivered an old page: '+marker
+            assert '#S-121' not in decoded,'Removed screen identifier is still delivered'
+            print('DALELI_INCOME_EXPO_GO_DELIVERY_VERIFIED')
+            PY
+            if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/web-build" > "$CASE/web-build.log" 2>&1; then tail -60 "$CASE/web-build.log"; exit 1; fi
+            python3 - <<'PY'
+            import os,pathlib,shutil,tempfile,re,subprocess,hashlib
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);build=case/'web-build'
+            html=(build/'index.html').read_text()
+            for attr in ['src','href']:
+                for prefix in ['/_expo/','/assets/']: html=html.replace(attr+'="'+prefix,attr+'="/webapp'+prefix)
+            (build/'index.html').write_text(html)
+            for dest in [root/'ahmed-mobile/dist-web',root/'ahmed-api/public/webapp']:
+                dest.mkdir(parents=True,exist_ok=True)
+                for source in build.rglob('*'):
+                    if not source.is_file() or source.relative_to(build)==pathlib.Path('index.html'): continue
+                    target=dest/source.relative_to(build);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(str(source),str(target));os.chmod(str(target),0o644)
+                    folder=target.parent
+                    while True:
+                        os.chmod(str(folder),0o755)
+                        if folder==dest: break
+                        folder=folder.parent
+                previous=case/('before-'+dest.parent.name+'-index.html')
+                if (dest/'index.html').exists() and not previous.exists(): previous.write_bytes((dest/'index.html').read_bytes());os.chmod(str(previous),0o600)
+                fd,temp=tempfile.mkstemp(prefix='.sulfa-income-index-',dir=str(dest))
+                with os.fdopen(fd,'wb') as stream: stream.write(html.encode())
+                os.chmod(temp,0o644);os.replace(temp,str(dest/'index.html'))
+            scripts=re.findall(r'<script[^>]+src="([^"]+)"',html);assert scripts
+            for src in scripts:
+                if '/_expo/' not in src: continue
+                url='https://ahmed.pm.sa'+src if src.startswith('/') else 'https://ahmed.pm.sa/webapp/'+src
+                body=subprocess.check_output(['curl','-fsS','--max-time','30',url])
+                local=root/'ahmed-api/public'/src.lstrip('/') if src.startswith('/') else root/'ahmed-api/public/webapp'/src
+                assert hashlib.sha256(body).hexdigest()==hashlib.sha256(local.read_bytes()).hexdigest()
+                decoded=re.sub(r'\\u([0-9a-fA-F]{4})',lambda m:chr(int(m.group(1),16)),body.decode())
+                assert 'future-income-redesign-v1' in decoded and 'ربحي الخاص من مؤسسة دليلي' in decoded and '#S-121' not in decoded,'Served web is stale'
+            print('DALELI_INCOME_PUBLIC_WEB_VERIFIED')
+            PY
+            if [ ! -f "$CASE/native-update.json" ]; then
+              if ! npx eas-cli update --channel production --platform all --environment production --message "Connect live Daleli personal profit and refresh income automatically" --non-interactive --json > "$CASE/native-update.json" 2> "$CASE/native-update.log"; then rm -f "$CASE/native-update.json"; tail -50 "$CASE/native-update.log"; exit 1; fi
+            fi
+            python3 - <<'PY'
+            import os,pathlib,json,subprocess
+            case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);updates=json.loads((case/'native-update.json').read_text())
+            assert {x['platform'] for x in updates}=={'ios','android'} and all(x['runtimeVersion']=='1.0.19' for x in updates)
+            for name,url,data,expected in [('health','https://ahmed.pm.sa/api/health',None,200),('invalid-login','https://ahmed.pm.sa/api/ahmed/session',{'username':'__income_health_check__','password':'not-a-real-password'},422),('protected-session','https://ahmed.pm.sa/api/ahmed/session',None,401)]:
+                out=case/(name+'.json');cmd=['curl','-sS','--max-time','30','-H','Accept: application/json','-o',str(out),'-w','%{http_code}',url]
+                if data is not None: cmd+=['-H','Content-Type: application/json','--data',json.dumps(data)]
+                actual=int(subprocess.check_output(cmd,universal_newlines=True));json.loads(out.read_text());os.chmod(str(out),0o600)
+                assert actual==expected,'Unexpected authentication response';print('DALELI_INCOME_HTTP_VERIFIED',name,actual)
+            source=json.loads((case/'live-summary.json').read_text())['data']['income']
+            result={'monthly_daleli_profit':source['com_monthly_person_net'],'source_live':True,'complete':True,'source_commit':os.environ['AHMED_INCOME_COMMIT'],'platforms':sorted(x['platform'] for x in updates),'group':updates[0]['group'],'database_modified':False,'expo_go_verified':True}
+            (case/'complete.json').write_text(json.dumps(result));os.chmod(str(case/'complete.json'),0o600)
+            print('DALELI_INCOME_PUBLISHED',json.dumps(result,sort_keys=True))
+            PY
