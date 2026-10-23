@@ -14,10 +14,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  inspect-delivered-bundles:
+  refresh-expo-delivery:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect source, delivered web, native update and Expo bundles
+      - name: Refresh only Ahmed Expo and verify the delivered Sulfa code
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -35,57 +35,70 @@ jobs:
             mkdir -p "$CASE"
             chmod 700 "$CASE"
             python3 - <<'PY'
-            import os,pathlib,subprocess,json,hashlib,re,email
+            import os,pathlib,subprocess,json,hashlib,signal,time
             root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
             previous=pathlib.Path('/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023')
-            def fetch(url,headers=None,timeout=150):
-                cmd=['curl','-fsS','--max-time',str(timeout)]
-                for h in headers or []: cmd+=['-H',h]
-                return subprocess.check_output(cmd+[url])
-            def markers(body):
-                return {k:(k.encode('utf-8') in body or k.encode('utf-16le') in body) for k in ['platform_snapshot','الاستثمارات القائمة','ملخص سلفة','حركة موثقة','إجمالي المبالغ المستثمرة']}
             plan=json.loads((previous/'import-plan.json').read_text())
             for item in plan['source_files']:
-                body=(root/item['path']).read_bytes()
-                print('DELIVERY_SOURCE',json.dumps({'path':item['path'],'matches_saved_source':hashlib.sha256(body).hexdigest()==item['target_sha256'],'markers':markers(body)},ensure_ascii=True))
-            html=fetch('https://ahmed.pm.sa/webapp/').decode('utf-8')
-            scripts=re.findall(r'<script[^>]+src="([^"]+)"',html)
-            for src in scripts:
-                if '/_expo/' not in src: continue
-                url='https://ahmed.pm.sa'+src if src.startswith('/') else 'https://ahmed.pm.sa/webapp/'+src
-                body=fetch(url);(case/'served-web.js').write_bytes(body)
-                print('DELIVERY_WEB',json.dumps({'asset':src,'sha256':hashlib.sha256(body).hexdigest(),'markers':markers(body)},ensure_ascii=True))
-            for platform in ['android','ios']:
-                headers=['Accept: application/expo+json,application/json','expo-protocol-version: 1','expo-platform: '+platform,'expo-runtime-version: 1.0.19','expo-channel-name: production']
-                try:
-                    raw=fetch('https://u.expo.dev/85d588cc-f97a-4907-a248-0e778d83d674',headers)
-                    manifest=json.loads(raw.decode('utf-8'))
-                    (case/(platform+'-manifest.json')).write_text(json.dumps(manifest));os.chmod(str(case/(platform+'-manifest.json')),0o600)
-                    asset=manifest.get('launchAsset',{}).get('url')
-                    body=fetch(asset) if asset else b''
-                    (case/(platform+'-launch-asset')).write_bytes(body)
-                    print('DELIVERY_NATIVE',json.dumps({'platform':platform,'id':manifest.get('id'),'runtime':manifest.get('runtimeVersion'),'metadata':manifest.get('metadata'),'asset_bytes':len(body),'markers':markers(body)},ensure_ascii=True))
-                except Exception as error:
-                    print('DELIVERY_NATIVE_INSPECT_ERROR',platform,type(error).__name__)
-            try:
-                print('DELIVERY_EXPO_STATUS',fetch('http://127.0.0.1:8082/status',timeout=5).decode('utf-8').strip())
-                pids=subprocess.check_output(['lsof','-tiTCP:8082','-sTCP:LISTEN'],universal_newlines=True).split()
-                for pid in pids:
-                    print('DELIVERY_EXPO_PROCESS',json.dumps({'pid':pid,'cwd':os.readlink('/proc/'+pid+'/cwd'),'command':pathlib.Path('/proc/'+pid+'/cmdline').read_bytes().replace(b'\0',b' ').decode('utf-8')},ensure_ascii=True))
-                body=fetch('http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0',timeout=180)
-                (case/'expo-android.js').write_bytes(body)
-                print('DELIVERY_EXPO_BUNDLE',json.dumps({'sha256':hashlib.sha256(body).hexdigest(),'bytes':len(body),'markers':markers(body)},ensure_ascii=True))
-            except Exception as error:
-                print('DELIVERY_EXPO_INSPECT_ERROR',type(error).__name__)
+                assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['target_sha256'],'Source differs from verified update'
+            proof=json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/funding-date-label-1792684447832/build-input-hashes.json').read_text())
+            for name,digest in proof.items():
+                if name in {'.env','ta3meed/Ta3meedTenantInvestorAccounts.js','SulfaInvestmentScreen.js'}: continue
+                assert hashlib.sha256((root/'ahmed-mobile'/name).read_bytes()).hexdigest()==digest,'Existing development changed: '+name
+            assert 'const profit = Math.round((total - manual) * 100) / 100;' in (root/'ahmed-mobile/ta3meed/Ta3meedTenantInvestorAccounts.js').read_text()
+            p=subprocess.run(['lsof','-tiTCP:8082','-sTCP:LISTEN'],stdout=subprocess.PIPE,universal_newlines=True)
+            pids=p.stdout.split()
+            for pid in pids:
+                command=pathlib.Path('/proc/'+pid+'/cmdline').read_bytes().replace(b'\0',b' ').decode('utf-8')
+                assert os.path.realpath('/proc/'+pid+'/cwd')==str(root/'ahmed-mobile'),'Unexpected process directory on Expo port'
+                assert 'expo start' in command and '8082' in command,'Unexpected process on Expo port'
+            for pid in pids: os.kill(int(pid),signal.SIGTERM)
+            remaining=''
+            for attempt in range(20):
+                remaining=subprocess.run(['lsof','-tiTCP:8082','-sTCP:LISTEN'],stdout=subprocess.PIPE,universal_newlines=True).stdout.strip()
+                if not remaining: break
+                time.sleep(0.5)
+            assert not remaining,'Expo did not release its port'
+            print('AHMED_EXPO_8082_STOPPED_WITH_SOURCE_AND_DATA_PRESERVED')
             PY
-            /usr/local/bin/php "$CASE/../sulfa-sync-20261023/staged/scripts/verify-sulfa-observations.php" "$ROOT" "$ROOT/ahmed-api/database/database.sqlite" "$ROOT/ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php" "$CASE/../sulfa-sync-20261023/import-plan.json"
             cd "$ROOT/ahmed-mobile"
-            export CI=1 EXPO_NO_TELEMETRY=1
-            if npx eas-cli build:list --platform android --limit 3 --non-interactive --json > "$CASE/android-builds.json" 2> "$CASE/android-builds.log"; then
-              python3 - <<'PY'
-            import os,pathlib,json
-            case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
-            for build in json.loads((case/'android-builds.json').read_text()):
-                print('DELIVERY_ANDROID_BUILD',json.dumps({k:build.get(k) for k in ['id','status','appVersion','appBuildVersion','runtimeVersion','channel','createdAt']},ensure_ascii=True))
+            RUNTIME="$(dirname "$ROOT")"
+            mkdir -p "$RUNTIME/.cache" "$RUNTIME/.tmp"
+            export BROWSER=none CI=1 EXPO_NO_TELEMETRY=1 EXPO_NO_DEVTOOLS=1
+            export REACT_NATIVE_PACKAGER_HOSTNAME=ahmed.pm.sa
+            export XDG_CACHE_HOME="$RUNTIME/.cache" TMPDIR="$RUNTIME/.tmp" TMP="$RUNTIME/.tmp" TEMP="$RUNTIME/.tmp"
+            nohup npx expo start --clear --go --host lan --port 8082 > "$CASE/expo-refreshed.log" 2>&1 </dev/null &
+            echo $! > "$RUNTIME/ahmed-expo-8082.pid"
+            READY=0
+            for ATTEMPT in $(seq 1 45); do
+              if curl -fsS --max-time 2 http://127.0.0.1:8082/status | grep -q 'packager-status:running'; then READY=1; break; fi
+              sleep 1
+            done
+            if [ "$READY" -ne 1 ]; then tail -60 "$CASE/expo-refreshed.log"; exit 1; fi
+            python3 - <<'PY'
+            import os,pathlib,subprocess,json,re,hashlib
+            root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
+            def get(url): return subprocess.check_output(['curl','-fsS','--max-time','180',url])
+            url='http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0'
+            body=get(url);(case/'expo-android-refreshed.js').write_bytes(body)
+            text=body.decode('utf-8');text=re.sub(r'\\u([0-9a-fA-F]{4})',lambda m:chr(int(m.group(1),16)),text)
+            checks={word:word in text for word in ['platform_snapshot','الاستثمارات القائمة','ملخص سلفة','حركة موثقة','الأرباح المحققة','رصيد المحفظة']}
+            assert all(checks.values()),'Refreshed Expo bundle lacks the new Sulfa summary'
+            print('AHMED_EXPO_NEW_SULFA_BUNDLE_VERIFIED',json.dumps({'sha256':hashlib.sha256(body).hexdigest(),'checks':checks},ensure_ascii=True))
+            for name,url,data,expected in [('health','https://ahmed.pm.sa/api/health',None,200),('invalid-login','https://ahmed.pm.sa/api/ahmed/session',{'username':'__sulfa_delivery_check__','password':'not-a-real-password'},422),('protected-session','https://ahmed.pm.sa/api/ahmed/session',None,401)]:
+                out=case/(name+'-checked.json');cmd=['curl','-sS','--max-time','30','-H','Accept: application/json','-o',str(out),'-w','%{http_code}',url]
+                if data is not None: cmd+=['-H','Content-Type: application/json','--data',json.dumps(data)]
+                actual=int(subprocess.check_output(cmd,universal_newlines=True));json.loads(out.read_text());os.chmod(str(out),0o600)
+                assert actual==expected,'Unexpected HTTP status';print('AHMED_EXPO_HTTP_VERIFIED',name,actual)
             PY
-            fi
+            node <<'JS'
+            const fs = require('fs');
+            const candidates = ['node_modules/metro/src/lib/createWebsocketServer.js','node_modules/@react-native/dev-middleware/dist/utils/createMessageSocketEndpoint.js','node_modules/@expo/cli/build/src/start/server/metro/MetroBundlerDevServer.js','node_modules/expo/node_modules/@expo/cli/build/src/start/server/metro/MetroBundlerDevServer.js'];
+            for (const file of candidates) {
+              if (!fs.existsSync(file)) continue;
+              const lines=fs.readFileSync(file,'utf8').split('\n');
+              const hits=[];
+              for(let i=0;i<lines.length;i++) if(/broadcastMessage|broadcast\(|messageSocket|reload|\/message/.test(lines[i])) hits.push(lines.slice(Math.max(0,i-2),Math.min(lines.length,i+4)).join('\n'));
+              console.log('AHMED_EXPO_RELOAD_SOURCE',file,JSON.stringify(hits.slice(0,12)));
+            }
+            JS
