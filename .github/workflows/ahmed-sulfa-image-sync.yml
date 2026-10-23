@@ -14,69 +14,150 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  inspect-sulfa-data:
+  import-verified-sulfa-observations:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect only Sulfa records using protected data transfer
+      - name: Verify, import and publish the scoped Sulfa update
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
-          command_timeout: 5m
+          command_timeout: 20m
           script: |
             set -eu
             umask 022
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            export AHMED_PROJECT_ROOT="$ROOT"
+            CASE="/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023"
+            TARGET="${{ github.sha }}"
+            export AHMED_SULFA_ROOT="$ROOT" AHMED_SULFA_CASE="$CASE" AHMED_SULFA_TARGET="$TARGET"
+            test -f "$CASE/server-private.pem"
+            if [ -f "$CASE/sync-complete.json" ]; then echo "SULFA_SYNC_ALREADY_COMPLETE"; exit 0; fi
+            git -C "$ROOT" fetch origin main
             python3 - <<'PY'
-            import os,pathlib,sqlite3,json,hashlib
-            root=pathlib.Path(os.environ["AHMED_PROJECT_ROOT"])
-            case=pathlib.Path("/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023")
-            case.mkdir(parents=True,exist_ok=True,mode=0o700);os.chmod(str(case),0o700)
-            conn=sqlite3.connect("file:"+str(root/"ahmed-api/database/database.sqlite")+"?mode=ro",uri=True);conn.row_factory=sqlite3.Row
-            tables=[r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'sulfa_%' ORDER BY name")]
-            payload={"tables":{},"schemas":{},"indexes":{},"users":[],"source_files":{}}
-            for table in tables:
-                payload["schemas"][table]=[dict(r) for r in conn.execute('PRAGMA table_info("'+table+'")')]
-                payload["indexes"][table]=[dict(r) for r in conn.execute('PRAGMA index_list("'+table+'")')]
-                if any(r["name"]=="user_id" for r in payload["schemas"][table]):
-                    payload["tables"][table]=[dict(r) for r in conn.execute('SELECT * FROM "'+table+'" WHERE user_id=1 ORDER BY id')]
-            payload["users"]=[dict(r) for r in conn.execute("SELECT id,name,username,is_admin FROM users WHERE id=1")]
-            for name in ["ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php","ahmed-mobile/SulfaInvestmentScreen.js"]:
-                content=(root/name).read_bytes();payload["source_files"][name]={"sha256":hashlib.sha256(content).hexdigest(),"content":content.decode("utf-8")}
-            out=case/"preflight.json";out.write_text(json.dumps(payload,ensure_ascii=True));os.chmod(str(out),0o600)
-            conn.close()
-            print("SULFA_PREFLIGHT_SAVED_PRIVATELY")
+            import os,pathlib,subprocess
+            root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
+            stage=case/'staged';stage.mkdir(exist_ok=True,mode=0o700);os.chmod(str(stage),0o700)
+            paths=['ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php','ahmed-mobile/SulfaInvestmentScreen.js','scripts/import-sulfa-observations.py','scripts/verify-sulfa-observations.php']
+            for name in paths:
+                content=subprocess.check_output(['git','-C',str(root),'show',os.environ['AHMED_SULFA_TARGET']+':'+name])
+                target=stage/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(content);os.chmod(str(target),0o600)
             PY
             /usr/local/bin/php <<'PHP'
             <?php
-            $case='/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023';
-            $pub=<<<'PUBLIC_KEY'
-            -----BEGIN PUBLIC KEY-----
-            MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAtFgcobV5bJX6UCjeQTQ9
-            mHMm1dDUWN0xf7BspASfmPFXo5UdbHH0Yw6Mk6Fwq8gAHkVIBRI0zPEiXFjkqbGn
-            1T5HtPrFcGISM3Pig6UVg4184OT3f+xgrxRnj952sGkc6k+ZPliro6eTY98B+sw+
-            DqUtJklpX6iHHmHqy+vvVXX5+CaEPkR8ABWcl1dhVIsIDUhtvBf2X6OC05Ku42zf
-            fQdSbvJj4kKgge7K58crOH3OevEW5/i7D1v/CzIZPH38K9aeriZhLCyJoQtNIaKV
-            Rfn0VpRGgEchZpf9mO6lldQ9RFSkV8b48UNtHNrxW9a9HjDHoU4z8txChJH3uURy
-            f9ZfE3vmz6l73b972Z4JEcnGbK8Hlf3WZpfn6aUZFWM+hBX8+VKRbtxYdubGNoyY
-            Yqcolu6f89bMG80jws34mfR4f0Za+N4lo1x/ThlhTa6KI+/uI2sjEaS/UevN0AyE
-            Ki0b0IiQSD42w0o/JADpr/Pyy8iYFhx7UiMYQBLvJf5BAgMBAAE=
-            -----END PUBLIC KEY-----
-            PUBLIC_KEY;
-            if(!is_file($case.'/server-private.pem')) {
-                $rsa=openssl_pkey_new(['private_key_type'=>OPENSSL_KEYTYPE_RSA,'private_key_bits'=>3072]);
-                if(!$rsa||!openssl_pkey_export($rsa,$private)) throw new RuntimeException('Unable to prepare protected transfer');
-                file_put_contents($case.'/server-private.pem',$private);chmod($case.'/server-private.pem',0600);
-                file_put_contents($case.'/server-public.pem',openssl_pkey_get_details($rsa)['key']);
-            }
-            $key=random_bytes(32);$iv=random_bytes(12);
-            $body=openssl_encrypt(gzencode(file_get_contents($case.'/preflight.json'),9),'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
-            if($body===false||!openssl_public_encrypt($key,$sealed,$pub,OPENSSL_PKCS1_OAEP_PADDING)) throw new RuntimeException('Protected transfer failed');
-            $envelope=base64_encode(json_encode(['key'=>base64_encode($sealed),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($body)]));
-            foreach(str_split($envelope,7000) as $index=>$chunk) echo 'SULFA_ENCRYPTED_'.str_pad((string)$index,3,'0',STR_PAD_LEFT).'='.$chunk.PHP_EOL;
-            echo 'SULFA_SERVER_PUBLIC_KEY='.base64_encode(file_get_contents($case.'/server-public.pem')).PHP_EOL;
+            $case=getenv('AHMED_SULFA_CASE');
+            $encoded='eyJrZXkiOiAibUlkRWJxa1dNT1IzYnd0cS9HcHBsN2xuWEEwbGF2cDVyMHIxSzd2YjM3aHBCNDlvOHJiZk5YRDd0Q1Jyb2V1QWtROW82cjF2c1BaTlNvaWhJZ1RGVlU4NVR3VmdRTmlrd3RpQ2VYTXV2L3p1ODR4U0VQeE9XR0dvRTRVSmh5M1lCRHVURytnTWl2K25sVE1peWx2d0ZLM3ZYRWZJdzM3TEZkY25YTDZYa01jWFkwdkRwYTZjVWFPdmhWZkwyWW82NS9iNFcyVVkzQkwrNWIxTUNWbFNyU092T0NvSWlMNFBxTGVRaW5nMU4zcGQ5VDZzK3NiR1hDazlHbU40Q3dJVkNReEdMMkFEeTIwU2xNVXhCWkcyRit6M3dDUTF3UzgrNklaNWpuaHBrUzkwZTBkS0tPazJEaU5Wams2d0pybUJLT1Bta2UvbloxN21KZjJGSmZOYmJCQm51c3p2UmlNd3JzVnAzY2ZubDB6K2RMRklQWXdZSTZKOFZZdVpJYVFZZTl1bjF4Tjg5VTF0ei9OOWY5UjZNNkpaR2dOY3RRQjNjUUlQbXZrSXBHUS9vZlR3VTNkdEtxcjRPNENPTU9XdkkxNzJjN1BRUFhjTnQ0RU52YzhpMzdoTC9wamQzWjRyUWxCczgxdHJrczZQc042eVZBMDA5WGZVcHFlVlhjaWkiLCAiaXYiOiAibWtOUENEVEF4TWFiTWNUdyIsICJ0YWciOiAiZ1RuN3lFSTB6V3U5QkpzakdGaVZ3dz09IiwgImNpcGhlcnRleHQiOiAiVG1nK1YwS24rYTBrYWplR2lENXpVdjNoZDQvellkbXpaMDJ5SXNyZ0J5LytqZkpOejg4RTVQWjE5alRKWk1ucjRZQUdiL3gxMXFHbDR1UXQ3YjhOaWpyWkFrdndwSm1LN0xpWWRMNTdKTUNtR2U5cDNkTU9oYk8rSy96R0hRd3NhWmc4MjZoa3c4QTJLRGk0STNEamFFQTQ5cmE0ZTFwR0dwNWZrS2MxLzRiamdhbnNQQ0o2dEoyQkxCT0w1eUJtV2Njb2liTVlsMFlWZGl2QXB5TDhpU1c4MUFLRFR0YVEwSFlsRW14WWdQUjExbG1ncFFJQ29Ua0ovS1lwNExtbE1LRmJkb0FzYUl3cnJ1azVhZko5YzFLaUFCaG9JVXErRDRpRWlYcEs5RlFlc0FwT2xpdzRaZ3hlSDBadmphRFJWM2oxKzJlTUpoZ09sR1VqSGhNbFF1L2pxSGlGRnFuemtyT3BUWXpjLzJ6MUdHRHJTa1Nvc1R1dkt3MVdlS1dhbnZpSUhRYU5HRGwxQ2JENGpualRROFNQR21ZM0QzbjAxMURCKzcvWDRtenE1VjMxOVZ0ZGxUdUdFNUpGUTJWdWRjUys1RGFSWkFMUlRrYXdTMmNOY1dIL3M4eko2cFQ2U1FNa01oVzI0Zk85elY1Q1ozM0JFek5kaGJUOFNkcVRCRmZTdGFHdmJRK2hoeWovUFNYTlZhVzFNOGxMQmg1VFVWbk8rUnlvOUZucnZMTHdlblp5T0xFa01zWGJQTnE5eUkrNnh3cG05QjVYUEE0N2pYMGMvRlNFQ0xXOHE3NGppaFQ3OG9FTW5halM4bld4YWI1MFJxV1RBRGxLOXZJN0RFTGxiWFNldzJUN1JvSWRzNDNmeGRIeElUZmp2YnJyMEtCNURzZDRWWUhzSzJaLzJLL0plUVZIZVdIQ1RRZmpsZUNTVHZRcWFQRFdlVHdFdjdRVXpkL3I3OCtkTU1HUVFUWXZBMFdZbElOQnNmZm93QnVWMGJTb2ZIUS9QbkRTVFhqLzdSTzBmdDNDVUNGclQwUzB5dUFKUWlrQWhOUzBZTUhNN3lCMFAxQW80MnZsZnJpNXJNQVBHaWtnUitmYUkwN3pvbkxqc0Z2RGNXWnQzMWNuRytyd0NQSDBJQU1sQkhPS1VabFJlRVZhcHEzT1dQUU92THVPMVlRdHAwZnhkZXdsbElTRElzT3RobzZHRzZVbGtWSzZmeDRSR0R5QWhxWDYvelhGakE0cnZNT1ZFRGJ0eUQxRXNpc0drVXpLT1MzcFhIdUw0N2VPcEZuNWoyZ1dpSUxpSTNNWEl4MVpCQmJTL0VaL1EzVEdpSHJWWW5ORjltV1VJZGlUdWdPdWdHRzU0VUs5TGZ1U2lJdEhLYUQvM3J6c3pRL0I4SXlxTXhnaFFYOEdWbloxL0ZweTRKSzJFdThXM2g4czRUS1dXR1grb0x3ZkFpOUJqdWZlOC9tdC9OOUZ6eDhNS3QrUkNLRDFDUkxSOXVVVHI2Yk9IWm51QTdQV3YyeVFaMXlwTnJ1eE1JMENZbm9ITUJwRlZRamRsbWJiUHM0QnlGM1ROcmcrdXppbkh0bDhnbi9HNnQrUHlXaXJFeVZITXFxaUNNenJkY0ZKVmpjeHNaY3NDeG9zSDlacFpHTHZHOGdyR3FhT0lBQU0vTGd1SnZpWDJ5L0dxMTRiM2tKNitKNFZDeHJUcE5TM0piT2pod3pyZitGQkFoR1NVSjhWbWU0ZUYzSGVmOWhpUjNFaWFhSGk3UVZvam1KNVBGRmNZTGttVklBdTZtUkJGWXRiaFp2bTdPVHIwc0Q5RGY0VkNTMklYa3R4Vi9vK2poSlB3SEh0NlljV3JqMmx6L2tQMmxVcGg5QmtWelY3NlFrREpkS0tsRXNTdkF1cEpmMGRlN2pNUXFqaXFSRzk4MUZpN3p1Z3pvNDhvMmpRcUROOXBIQTZSdkJvSUtSOGNocWFWN0QrNENPU25tZ0I1VnUyM3RmaEl3UXhtSGZGUFl1NHU0SE5nSnJkVWgzVExaVHd2K2tMNm1GeHpiVVk3UWFGbXA5Yk5UUFN4ODZMdjRua3VDcWFKTjBrNTQ3Uml4MG5DTWdyQ1hLMTZsNmxqemd4bE5CVHE3ZkVmNU9Pb1BqcXAxVml4L2ZzdmIrMzFlb0w1TXB3cTVVa0dzaG9nSDZqK2tOdUFLblhyVSsrQnpzd3VxekxEb2xGNDhqM21QTE5PK0xLMXIxOEpQeHNKdkt2U0owUDBOZUdjRTBveHFvZ1hsbjNBZGpSbnFqUlVhQkJ1dGl4OVB4Yms5WVZMUytCNkgzaTRDRmtMVHArM0ZmWWN5M3d0Skd0ZjhzMHBOWG1MVUhIWkpDL2hEcHNDUi9aT3lFM3VmMlU2cVlpeDV4OTlBdGllT1BBUFdNWjQyU1hiR2V6dll5MENNS3NEVTBFSEo2YzdMcVJNZHllK3FFSjFQVGNIR2RST3dWb3VUWjhwNnhidGVDd3dYZ0REL0g1a096a3VGZ2JpZFc5d3o5V0pIQjMwUUdkWEliN0lKRi94ZkZpM2lpK01hZTVIRWNRV1ZUZW1BV3p0cTJqQ2orMERBM1FQVlo4NU9hV0MyMzhReUhtY0Q4V2ZVdnhxa21waDNoV0JhOVBjd3gvZUZ4dGFlSnJTQlh1ZDdpOVVhWThpUTFHcGlXdUhzbVQ1OERYdHVRdmJTTFJCd1NoMkVkMURROG50WTE4U3JlSUVxVzBpNFd1aUxITm5SR1pMNFdxRU42RDhiY0FFdGZJSnVTb2pTOWZpb29GbC8rYWEvUm5SNzRINEtlTC9yM2ZRWEF3ZXNDM3hZOUpQWmZMblR6NlVsdExPdXBqN2o4SHBwcGJkYmpYb2ZSbXlqY2RaZUkzZnh3K255R0UrWkF6SzJkbUo1UmtTUmFUc1YxL3BXMDZjWGpVVUkvN3dZbjZnNFUzVmhIUlI1aGVvWDIzVG5KZmxCN1pkc2NMUHJnQjV5TWxlSGFUZmNPYmYvRm5JTS9oNzdiYTRteDZER0REb01RbmFxUXYwUFB5U3FTdm5DZnoyZWZXdE1qcjdkN0ltc3hoaVM0V3FkbkVxcTFGS1pKNzVxakpYRnZtWDBtQTBwTWdJSkd4MVlvN1c4NEVId2c3Y3hVYXVLWkc3OE0vNnRmVHBBNmgzc3pQU3AxT3UxMkw5Q2o5NVJ3NlVPZ3l3WE5UYzA0OWgxbU5kSFZzR3dEYnlCRmpBNmlhTVdiejBBWjNRSVh1RU1hblR0NWJ6SWY0alNBcTlWZkREdVZTN1NHcTJjQ1UyYTFKYkNSNXpiSkxyOFF4RzloZm1XUnR0R1NZZGVXRjVsb3FoVTVEYkRkQzU4NFBjOUZyUVI3R3o1QmxaQ2NLWk1scWpPNytpNUhNSmJpZTlaK3VuQUsxSFJ1MW9KdXhweS83azA0TFFYT3NTT3JEcktKUEl6Y0ZqMkRjZ3dPTzNBanJTeFpKbHN4QXBkKzQ1N3pVdy9tQWtDQm5jdEl0ZEZlUVVwTjB3NmVzczhzNE9la1JIbU9hdlRYZTBNcERxMnJ1aXpiZktDaldQWlJPZXljbXZUclFMQVZEdHhVZDRHVFlhNHhoenlZakhqcUJibWxlbFE3czkzamJQOVhkaHFDUEd4VU82WG1sMEZjRnN5M3NvWnhHS2tSWlhzQkZ3TGdtOWt2SWNXTTRQVTdSYWNFS2tHNDV0SU1sRGNaZjltUUY3cngrVmdkS1d3S2ZrTG9ObHkvTUhOclJGVmU4VjU0VDVWMU9ETnBTYlE5UEtkcU0xODZsVDdHblhTTXd1MTBUWG9EUkt2cWYvSXEzb0o3Tk5uQT0ifQ==';
+            $envelope=json_decode(base64_decode($encoded,true),true,512,JSON_THROW_ON_ERROR);
+            if(!openssl_private_decrypt(base64_decode($envelope['key'],true),$key,file_get_contents($case.'/server-private.pem'),OPENSSL_PKCS1_OAEP_PADDING)) throw new RuntimeException('Unable to open protected observation plan');
+            $body=openssl_decrypt(base64_decode($envelope['ciphertext'],true),'aes-256-gcm',$key,OPENSSL_RAW_DATA,base64_decode($envelope['iv'],true),base64_decode($envelope['tag'],true));
+            if($body===false) throw new RuntimeException('Observation authentication failed');
+            $plan=gzdecode($body);json_decode($plan,true,512,JSON_THROW_ON_ERROR);
+            file_put_contents($case.'/import-plan.json',$plan);chmod($case.'/import-plan.json',0600);
+            echo "SULFA_PRIVATE_PLAN_AUTHENTICATED\n";
             PHP
+            python3 - <<'PY'
+            import os,pathlib,json,hashlib,sqlite3,subprocess
+            root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE']);stage=case/'staged'
+            plan=json.loads((case/'import-plan.json').read_text())
+            allowed={'ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php','ahmed-mobile/SulfaInvestmentScreen.js'}
+            assert {x['path'] for x in plan['source_files']}==allowed
+            for item in plan['source_files']:
+                assert hashlib.sha256((stage/item['path']).read_bytes()).hexdigest()==item['target_sha256'],'Staged source hash differs'
+                assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest() in [item['before_sha256'],item['target_sha256']],'Concurrent source edit'
+                if item['path'].endswith('.php'): subprocess.check_call(['/usr/local/bin/php','-l',str(stage/item['path'])])
+            proof=json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/funding-date-label-1792684447832/build-input-hashes.json').read_text())
+            for name,digest in proof.items():
+                if name in {'.env','ta3meed/Ta3meedTenantInvestorAccounts.js','SulfaInvestmentScreen.js'}: continue
+                assert hashlib.sha256((root/'ahmed-mobile'/name).read_bytes()).hexdigest()==digest,'Existing development changed: '+name
+            clone=case/'isolated-test.sqlite'
+            if clone.exists(): clone.unlink()
+            original=sqlite3.connect('file:'+str(root/'ahmed-api/database/database.sqlite')+'?mode=ro',uri=True)
+            original.execute('BEGIN');copy=sqlite3.connect(str(clone));copy.executescript('\n'.join(original.iterdump()));copy.close();original.rollback();original.close();os.chmod(str(clone),0o600)
+            print('SULFA_SOURCE_GUARDS_AND_ISOLATED_DATABASE_READY')
+            PY
+            python3 "$CASE/staged/scripts/import-sulfa-observations.py" --database "$CASE/isolated-test.sqlite" --plan "$CASE/import-plan.json"
+            python3 "$CASE/staged/scripts/import-sulfa-observations.py" --database "$CASE/isolated-test.sqlite" --plan "$CASE/import-plan.json" --result "$CASE/repeat-test.json"
+            /usr/local/bin/php "$CASE/staged/scripts/verify-sulfa-observations.php" "$ROOT" "$CASE/isolated-test.sqlite" "$CASE/staged/ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php" "$CASE/import-plan.json"
+            python3 - <<'PY'
+            import os,pathlib,json,hashlib,subprocess,tempfile,shutil
+            root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE']);stage=case/'staged'
+            repeat=json.loads((case/'repeat-test.json').read_text());assert repeat['updated']==0 and repeat['inserted']==0
+            plan=json.loads((case/'import-plan.json').read_text());changes=[]
+            def install(data,path,owner):
+                handle,temp=tempfile.mkstemp(prefix='.sulfa-sync-',dir=str(path.parent))
+                try:
+                    with os.fdopen(handle,'wb') as stream: stream.write(data);stream.flush();os.fsync(stream.fileno())
+                    os.chmod(temp,0o644);os.chown(temp,owner.st_uid,owner.st_gid);os.replace(temp,str(path))
+                finally:
+                    if os.path.exists(temp): os.unlink(temp)
+            try:
+                for item in plan['source_files']:
+                    live=root/item['path'];old=live.read_bytes();digest=hashlib.sha256(old).hexdigest()
+                    assert digest in [item['before_sha256'],item['target_sha256']],'Concurrent source edit before install'
+                    if digest==item['target_sha256']: continue
+                    owner=live.stat();backup=case/'source-before'/item['path'];backup.parent.mkdir(parents=True,exist_ok=True)
+                    if not backup.exists(): backup.write_bytes(old);os.chmod(str(backup),0o600)
+                    install((stage/item['path']).read_bytes(),live,owner);changes.append((live,old,owner))
+                subprocess.check_call(['python3',str(stage/'scripts/import-sulfa-observations.py'),'--database',str(root/'ahmed-api/database/database.sqlite'),'--plan',str(case/'import-plan.json'),'--backup',str(case/'database-before-import.sql'),'--result',str(case/'import-result.json')])
+            except BaseException:
+                for live,old,owner in reversed(changes): install(old,live,owner)
+                raise
+            print('SULFA_SCOPED_SOURCE_AND_DATA_INSTALLED')
+            PY
+            /usr/local/bin/php "$CASE/staged/scripts/verify-sulfa-observations.php" "$ROOT" "$ROOT/ahmed-api/database/database.sqlite" "$ROOT/ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php" "$CASE/import-plan.json"
+            cd "$ROOT/ahmed-mobile"
+            export CI=1 BROWSER=none EXPO_NO_TELEMETRY=1
+            RUNTIME="$(dirname "$ROOT")"
+            export XDG_CACHE_HOME="$RUNTIME/.cache" TMPDIR="$RUNTIME/.tmp" TMP="$RUNTIME/.tmp" TEMP="$RUNTIME/.tmp"
+            mkdir -p "$XDG_CACHE_HOME" "$TMPDIR"
+            if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/web-build" > "$CASE/web-build.log" 2>&1; then tail -60 "$CASE/web-build.log"; exit 1; fi
+            python3 - <<'PY'
+            import os,pathlib,shutil,tempfile,re,hashlib,subprocess
+            root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE']);build=case/'web-build'
+            html=(build/'index.html').read_text()
+            for attr in ['src','href']:
+                for prefix in ['/_expo/','/assets/']: html=html.replace(attr+'="'+prefix,attr+'="/webapp'+prefix)
+            (build/'index.html').write_text(html)
+            for dest in [root/'ahmed-mobile/dist-web',root/'ahmed-api/public/webapp']:
+                dest.mkdir(parents=True,exist_ok=True)
+                for path in build.rglob('*'):
+                    if not path.is_file() or path.relative_to(build)==pathlib.Path('index.html'): continue
+                    target=dest/path.relative_to(build);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(str(path),str(target));os.chmod(str(target),0o644)
+                    folder=target.parent
+                    while True:
+                        os.chmod(str(folder),0o755)
+                        if folder==dest: break
+                        folder=folder.parent
+                previous=case/('previous-'+dest.parent.name+'-index.html')
+                if (dest/'index.html').exists() and not previous.exists(): shutil.copy2(str(dest/'index.html'),str(previous));os.chmod(str(previous),0o600)
+                fd,temp=tempfile.mkstemp(prefix='.sulfa-index-',dir=str(dest))
+                with os.fdopen(fd,'wb') as stream: stream.write(html.encode())
+                os.chmod(temp,0o644);os.replace(temp,str(dest/'index.html'))
+            scripts=re.findall(r'<script[^>]+src="([^"]+)"',html);assert scripts
+            for src in scripts:
+                if '/_expo/' not in src: continue
+                url='https://ahmed.pm.sa'+src if src.startswith('/') else 'https://ahmed.pm.sa/webapp/'+src
+                served=subprocess.check_output(['curl','-fsS','--retry','2','--max-time','30',url])
+                local=root/'ahmed-api/public'/src.lstrip('/') if src.startswith('/') else root/'ahmed-api/public/webapp'/src
+                assert hashlib.sha256(served).hexdigest()==hashlib.sha256(local.read_bytes()).hexdigest(),'Public bundle differs'
+            print('SULFA_PUBLIC_WEB_BUNDLE_VERIFIED')
+            PY
+            if [ ! -f "$CASE/native-update.json" ]; then
+              if ! npx eas-cli update --channel production --platform all --environment production --message "Update Sulfa verified portfolio observations" --non-interactive --json > "$CASE/native-update.json" 2> "$CASE/native-update.log"; then rm -f "$CASE/native-update.json"; tail -60 "$CASE/native-update.log"; exit 1; fi
+            fi
+            python3 - <<'PY'
+            import os,pathlib,json,subprocess
+            case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
+            updates=json.loads((case/'native-update.json').read_text())
+            assert {x['platform'] for x in updates}=={'ios','android'} and all(x['runtimeVersion']=='1.0.19' for x in updates)
+            for name,url,body,status in [('health','https://ahmed.pm.sa/api/health',None,200),('invalid-login','https://ahmed.pm.sa/api/ahmed/session',{'username':'__sulfa_sync_health_check__','password':'not-a-real-password'},422),('protected-session','https://ahmed.pm.sa/api/ahmed/session',None,401)]:
+                out=case/(name+'.json');cmd=['curl','-sS','--max-time','30','-H','Accept: application/json','-o',str(out),'-w','%{http_code}',url]
+                if body is not None: cmd+=['-H','Content-Type: application/json','--data',json.dumps(body)]
+                actual=int(subprocess.check_output(cmd,universal_newlines=True));json.loads(out.read_text());os.chmod(str(out),0o600)
+                assert actual==status,'Unexpected authentication response';print('SULFA_HTTP_VERIFIED',name,actual)
+            result={'complete':True,'platforms':sorted(x['platform'] for x in updates),'group':updates[0]['group'],'runtime':'1.0.19','source_commit':os.environ['AHMED_SULFA_TARGET'],'import':json.loads((case/'import-result.json').read_text())}
+            (case/'sync-complete.json').write_text(json.dumps(result));os.chmod(str(case/'sync-complete.json'),0o600)
+            print('SULFA_SYNC_COMPLETED',json.dumps(result,sort_keys=True))
+            PY

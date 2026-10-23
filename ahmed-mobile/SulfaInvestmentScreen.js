@@ -207,6 +207,7 @@ export default function SulfaInvestmentScreen({ onBack }) {
   }, []);
 
   const stats = data.stats || {};
+  const platformSnapshot = data.platform_snapshot || null;
   const transactions = Array.isArray(data.transactions) ? data.transactions : [];
   const investedAmount = Number(data.invested_amount || 0);
   const annualRate = Number(data.annual_rate || DEFAULT_ANNUAL_RATE);
@@ -301,29 +302,29 @@ export default function SulfaInvestmentScreen({ onBack }) {
               <Text style={styles.fixedReturnText}>بيانات فعلية</Text>
             </View>
           </View>
-          <Text style={styles.heroLabel}>إجمالي المبالغ المستثمرة</Text>
+          <Text style={styles.heroLabel}>{platformSnapshot ? 'الاستثمارات القائمة' : 'إجمالي المبالغ المستثمرة'}</Text>
           <Text
             style={styles.heroAmount}
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.68}
           >
-            {money(investedAmount)}
+            {money(platformSnapshot?.outstanding_investments ?? investedAmount)}
           </Text>
           <View style={styles.heroMetaRow}>
             <View style={styles.heroMetaItem}>
-              <Text style={styles.heroMetaValue}>{Number(stats.opportunity_count || 0)}</Text>
+              <Text style={styles.heroMetaValue}>{Number(platformSnapshot?.opportunity_count ?? stats.opportunity_count ?? 0)}</Text>
               <Text style={styles.heroMetaLabel}>فرصة استثمار</Text>
             </View>
             <View style={styles.heroMetaDivider} />
             <View style={styles.heroMetaItem}>
-              <Text style={styles.heroMetaValue}>{percent(annualRate, 1)}</Text>
-              <Text style={styles.heroMetaLabel}>متوسط العائد السنوي</Text>
+              <Text style={styles.heroMetaValue}>{percent(platformSnapshot?.realized_profit_percent ?? annualRate, platformSnapshot ? 2 : 1)}</Text>
+              <Text style={styles.heroMetaLabel}>{platformSnapshot ? 'العائد المحقق' : 'متوسط العائد السنوي'}</Text>
             </View>
             <View style={styles.heroMetaDivider} />
             <View style={styles.heroMetaItem}>
               <Text style={styles.heroMetaValue}>{Number(stats.transaction_count || 0)}</Text>
-              <Text style={styles.heroMetaLabel}>حركة مسجلة</Text>
+              <Text style={styles.heroMetaLabel}>حركة موثقة</Text>
             </View>
           </View>
         </View>
@@ -334,11 +335,23 @@ export default function SulfaInvestmentScreen({ onBack }) {
         {!!message ? <Text style={styles.message}>{message}</Text> : null}
 
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>الإحصائيات</Text>
-          <Text style={styles.sectionSubtitle}>محسوبة من كل حركة وفرصة مسجلة</Text>
+          <Text style={styles.sectionTitle}>{platformSnapshot ? 'ملخص سلفة' : 'الإحصائيات'}</Text>
+          <Text style={styles.sectionSubtitle}>{platformSnapshot ? `تحديث الصور: ${formatDate(platformSnapshot.snapshot_date)}` : 'محسوبة من كل حركة وفرصة مسجلة'}</Text>
         </View>
 
-        <View style={styles.statsGrid}>
+        {platformSnapshot ? <>
+          <View style={styles.statsGrid}>
+            <StatCard label="الأرباح المحققة" value={money(platformSnapshot.realized_profit)} hint={percent(platformSnapshot.realized_profit_percent) + ' عائد محقق'} tone="green" />
+            <StatCard label="إجمالي الإيداعات" value={money(platformSnapshot.total_deposits)} tone="blue" />
+            <StatCard label="إجمالي الاستثمارات" value={money(platformSnapshot.total_investments)} tone="purple" />
+            <StatCard label="رصيد المحفظة" value={money(platformSnapshot.wallet_balance)} tone="slate" />
+            <StatCard label="السداد المتوقع" value={money(platformSnapshot.expected_repayment)} tone="amber" />
+            <StatCard label="متوسط مدة الاستثمار" value={platformSnapshot.average_duration_months + ' شهرًا'} tone="cyan" />
+          </View>
+          <View style={styles.noteCard}>
+            <Text style={styles.noteText}>متوسط الاستثمار: {money(platformSnapshot.average_investment_amount)} · السحوبات: {money(platformSnapshot.total_withdrawals)}{'\n'}الفرص الموثقة بالتفصيل: {Number(stats.opportunity_count || 0)} من {Number(platformSnapshot.opportunity_count || 0)} فرصة</Text>
+          </View>
+        </> : <View style={styles.statsGrid}>
           <StatCard
             label="الأرباح الموزعة"
             value={money(stats.distributed_profits)}
@@ -375,11 +388,11 @@ export default function SulfaInvestmentScreen({ onBack }) {
             hint="مدة كل فرصة"
             tone="cyan"
           />
-        </View>
+        </View>}
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>العائد الشهري المتوقع</Text>
-          <Text style={styles.sectionSubtitle}>على الفرص النشطة المسجلة</Text>
+          <Text style={styles.sectionSubtitle}>تقدير للفرص النشطة الموثقة بالتفصيل</Text>
         </View>
 
         <View style={styles.returnsCard}>
@@ -414,7 +427,7 @@ export default function SulfaInvestmentScreen({ onBack }) {
           </View>
           <View style={styles.cashFlowCopy}>
             <Text style={styles.cashFlowLabel}>إجمالي التدفق الشهري المتوقع</Text>
-            <Text style={styles.cashFlowHint}>الربح + استرداد رأس المال</Text>
+            <Text style={styles.cashFlowHint}>الربح + استرداد رأس المال للفرص الموثقة</Text>
           </View>
           <Text style={styles.cashFlowValue}>{money(monthlyCashFlow)}</Text>
         </View>

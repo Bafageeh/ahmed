@@ -65,6 +65,7 @@ class SulfaInvestmentController extends Controller
                 'monthly_principal_return' => $stats['monthly_principal_return'],
                 'monthly_cash_flow' => $stats['monthly_cash_flow'],
                 'stats' => $stats,
+                'platform_snapshot' => $this->platformSnapshot($userId),
                 'entries' => $entries->values(),
                 'transactions' => $transactions->values(),
                 'filters' => $this->activeFilters($request),
@@ -271,6 +272,48 @@ class SulfaInvestmentController extends Controller
             'average_duration_months' => $opportunityCount > 0
                 ? round((float) $countableEntries->avg('duration_months'), 1)
                 : 0,
+        ];
+    }
+
+    private function platformSnapshot(int $userId): ?array
+    {
+        if (! Schema::hasTable('sulfa_portfolio_snapshots') || ! Schema::hasTable('sulfa_account_snapshots')) {
+            return null;
+        }
+
+        $portfolio = DB::table('sulfa_portfolio_snapshots')
+            ->where('user_id', $userId)
+            ->orderByDesc('snapshot_date')
+            ->orderByDesc('id')
+            ->first();
+        $notes = json_decode((string) ($portfolio->notes ?? ''), true);
+        if (! $portfolio || ! is_array($notes) || ($notes['kind'] ?? null) !== 'sulfa_platform_snapshot_v1') {
+            return null;
+        }
+
+        $observed = is_array($notes['observed'] ?? null) ? $notes['observed'] : [];
+        $account = DB::table('sulfa_account_snapshots')
+            ->where('user_id', $userId)
+            ->where('snapshot_date', $portfolio->snapshot_date)
+            ->where('source', $portfolio->source)
+            ->orderByDesc('id')
+            ->first();
+        $number = static fn ($value) => $value === null ? null : round((float) $value, 2);
+
+        return [
+            'snapshot_date' => $portfolio->snapshot_date,
+            'total_investments' => $number($portfolio->total_investments),
+            'outstanding_investments' => $number($portfolio->outstanding_investments),
+            'principal_repaid' => $number($portfolio->principal_repaid),
+            'wallet_balance' => $number($account->wallet_balance ?? null),
+            'realized_profit' => $number($account->realized_profit ?? null),
+            'realized_profit_percent' => $number($account->realized_profit_percent ?? null),
+            'total_deposits' => $number($observed['total_deposits'] ?? null),
+            'total_withdrawals' => $number($observed['total_withdrawals'] ?? null),
+            'expected_repayment' => $number($observed['expected_repayment'] ?? null),
+            'opportunity_count' => isset($observed['opportunity_count']) ? (int) $observed['opportunity_count'] : null,
+            'average_investment_amount' => $number($observed['average_investment_amount'] ?? null),
+            'average_duration_months' => $number($observed['average_duration_months'] ?? null),
         ];
     }
 
