@@ -81,7 +81,7 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
       if (state === 'active' && Date.now() - lastRefresh.current > 60000 && !mutation.current) reloadAll(false);
     });
     const timer = setInterval(() => {
-      if (appActive.current && !mutation.current && Date.now() - lastRefresh.current >= 60000) reloadAll(false);
+      if (appActive.current && !mutation.current) reloadAll(false);
     }, 60000);
     return () => { mounted.current = false; subscription.remove(); clearInterval(timer); };
   }, [reloadAll]);
