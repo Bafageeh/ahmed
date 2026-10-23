@@ -1,15 +1,6 @@
 name: Ahmed Expo Hot Deploy
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'ahmed-api/**'
-      - 'ahmed-mobile/**'
-      - 'scripts/restart-ahmed-expo-fast.sh'
-      - 'scripts/patch-tokenize-platform.py'
-      - '.github/workflows/ahmed-expo-hot-deploy.yml'
   workflow_dispatch:
 
 permissions:
