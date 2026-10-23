@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { InvestorAllocationEditor, InvestorManagerModal, InvestorOwnerChangeModal } from './Ta3meedInvestorControls';
+import { allocationFormError, allocationFormRows, allocationPayload, hasProtectedAllocations, normalizeAmountInput } from './ta3meedAllocationForm';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const n = (value) => Number(value || 0);
@@ -236,40 +238,15 @@ const emptyOpportunityForm = () => ({
   months: '',
   start_date: '',
   maturity_date: '',
-  allocations: '',
+  allocations: [],
   notes: '',
 });
 
 function numberValue(value) {
-  const normalized = String(value ?? '').replace(/,/g, '').trim();
+  const normalized = normalizeAmountInput(value);
   if (!normalized) return 0;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function parseAllocations(text) {
-  const rows = [];
-  const invalid = [];
-
-  String(text || '')
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .forEach((line) => {
-      const parts = line.split(/\s+/);
-      const amountText = String(parts.pop() || '').replace(/,/g, '');
-      const investor = parts.join(' ').trim();
-      const amount = Number(amountText);
-
-      if (!investor || !Number.isFinite(amount) || amount <= 0) {
-        invalid.push(line);
-        return;
-      }
-
-      rows.push({ investor, amount });
-    });
-
-  return { rows, invalid };
 }
 
 async function apiJson(path, options = {}) {
@@ -300,11 +277,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const allocationsInfo = useMemo(() => parseAllocations(form.allocations), [form.allocations]);
-  const allocationsTotal = useMemo(
-    () => allocationsInfo.rows.reduce((sum, row) => sum + numberValue(row.amount), 0),
-    [allocationsInfo]
-  );
+  const allocationError = allocationFormError(form.allocations, form.total_amount, form.profit);
   const totalAmount = numberValue(form.total_amount);
   const profitAmount = numberValue(form.profit);
   const calculatedRate = totalAmount > 0 && profitAmount > 0 ? (profitAmount / totalAmount) * 100 : 0;
@@ -328,12 +301,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
     if (form.months.trim() && (!Number.isInteger(numberValue(form.months)) || numberValue(form.months) <= 0)) {
       return 'عدد الشهور يجب أن يكون رقمًا صحيحًا أكبر من صفر.';
     }
-    if (allocationsInfo.invalid.length) {
-      return `راجع صيغة المستثمرين. كل سطر يجب أن يكون: الاسم ثم المبلغ.\n${allocationsInfo.invalid[0]}`;
-    }
-    if (allocationsTotal > totalAmount + 0.009) {
-      return `مجموع المستثمرين (${money(allocationsTotal)}) أكبر من مبلغ الاستثمار (${money(totalAmount)}).`;
-    }
+    if (allocationError) return allocationError;
     return '';
   };
 
@@ -371,7 +339,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
         withdrawal_date: form.start_date.trim() || null,
         maturity_date: form.maturity_date.trim() || null,
         notes: form.notes.trim() || null,
-        allocations: allocationsInfo.rows,
+        allocations: allocationPayload(form.allocations),
       };
 
       const created = await apiJson('/ta3meed/investments', {
@@ -428,7 +396,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
                 compact
                 label="مبلغ الاستثمار *"
                 value={form.total_amount}
-                onChangeText={(value) => setField('total_amount', value.replace(/[^0-9.,]/g, ''))}
+                onChangeText={(value) => setField('total_amount', normalizeAmountInput(value))}
                 placeholder="0"
                 keyboardType="decimal-pad"
               />
@@ -436,7 +404,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
                 compact
                 label="الربح المتوقع"
                 value={form.profit}
-                onChangeText={(value) => setField('profit', value.replace(/[^0-9.,]/g, ''))}
+                onChangeText={(value) => setField('profit', normalizeAmountInput(value))}
                 placeholder="0"
                 keyboardType="decimal-pad"
               />
@@ -478,7 +446,9 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
             <View style={addStyles.twoColumns}>
               <FormField
                 compact
-                label="تاريخ السحب"
+                label="تاريخ التمويل"
+                testID="add-opportunity-funding-date"
+                accessibilityLabel="تاريخ التمويل"
                 value={form.start_date}
                 onChangeText={(value) => setField('start_date', value)}
                 placeholder="YYYY-MM-DD"
@@ -493,24 +463,12 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
             </View>
 
             <View style={addStyles.sectionHeaderSecondary}>
-              <Text style={addStyles.sectionHint}>اختياري</Text>
+              <Text style={addStyles.sectionHint}>توزيع أصل الاستثمار كاملاً</Text>
               <Text style={addStyles.sectionTitle}>توزيع المستثمرين</Text>
             </View>
 
-            <FormField
-              label="المستثمرون"
-              value={form.allocations}
-              onChangeText={(value) => setField('allocations', value)}
-              placeholder={'كل سطر: الاسم المبلغ\nمثال: أحمد 50000'}
-              multiline
-            />
-
-            {allocationsInfo.rows.length > 0 ? (
-              <View style={addStyles.allocationSummary}>
-                <Text style={addStyles.allocationSummaryValue}>{money(allocationsTotal)}</Text>
-                <Text style={addStyles.allocationSummaryLabel}>مجموع {allocationsInfo.rows.length} مستثمر</Text>
-              </View>
-            ) : null}
+            <InvestorAllocationEditor visible={visible} rows={form.allocations} onChange={(rows) => setField('allocations', rows)} totalAmount={form.total_amount} />
+            {!!allocationError && <Text style={addStyles.errorText}>{allocationError}</Text>}
 
             <FormField
               label="ملاحظات"
@@ -534,8 +492,8 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={createOpportunity}
-              disabled={saving}
-              style={[addStyles.saveButton, saving && addStyles.disabled]}
+              disabled={saving || Boolean(allocationError)}
+              style={[addStyles.saveButton, (saving || Boolean(allocationError)) && addStyles.disabled]}
               activeOpacity={0.88}
             >
               {saving ? <ActivityIndicator color="#ffffff" size="small" /> : <Text style={addStyles.saveText}>حفظ الفرصة</Text>}
@@ -563,10 +521,7 @@ function editOpportunityForm(item) {
     company_name: String(meta.company_name || item?.company_name || ''),
     tasks: String(meta.tasks || item?.tasks || ''),
     executor: String(meta.executor || item?.executor || ''),
-    allocations: (item?.allocations || [])
-      .map((allocation) => `${allocation.investor_name || allocation.investor_code || ''} ${n(allocation.invested_amount)}`.trim())
-      .filter(Boolean)
-      .join('\n'),
+    allocations: allocationFormRows(item),
     notes: String(item?.notes || ''),
   };
 }
@@ -576,19 +531,18 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState('');
+  const [ownerRow, setOwnerRow] = useState(null);
 
   useEffect(() => {
     if (!visible) return;
     setForm(editOpportunityForm(item));
+    setOwnerRow(null);
     setCancelling(false);
     setError('');
   }, [visible, item]);
 
-  const allocationsInfo = useMemo(() => parseAllocations(form.allocations), [form.allocations]);
-  const allocationsTotal = useMemo(
-    () => allocationsInfo.rows.reduce((sum, row) => sum + numberValue(row.amount), 0),
-    [allocationsInfo]
-  );
+  const allocationError = allocationFormError(form.allocations, form.total_amount, form.profit, item);
+  const rightsLocked = hasProtectedAllocations(item);
   const totalAmount = numberValue(form.total_amount);
   const profitAmount = numberValue(form.profit);
   const calculatedRate = totalAmount > 0 && profitAmount > 0 ? (profitAmount / totalAmount) * 100 : 0;
@@ -610,13 +564,16 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
     if (form.months.trim() && (!Number.isInteger(numberValue(form.months)) || numberValue(form.months) <= 0)) {
       return 'عدد الشهور يجب أن يكون رقمًا صحيحًا أكبر من صفر.';
     }
-    if (allocationsInfo.invalid.length) {
-      return `راجع صيغة المستثمرين. كل سطر يجب أن يكون: الاسم ثم المبلغ.\n${allocationsInfo.invalid[0]}`;
-    }
-    if (allocationsTotal > totalAmount + 0.009) {
-      return `مجموع المستثمرين (${money(allocationsTotal)}) أكبر من مبلغ الاستثمار (${money(totalAmount)}).`;
-    }
+    if (allocationError) return allocationError;
     return '';
+  };
+
+  const handleOwnerChange = (row) => {
+    if (JSON.stringify(form) !== JSON.stringify(editOpportunityForm(item))) {
+      setError('احفظ تعديلات بيانات الفرصة أو أعد فتحها قبل تصحيح المستثمر.');
+      return;
+    }
+    setOwnerRow(row);
   };
 
   const save = async () => {
@@ -644,7 +601,8 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
         tasks: form.tasks.trim() || null,
         executor: form.executor.trim() || null,
         notes: form.notes.trim() || null,
-        allocations: allocationsInfo.rows,
+        allocations: allocationPayload(form.allocations),
+        allocation_version: item.allocation_version,
       };
 
       const result = await apiJson(`/ta3meed/investments/${item.id}`, {
@@ -690,7 +648,8 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={close}>
+    <>
+    <Modal visible={visible && !ownerRow} transparent animationType="fade" onRequestClose={close}>
       <View style={addStyles.backdrop}>
         <View style={addStyles.modalCard}>
           <View style={addStyles.modalHeader}>
@@ -698,8 +657,8 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
               <Text style={addStyles.closeText}>×</Text>
             </TouchableOpacity>
             <View style={addStyles.titleBlock}>
-              <Text style={addStyles.title}>تعديل فرصة تعميد</Text>
-              <Text style={addStyles.subtitle}>نفس نموذج الإضافة مع البيانات الحالية</Text>
+              <Text style={addStyles.title}>تعديل تفاصيل الفرصة</Text>
+              <Text style={addStyles.subtitle}>حدّث بيانات الفرصة وتاريخ التمويل</Text>
             </View>
             <View style={addStyles.headerMark}><Text style={addStyles.headerMarkText}>✎</Text></View>
           </View>
@@ -726,16 +685,18 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
               <FormField
                 compact
                 label="مبلغ الاستثمار *"
+                editable={!rightsLocked}
                 value={form.total_amount}
-                onChangeText={(value) => setField('total_amount', value.replace(/[^0-9.,]/g, ''))}
+                onChangeText={(value) => setField('total_amount', normalizeAmountInput(value))}
                 placeholder="0"
                 keyboardType="decimal-pad"
               />
               <FormField
                 compact
                 label="الربح المتوقع"
+                editable={!rightsLocked}
                 value={form.profit}
-                onChangeText={(value) => setField('profit', value.replace(/[^0-9.,]/g, ''))}
+                onChangeText={(value) => setField('profit', normalizeAmountInput(value))}
                 placeholder="0"
                 keyboardType="decimal-pad"
               />
@@ -777,7 +738,9 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
             <View style={addStyles.twoColumns}>
               <FormField
                 compact
-                label="تاريخ السحب"
+                label="تاريخ التمويل"
+                testID="edit-opportunity-funding-date"
+                accessibilityLabel="تاريخ التمويل"
                 value={form.start_date}
                 onChangeText={(value) => setField('start_date', value)}
                 placeholder="YYYY-MM-DD"
@@ -822,20 +785,8 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
               <Text style={addStyles.sectionTitle}>المستثمرون</Text>
             </View>
 
-            <FormField
-              label="المستثمرون"
-              value={form.allocations}
-              onChangeText={(value) => setField('allocations', value)}
-              placeholder={'كل سطر: الاسم المبلغ\nمثال: أحمد 50000'}
-              multiline
-            />
-
-            {allocationsInfo.rows.length > 0 ? (
-              <View style={addStyles.allocationSummary}>
-                <Text style={addStyles.allocationSummaryValue}>{money(allocationsTotal)}</Text>
-                <Text style={addStyles.allocationSummaryLabel}>مجموع {allocationsInfo.rows.length} مستثمر</Text>
-              </View>
-            ) : null}
+            <InvestorAllocationEditor visible={visible} rows={form.allocations} onChange={(rows) => setField('allocations', rows)} totalAmount={form.total_amount} item={item} onChangeOwner={handleOwnerChange} />
+            {!!allocationError && <Text style={addStyles.errorText}>{allocationError}</Text>}
 
             <FormField
               label="ملاحظات"
@@ -874,8 +825,8 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
             </TouchableOpacity>
             <TouchableOpacity
               onPress={save}
-              disabled={saving || cancelling}
-              style={[addStyles.saveButton, (saving || cancelling) && addStyles.disabled]}
+              disabled={saving || cancelling || Boolean(allocationError)}
+              style={[addStyles.saveButton, (saving || cancelling || Boolean(allocationError)) && addStyles.disabled]}
               activeOpacity={0.88}
             >
               {saving ? <ActivityIndicator color="#ffffff" size="small" /> : <Text style={addStyles.saveText}>حفظ التعديل</Text>}
@@ -884,6 +835,8 @@ function EditOpportunityModal({ visible, item, onClose, onSaved, onCancelled }) 
         </View>
       </View>
     </Modal>
+    <InvestorOwnerChangeModal visible={visible && Boolean(ownerRow)} row={ownerRow} item={item} onClose={() => setOwnerRow(null)} onDone={() => { setOwnerRow(null); onSaved?.(item); }} />
+    </>
   );
 }
 
@@ -909,9 +862,11 @@ function FormField({ label, compact, multiline, shortMultiline, ...inputProps })
 
 export default function Ta3meedNoResetFilterScreen(props) {
   const [addOpen, setAddOpen] = useState(false);
+  const [investorManagerOpen, setInvestorManagerOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [screenVersion, setScreenVersion] = useState(0);
+  const [sortOrder, setSortOrder] = useState('maturity');
   const [toast, setToast] = useState('');
 
   const handleCreated = (created) => {
@@ -946,7 +901,7 @@ export default function Ta3meedNoResetFilterScreen(props) {
 
   return (
     <View style={addStyles.host}>
-      <Ta3meedCompactFiltersScreen key={screenVersion} {...props} onEditOpportunity={handleEdit} />
+      <Ta3meedCompactFiltersScreen key={screenVersion} {...props} selectedSortOrder={sortOrder} onSortOrderChange={setSortOrder} onEditOpportunity={handleEdit} onManageInvestors={() => setInvestorManagerOpen(true)} />
 
       <TouchableOpacity
         accessibilityRole="button"
@@ -964,6 +919,7 @@ export default function Ta3meedNoResetFilterScreen(props) {
         </View>
       )}
 
+      <InvestorManagerModal visible={investorManagerOpen} onClose={() => { setInvestorManagerOpen(false); setScreenVersion((version) => version + 1); }} />
       <AddOpportunityModal
         visible={addOpen}
         onClose={() => setAddOpen(false)}

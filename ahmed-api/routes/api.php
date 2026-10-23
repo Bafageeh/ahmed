@@ -16,9 +16,11 @@ use App\Http\Controllers\Api\PersonalExpenseController;
 use App\Http\Controllers\Api\SecureVaultController;
 use App\Http\Controllers\Api\SulfaInvestmentController;
 use App\Http\Controllers\Api\Ta3meedController;
+use App\Http\Controllers\Api\Ta3meedDataToolsController;
 use App\Http\Controllers\Api\Ta3meedImportController;
 use App\Http\Controllers\Api\Ta3meedImageImportController;
 use App\Http\Controllers\Api\Ta3meedInvestorAccountController;
+use App\Http\Controllers\Api\Ta3meedInvestorRegistryController;
 use App\Http\Controllers\Api\Ta3meedMutationController;
 use App\Http\Controllers\Api\Ta3meedReceiptController;
 use App\Http\Controllers\Api\TokenizeInvestmentController;
@@ -50,6 +52,7 @@ Route::post('/ahmed/session', [AhmedSessionController::class, 'store']);
 Route::post('/auth/login', [AhmedSessionController::class, 'store']);
 Route::get('/wa/webhook', [WhatsAppController::class, 'verifyWebhook']);
 Route::post('/wa/webhook', [WhatsAppController::class, 'webhook']);
+Route::get('/ta3meed/export-download/{token}', [Ta3meedDataToolsController::class, 'downloadExport']);
 
 Route::middleware('ahmed.auth')->group(function () {
     Route::get('/ahmed/session', [AhmedSessionController::class, 'show']);
@@ -112,11 +115,21 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::post('/ta3meed/receipts/parse', [Ta3meedReceiptController::class, 'parse']);
     Route::post('/ta3meed/receipts/apply-message', [Ta3meedReceiptController::class, 'applyMessage']);
     Route::post('/ta3meed/receipts/apply-message-confirmed', [Ta3meedReceiptController::class, 'applyMessageConfirmed']);
+    Route::get('/ta3meed/investors', [Ta3meedInvestorRegistryController::class, 'index']);
+    Route::post('/ta3meed/investors', [Ta3meedInvestorRegistryController::class, 'store']);
+    Route::patch('/ta3meed/investors/{id}', [Ta3meedInvestorRegistryController::class, 'update']);
+    Route::post('/ta3meed/allocations/{id}/owner-preview', [Ta3meedInvestorRegistryController::class, 'preview']);
+    Route::post('/ta3meed/allocations/{id}/owner-change', [Ta3meedInvestorRegistryController::class, 'changeOwner']);
+    Route::get('/ta3meed/investments/{id}/investor-history', [Ta3meedInvestorRegistryController::class, 'history']);
     Route::get('/ta3meed/investors/{code}/account', [Ta3meedInvestorAccountController::class, 'show']);
     Route::post('/ta3meed/investors/{code}/account/entries', [Ta3meedMutationController::class, 'storeInvestorAccountEntry']);
     Route::put('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'updateInvestorAccountEntry']);
     Route::delete('/ta3meed/investors/{code}/account/entries/{entryId}', [Ta3meedMutationController::class, 'deleteInvestorAccountEntry']);
     Route::get('/ta3meed/summary', [Ta3meedController::class, 'summary']);
+    Route::post('/ta3meed/export-link', [Ta3meedDataToolsController::class, 'exportLink']);
+    Route::get('/ta3meed/backups', [Ta3meedDataToolsController::class, 'backups']);
+    Route::post('/ta3meed/backups', [Ta3meedDataToolsController::class, 'createBackup']);
+    Route::post('/ta3meed/backups/{id}/restore', [Ta3meedDataToolsController::class, 'restoreBackup']);
 
     Route::get('/income/basic', [IncomeController::class, 'index']);
     Route::post('/income/basic', [IncomeController::class, 'store']);

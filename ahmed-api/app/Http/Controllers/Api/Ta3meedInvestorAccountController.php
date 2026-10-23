@@ -28,7 +28,6 @@ class Ta3meedInvestorAccountController extends Controller
 
         if (! $investor) return response()->json(['message' => 'Investor not found'], 404);
 
-        $this->normalizeInvestorRow($investor);
 
         $platform = DB::table('investment_platforms')->where('code', 'ta3meed')->first();
         if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);

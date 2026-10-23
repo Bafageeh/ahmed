@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Ta3meedActualProfit;
+use App\Support\Ta3meedAllocationPolicy;
 use App\Support\Ta3meedInvestorName;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +29,7 @@ class Ta3meedController extends Controller
 
             $item->allocations = $allocationQuery->select([
                 'investment_opportunity_allocations.id',
+                'investment_opportunity_allocations.investor_id',
                 'investment_investors.name as investor_name',
                 'investment_investors.code as investor_code',
                 'investment_opportunity_allocations.invested_amount',
@@ -38,6 +41,7 @@ class Ta3meedController extends Controller
 
             $item->receipts = $this->receipts($item->id, $userId);
             $this->appendActualAnnualRate($item);
+            Ta3meedAllocationPolicy::decorate($item);
             return $item;
         });
 
@@ -49,7 +53,7 @@ class Ta3meedController extends Controller
         $userId = $this->userId($request);
         $data = $request->validate([
             'code' => ['required', 'string', 'max:100'],
-            'total_amount' => ['required', 'numeric', 'min:0'],
+            'total_amount' => ['required', 'numeric', 'min:0.01'],
             'profit' => ['nullable', 'numeric', 'min:0'],
             'profit_rate' => ['nullable', 'numeric', 'min:0'],
             'category' => ['nullable', 'string', 'max:50'],
@@ -60,66 +64,60 @@ class Ta3meedController extends Controller
             'remaining_amount' => ['nullable', 'numeric', 'min:0'],
             'notes' => ['nullable', 'string'],
             'allocations' => ['nullable', 'array'],
-            'allocations.*.investor' => ['required_with:allocations', 'string', 'max:100'],
-            'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0'],
+            'allocations.*.investor' => ['nullable', 'string', 'max:100'],
+            'allocations.*.investor_id' => ['nullable', 'integer', 'min:1'],
+            'allocations.*.allocation_id' => ['nullable', 'integer', 'min:1'],
+            'allocations.*.amount' => ['required_with:allocations', 'numeric', 'min:0.01'],
         ]);
 
         $platform = $this->platform();
         if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
-        $accountId = $this->accountId($platform->id, $userId);
-        $totalAmount = round((float) $data['total_amount'], 2);
-        $profit = round((float) ($data['profit'] ?? 0), 2);
-        $rate = $data['profit_rate'] ?? ($totalAmount > 0 ? round(($profit / $totalAmount) * 100, 4) : null);
+        $item = DB::transaction(function () use ($data, $platform, $userId) {
+            if (DB::table('investment_opportunities')->where('platform_id', $platform->id)->where('user_id', $userId)->whereRaw('lower(reference_number) = ?', [mb_strtolower(trim($data['code']))])->exists()) {
+                Ta3meedAllocationPolicy::fail('code', 'رقم الفرصة موجود مسبقاً. افتح الفرصة الحالية للتعديل.');
+            }
+            $accountId = $this->accountId($platform->id, $userId);
+            $totalAmount = round((float) $data['total_amount'], 2);
+            $profit = round((float) ($data['profit'] ?? 0), 2);
+            $rate = $data['profit_rate'] ?? ($totalAmount > 0 ? round(($profit / $totalAmount) * 100, 4) : null);
 
-        $insert = [
-            'account_id' => $accountId,
-            'platform_id' => $platform->id,
-            'title' => 'تعميد - ' . $data['code'],
-            'reference_number' => $data['code'],
-            'investment_type' => 'ta3meed',
-            'principal_amount' => $totalAmount,
-            'expected_profit_amount' => $profit,
-            'actual_profit_amount' => 0,
-            'expected_rate' => $rate,
-            'start_date' => $data['start_date'] ?? null,
-            'maturity_date' => $data['maturity_date'] ?? null,
-            'status' => 'active',
-            'profit_distribution' => 'at_maturity',
-            'metadata' => json_encode([
-                'category' => $data['category'] ?? null,
-                'months' => $data['months'] ?? null,
-                'withdrawal_date' => $data['withdrawal_date'] ?? null,
-                'remaining_amount' => $data['remaining_amount'] ?? null,
-            ], JSON_UNESCAPED_UNICODE),
-            'notes' => $data['notes'] ?? null,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
-        $this->attachUser($insert, 'investment_opportunities', $userId);
-        $id = DB::table('investment_opportunities')->insertGetId($insert);
-
-        foreach (($data['allocations'] ?? []) as $allocation) {
-            $amount = round((float) $allocation['amount'], 2);
-            if ($amount <= 0) continue;
-            $investorId = $this->investorId($allocation['investor'], $userId);
-            $allocationProfit = $totalAmount > 0 ? round($profit * ($amount / $totalAmount), 2) : 0;
-            $allocationInsert = [
-                'opportunity_id' => $id,
-                'investor_id' => $investorId,
-                'invested_amount' => $amount,
-                'expected_profit_amount' => $allocationProfit,
+            $insert = [
+                'account_id' => $accountId,
+                'platform_id' => $platform->id,
+                'title' => 'تعميد - ' . $data['code'],
+                'reference_number' => $data['code'],
+                'investment_type' => 'ta3meed',
+                'principal_amount' => $totalAmount,
+                'expected_profit_amount' => $profit,
                 'actual_profit_amount' => 0,
-                'received_amount' => 0,
+                'expected_rate' => $rate,
+                'start_date' => $data['start_date'] ?? null,
+                'maturity_date' => $data['maturity_date'] ?? null,
                 'status' => 'active',
+                'profit_distribution' => 'at_maturity',
+                'metadata' => json_encode([
+                    'category' => $data['category'] ?? null,
+                    'months' => $data['months'] ?? null,
+                    'withdrawal_date' => $data['withdrawal_date'] ?? null,
+                    'remaining_amount' => $data['remaining_amount'] ?? null,
+                ], JSON_UNESCAPED_UNICODE),
+                'notes' => $data['notes'] ?? null,
                 'created_at' => now(),
                 'updated_at' => now(),
             ];
-            $this->attachUser($allocationInsert, 'investment_opportunity_allocations', $userId);
-            DB::table('investment_opportunity_allocations')->insert($allocationInsert);
-        }
+            $this->attachUser($insert, 'investment_opportunities', $userId);
+            $id = DB::table('investment_opportunities')->insertGetId($insert);
 
-        return response()->json(['data' => DB::table('investment_opportunities')->where('id', $id)->first()], 201);
+            $item = DB::table('investment_opportunities')->where('id', $id)->first();
+            Ta3meedAllocationPolicy::load($item, $userId);
+            Ta3meedAllocationPolicy::sync($item, $data, $userId, true);
+            $item = DB::table('investment_opportunities')->where('id', $id)->first();
+            Ta3meedAllocationPolicy::load($item, $userId);
+            Ta3meedActualProfit::apply($item);
+            return $item;
+        });
+        return response()->json(['data' => $item], 201);
     }
 
     public function summary(Request $request)
@@ -203,10 +201,9 @@ class Ta3meedController extends Controller
         $receivedFromReceipts = collect($item->receipts ?? [])->sum('amount');
         $receivedFromAllocations = collect($item->allocations ?? [])->sum('received_amount');
         $receivedAmount = max((float) $receivedFromReceipts, (float) $receivedFromAllocations);
-        $status = strtolower(trim((string) $item->status));
-        $closedStatuses = ['received', 'completed', 'closed', 'cancelled', 'canceled', 'finished', 'ended'];
-        $isEnded = in_array($status, $closedStatuses, true);
-        $actualProfit = max(0, $receivedAmount - $principal);
+        Ta3meedActualProfit::apply($item);
+        $actualProfit = $item->actual_profit_amount;
+        $isEnded = $actualProfit !== null;
         $showActualAnnualRate = $isEnded && $principal > 0 && $actualProfit > 0 && $expectedTotal > 0 && $receivedAmount < $expectedTotal;
 
         $item->registered_annual_profit_rate = round($registeredAnnualRate, 6);
@@ -252,30 +249,10 @@ class Ta3meedController extends Controller
         return DB::table('investment_accounts')->insertGetId($insert);
     }
 
-    private function investorId(string $name, int $userId): int
-    {
-        $code = Ta3meedInvestorName::code($name);
-        $displayName = Ta3meedInvestorName::displayName($name, $code);
-        $query = DB::table('investment_investors')->where(function ($q) use ($code, $name) {
-            $q->where('code', $code)->orWhere('name', $name);
-        });
-        $this->scopeUser($query, 'investment_investors', $userId);
-        $existing = $query->first();
-        if ($existing) {
-            $update = ['code' => $code, 'name' => $displayName, 'is_active' => true];
-            if (Schema::hasColumn('investment_investors', 'updated_at')) $update['updated_at'] = now();
-            DB::table('investment_investors')->where('id', $existing->id)->update($update);
-            return (int) $existing->id;
-        }
-
-        $insert = ['code' => $code, 'name' => $displayName, 'is_active' => true, 'created_at' => now(), 'updated_at' => now()];
-        $this->attachUser($insert, 'investment_investors', $userId);
-        return DB::table('investment_investors')->insertGetId($insert);
-    }
 
     private function userId(Request $request): int
     {
-        $id = (int) $request->header('X-Ahmed-User-Id', 0);
+        $id = (int) ($request->attributes->get('ahmed_user_id') ?: $request->header('X-Ahmed-User-Id', 0));
         if ($id > 0 && Schema::hasTable('users') && DB::table('users')->where('id', $id)->exists()) return $id;
         return Schema::hasTable('users') ? (int) (DB::table('users')->orderBy('id')->value('id') ?: 1) : 1;
     }

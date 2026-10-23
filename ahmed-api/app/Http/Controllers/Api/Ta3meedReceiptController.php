@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Ta3meedActualProfit;
+use App\Support\Ta3meedAllocationPolicy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -477,12 +479,15 @@ class Ta3meedReceiptController extends Controller
         if ($userId > 0) $this->scopeUser($allocationsQuery, 'investment_opportunity_allocations', $userId);
         $allocations = $allocationsQuery->get();
         foreach ($allocations as $allocation) {
-            $receiptAllocationQuery = DB::table('ta3meed_receipt_allocations')->where('allocation_id', $allocation->id);
+            $receiptAllocationQuery = DB::table('ta3meed_receipt_allocations')
+                ->where('opportunity_id', $opportunityId)
+                ->where('investor_id', $allocation->investor_id);
             if ($userId > 0) $this->scopeUser($receiptAllocationQuery, 'ta3meed_receipt_allocations', $userId);
+            $hasReceiptAllocations = (clone $receiptAllocationQuery)->exists();
             $received = round((float) $receiptAllocationQuery->sum('received_amount'), 2);
             DB::table('investment_opportunity_allocations')->where('id', $allocation->id)->update([
                 'received_amount' => $received,
-                'actual_profit_amount' => $isComplete ? round($received - (float) $allocation->invested_amount, 2) : 0,
+                'actual_profit_amount' => $isComplete && $hasReceiptAllocations ? round($received - (float) $allocation->invested_amount, 2) : 0,
                 'status' => $status,
                 'updated_at' => now(),
             ]);
@@ -515,6 +520,7 @@ class Ta3meedReceiptController extends Controller
         $this->scopeUser($allocationQuery, 'investment_opportunity_allocations', $userId);
         $item->allocations = $allocationQuery->select([
                 'investment_opportunity_allocations.id',
+                'investment_opportunity_allocations.investor_id',
                 'investment_investors.name as investor_name',
                 'investment_investors.code as investor_code',
                 'investment_opportunity_allocations.invested_amount',
@@ -527,6 +533,8 @@ class Ta3meedReceiptController extends Controller
         $receiptQuery = DB::table('ta3meed_receipts')->where('opportunity_id', $id);
         $this->scopeUser($receiptQuery, 'ta3meed_receipts', $userId);
         $item->receipts = $receiptQuery->orderByDesc('receipt_date')->orderByDesc('id')->get();
+        Ta3meedAllocationPolicy::decorate($item);
+        Ta3meedActualProfit::apply($item);
         return $item;
     }
 

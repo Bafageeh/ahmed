@@ -1,0 +1,188 @@
+name: Restore Verified Ahmed Developments
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-recovery-restore.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahmed-incident-recovery-20261023
+  cancel-in-progress: false
+
+jobs:
+  restore-verified-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore verified files and publish recovered application
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 20m
+          script: |
+            set -eu
+            umask 077
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            CASE="$(dirname "$ROOT")/ahmed-recovery-20261023T092158Z"
+            export AHMED_RECOVERY_ROOT="$ROOT"
+            export AHMED_RECOVERY_CASE="$CASE"
+            test -f "$CASE/current-source-and-git.tar.gz"
+            if [ -f "$CASE/restoration-complete.json" ]; then echo "Recovery already completed; leaving production unchanged"; exit 0; fi
+            python3 - <<'PY'
+            import os,json,pathlib,hashlib,shutil,sqlite3,subprocess,tempfile
+            root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"])
+            case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
+            plan=json.loads((case/"source-recovery-plan.json").read_text())
+            skip="ahmed-mobile/ta3meed/Ta3meedTenantInvestorAccounts.js"
+            checks=[]
+            for item in plan:
+                key=item["path"]
+                if key==skip: continue
+                assert key.startswith(("ahmed-mobile/","ahmed-api/")) and ".." not in pathlib.PurePosixPath(key).parts
+                prepared=case/"prepared"/key
+                assert hashlib.sha256(prepared.read_bytes()).hexdigest()==item["sha256"]
+                live=root/key
+                current=hashlib.sha256(live.read_bytes()).hexdigest() if live.is_file() else None
+                assert current in (item["current_sha256"],item["sha256"]), "Concurrent source edit: "+key
+                if prepared.suffix==".php":
+                    subprocess.check_call(["/usr/local/bin/php","-l",str(prepared)])
+                checks.append((item,prepared,live))
+            db=root/"ahmed-api/database/database.sqlite"
+            conn=sqlite3.connect("file:"+str(db)+"?mode=ro",uri=True)
+            conn.execute("BEGIN")
+            with (case/"database-before-source-restore.sql").open("w") as dump:
+                for line in conn.iterdump(): dump.write(line+"\n")
+            conn.rollback();conn.close()
+            def install(data,live):
+                st=live.stat() if live.exists() else None
+                handle,temp=tempfile.mkstemp(prefix=".recovery-",dir=str(live.parent))
+                try:
+                    with os.fdopen(handle,"wb") as stream:
+                        stream.write(data);stream.flush();os.fsync(stream.fileno())
+                    os.chmod(temp,(st.st_mode & 0o777) if st else 0o644)
+                    if st: os.chown(temp,st.st_uid,st.st_gid)
+                    os.replace(temp,str(live))
+                finally:
+                    if os.path.exists(temp): os.unlink(temp)
+            changed=[]
+            try:
+                for item,prepared,live in checks:
+                    data=prepared.read_bytes()
+                    if live.is_file() and live.read_bytes()==data: continue
+                    old=case/"before-restore"/item["path"]
+                    old.parent.mkdir(parents=True,exist_ok=True)
+                    if live.exists() and not old.exists(): shutil.copy2(str(live),str(old))
+                    install(data,live);changed.append((item,live,old))
+            except BaseException:
+                for item,live,old in reversed(changed):
+                    if old.exists(): install(old.read_bytes(),live)
+                raise
+            proof=json.loads(pathlib.Path("/home/pmsa/secure-backups/ahmed/funding-date-label-1792684447832/build-input-hashes.json").read_text())
+            mismatches=[]
+            for rel,digest in proof.items():
+                if rel in {".env","ta3meed/Ta3meedTenantInvestorAccounts.js"}: continue
+                p=root/"ahmed-mobile"/rel
+                if not p.is_file() or hashlib.sha256(p.read_bytes()).hexdigest()!=digest: mismatches.append(rel)
+            assert not mismatches,"Recovered build differs from verified production snapshot: "+json.dumps(mismatches)
+            assert "const profit = Math.round((total - manual) * 100) / 100;" in (root/skip).read_text()
+            (case/"source-restore-verification.json").write_text(json.dumps({"restored":True,"source_files_changed":len(changed),"verified_build_inputs":len(proof)-2,"investor_profit_retained":True,"database_restored":False}))
+            print("SOURCE_RESTORED_VERIFIED",json.dumps({"source_files_changed":len(changed),"verified_build_inputs":len(proof)-2,"investor_profit_retained":True,"database_restored":False}))
+            PY
+            cd "$ROOT/ahmed-api"
+            /usr/local/bin/php artisan optimize:clear
+            cat > "$CASE/api-read-check.php" <<'PHP'
+            <?php
+            $root=getenv('AHMED_RECOVERY_ROOT');
+            require $root.'/ahmed-api/vendor/autoload.php';
+            $app=require $root.'/ahmed-api/bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            $request=Illuminate\Http\Request::create('/api/ta3meed/investments','GET');
+            $request->headers->set('X-Ahmed-User-Id','1');
+            $request->attributes->set('ahmed_user_id',1);
+            $response=(new App\Http\Controllers\Api\Ta3meedController)->index($request);
+            if($response->getStatusCode()!==200) throw new RuntimeException('API recovery check failed');
+            $items=$response->getData(true)['data'];
+            if(count($items)<1) throw new RuntimeException('Investment data unavailable');
+            foreach($items as $item) {
+                if(!array_key_exists('allocation_version',$item)||!array_key_exists('allocations_locked',$item)) throw new RuntimeException('Allocation protection missing');
+            }
+            echo json_encode(['api_read_check'=>'passed','allocation_protection_restored'=>true,'investment_data_available'=>true]).PHP_EOL;
+            PHP
+            /usr/local/bin/php "$CASE/api-read-check.php"
+            cd "$ROOT/ahmed-mobile"
+            RUNTIME="$(dirname "$ROOT")"
+            mkdir -p "$RUNTIME/.cache" "$RUNTIME/.tmp"
+            if command -v lsof >/dev/null 2>&1; then
+              for EXPO_PID in $(lsof -tiTCP:8082 -sTCP:LISTEN); do
+                EXPO_COMMAND="$(ps -p "$EXPO_PID" -o args=)"
+                case "$EXPO_COMMAND" in *expo*|*metro*) kill "$EXPO_PID";; *) echo "Unexpected process on Expo port; stopping recovery restart"; exit 1;; esac
+              done
+            elif command -v fuser >/dev/null 2>&1; then
+              fuser -k 8082/tcp 2>/dev/null || true
+            fi
+            sleep 2
+            export BROWSER=none CI=1 EXPO_NO_TELEMETRY=1 EXPO_NO_DEVTOOLS=1
+            export REACT_NATIVE_PACKAGER_HOSTNAME=ahmed.pm.sa
+            export XDG_CACHE_HOME="$RUNTIME/.cache" TMPDIR="$RUNTIME/.tmp" TMP="$RUNTIME/.tmp" TEMP="$RUNTIME/.tmp"
+            nohup npx expo start --clear --go --host lan --port 8082 > "$CASE/expo-recovered.log" 2>&1 </dev/null &
+            echo $! > "$RUNTIME/ahmed-expo-8082.pid"
+            READY=0
+            for ATTEMPT in $(seq 1 45); do
+              if curl -fsS --max-time 2 http://127.0.0.1:8082/status | grep -q 'packager-status:running'; then READY=1; break; fi
+              sleep 1
+            done
+            if [ "$READY" -ne 1 ]; then tail -60 "$CASE/expo-recovered.log"; exit 1; fi
+            echo "EXPO_RECOVERED_AND_READY"
+            if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/recovered-web-build" > "$CASE/web-recovery-build.log" 2>&1; then
+              tail -80 "$CASE/web-recovery-build.log"; exit 1
+            fi
+            python3 - <<'PY'
+            import os,pathlib,shutil,tempfile,hashlib,json,urllib.request,re
+            root=pathlib.Path(os.environ["AHMED_RECOVERY_ROOT"]);case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
+            build=case/"recovered-web-build"
+            assert (build/"index.html").is_file()
+            html=(build/"index.html").read_text()
+            for attr in ["src","href"]:
+                for prefix in ["/_expo/","/assets/"]: html=html.replace(attr+'="'+prefix,attr+'="/webapp'+prefix)
+            (build/"index.html").write_text(html)
+            for dest in [root/"ahmed-mobile/dist-web",root/"ahmed-api/public/webapp"]:
+                dest.mkdir(parents=True,exist_ok=True)
+                for p in build.rglob("*"):
+                    if not p.is_file() or p.relative_to(build)==pathlib.Path("index.html"): continue
+                    target=dest/p.relative_to(build);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(str(p),str(target))
+                previous=case/("before-"+dest.name+"-index.html")
+                if (dest/"index.html").is_file() and not previous.exists(): shutil.copy2(str(dest/"index.html"),str(previous))
+                handle,temp=tempfile.mkstemp(prefix=".recovered-index-",dir=str(dest))
+                with os.fdopen(handle,"wb") as f: f.write((build/"index.html").read_bytes())
+                os.chmod(temp,0o644);os.replace(temp,str(dest/"index.html"))
+            html=(build/"index.html").read_text()
+            scripts=re.findall(r'<script[^>]+src="([^"]+)"',html)
+            assert scripts
+            for src in scripts:
+                if "/_expo/" not in src: continue
+                url="https://ahmed.pm.sa"+src if src.startswith("/") else "https://ahmed.pm.sa/webapp/"+src
+                remote=urllib.request.urlopen(url,timeout=30).read()
+                local=root/"ahmed-api/public"/src.lstrip("/") if src.startswith("/") else root/"ahmed-api/public/webapp"/src
+                assert hashlib.sha256(remote).hexdigest()==hashlib.sha256(local.read_bytes()).hexdigest(),"Served web bundle does not match restored build"
+            print("WEB_RESTORE_VERIFIED")
+            PY
+            if ! npx eas-cli update --channel production --platform all --environment production --message "Restore verified October 22 Ahmed developments with investor profit" --non-interactive --json > "$CASE/native-recovery-update.json" 2> "$CASE/native-recovery-update.log"; then
+              tail -80 "$CASE/native-recovery-update.log"; exit 1
+            fi
+            python3 - <<'PY'
+            import os,pathlib,json
+            case=pathlib.Path(os.environ["AHMED_RECOVERY_CASE"])
+            updates=json.loads((case/"native-recovery-update.json").read_text())
+            assert {x["platform"] for x in updates}=={"ios","android"}
+            assert all(x["runtimeVersion"]=="1.0.19" for x in updates)
+            result={"restored":True,"platforms":sorted(x["platform"] for x in updates),"runtime":"1.0.19","group":updates[0]["group"],"database_restored":False}
+            (case/"restoration-complete.json").write_text(json.dumps(result))
+            print("RECOVERY_COMPLETED",json.dumps(result))
+            PY
