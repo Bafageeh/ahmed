@@ -1,0 +1,214 @@
+name: Ahmed Future Income Redesign
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-income-redesign.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahmed-income-redesign
+  cancel-in-progress: false
+
+jobs:
+  publish-income-redesign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify and publish the redesigned income screen
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 15m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            CASE="/home/pmsa/secure-backups/ahmed/income-redesign-20261023"
+            export AHMED_INCOME_ROOT="$ROOT" AHMED_INCOME_CASE="$CASE" AHMED_INCOME_COMMIT="${{ github.sha }}"
+            mkdir -p "$CASE"
+            chmod 700 "$CASE"
+            if [ -f "$CASE/complete.json" ]; then echo "FUTURE_INCOME_ALREADY_PUBLISHED"; exit 0; fi
+            git -C "$ROOT" fetch origin main
+            python3 - <<'PY'
+            import os,pathlib,json,hashlib,subprocess
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE'])
+            staged=case/'staged';staged.mkdir(exist_ok=True);os.chmod(str(staged),0o700)
+            expected={'ahmed-mobile/AppShell.js': '86413cb2814d2a82e2e884d27e32b3a2167f3eaf868214231c8b85a6de12f56d', 'ahmed-mobile/FutureMonthlyIncomeScreen.js': '0b07ceb826b79efe1ea1bef139ba90340f5eba9369f339da0de4fb37b816e33f', 'ahmed-mobile/futureMonthlyIncomeData.js': '75dc26a5b969084701b2699696486834ee93c87e85d2960846299cb9484fcbeb'}
+            old_digest='394f31bb82c429c1385d8951b62d6c7b92004fbcfe2657a8ca83c6c603729e36'
+            for name,digest in expected.items():
+                content=subprocess.check_output(['git','-C',str(root),'show',os.environ['AHMED_INCOME_COMMIT']+':'+name])
+                assert hashlib.sha256(content).hexdigest()==digest,'Committed source mismatch: '+name
+                live=root/name
+                if live.exists():
+                    allowed={digest,old_digest} if name.endswith('/AppShell.js') else {digest}
+                    assert hashlib.sha256(live.read_bytes()).hexdigest() in allowed,'Concurrent source edit: '+name
+                target=staged/pathlib.Path(name).name;target.write_bytes(content);os.chmod(str(target),0o600)
+            for item in json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/dinar-sync-20261023/import-plan.json').read_text())['source_files']:
+                if item['path']=='ahmed-mobile/AppShell.js': continue
+                assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['sha256'],'Dinar development changed'
+            previous=pathlib.Path('/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023')
+            for item in json.loads((previous/'import-plan.json').read_text())['source_files']:
+                assert hashlib.sha256((root/item['path']).read_bytes()).hexdigest()==item['target_sha256'],'Sulfa summary source changed'
+            proof=json.loads(pathlib.Path('/home/pmsa/secure-backups/ahmed/funding-date-label-1792684447832/build-input-hashes.json').read_text())
+            for rel,digest in proof.items():
+                if rel in {'.env','AppShell.js','SulfaInvestmentScreen.js','ta3meed/Ta3meedTenantInvestorAccounts.js'}: continue
+                assert hashlib.sha256((root/'ahmed-mobile'/rel).read_bytes()).hexdigest()==digest,'Existing development changed: '+rel
+            assert 'const profit = Math.round((total - manual) * 100) / 100;' in (root/'ahmed-mobile/ta3meed/Ta3meedTenantInvestorAccounts.js').read_text()
+            print('FUTURE_INCOME_SOURCE_GUARDS_PASSED')
+            PY
+            /usr/local/bin/php <<'PHP'
+            <?php
+            $root=getenv('AHMED_INCOME_ROOT');$case=getenv('AHMED_INCOME_CASE');
+            require $root.'/ahmed-api/vendor/autoload.php';
+            $app=require $root.'/ahmed-api/bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+            Illuminate\Support\Facades\DB::beginTransaction();
+            try {
+                $request=Illuminate\Http\Request::create('/api/sulfa/investment','GET');
+                $request->attributes->set('ahmed_user_id',1);
+                $sulfa=(new App\Http\Controllers\Api\SulfaInvestmentController)->show($request)->getData(true);
+                $dinar=(new App\Http\Controllers\Api\DinarInvestmentController)->index($request)->getData(true);
+            } finally { Illuminate\Support\Facades\DB::rollBack(); }
+            file_put_contents($case.'/api-data.json',json_encode(['sulfa'=>$sulfa,'dinar'=>$dinar],JSON_THROW_ON_ERROR));chmod($case.'/api-data.json',0600);
+            echo "FUTURE_INCOME_CURRENT_ACCOUNT_DATA_READ_WITHOUT_PERSISTENT_WRITES\n";
+            PHP
+            cd "$ROOT/ahmed-mobile"
+            node <<'JS'
+            const fs=require('fs'),path=require('path'),assert=require('assert'),vm=require('vm'),{createRequire}=require('module');
+            const root=process.env.AHMED_INCOME_ROOT,folder=process.env.AHMED_INCOME_CASE,mobile=path.join(root,'ahmed-mobile');
+            const liveRequire=createRequire(path.join(mobile,'package.json')),babel=liveRequire('@babel/core');
+            const staged=path.join(folder,'staged');
+            for(const name of ['AppShell.js','FutureMonthlyIncomeScreen.js','futureMonthlyIncomeData.js']){
+              const source=fs.readFileSync(path.join(staged,name),'utf8');
+              babel.transformSync(source,{filename:path.join(mobile,name),configFile:path.join(mobile,'babel.config.js'),babelrc:false});
+              if(name==='AppShell.js') assert(!source.includes('#S-121'),'Screen identifier was not removed');
+            }
+            const compiled=babel.transformSync(fs.readFileSync(path.join(staged,'futureMonthlyIncomeData.js'),'utf8'),{filename:path.join(mobile,'futureMonthlyIncomeData.js'),configFile:path.join(mobile,'babel.config.js'),babelrc:false,plugins:[liveRequire.resolve('@babel/plugin-transform-modules-commonjs')]}).code;
+            const m={exports:{}};
+            new vm.Script('(function(require,module,exports){'+compiled+'\n})').runInThisContext()(liveRequire,m,m.exports);
+            const actual=JSON.parse(fs.readFileSync(path.join(folder,'api-data.json'),'utf8'));
+            const capital=Number(actual.sulfa.data.platform_snapshot.outstanding_investments);
+            const dinarCapital=Number(actual.dinar.summary.total_investment);
+            assert(Number.isFinite(capital)&&Number.isFinite(dinarCapital));
+            (async()=>{
+              const result=await m.exports.fetchFutureIncomeData({apiUrl:'https://ahmed.pm.sa/api',headers:{},includeFinance:false,fetcher:async(url)=>({ok:true,json:async()=>url.endsWith('/sulfa/investment')?actual.sulfa:url.endsWith('/dinar/investments')?actual.dinar:url.includes('/ta3meed/')?{data:{summary:{ta3meed:1}}}:{data:[],summary:{}}})});
+              assert.strictEqual(result.values.sulfa.amount,Math.round(capital*0.105/12*100)/100);
+              assert.strictEqual(result.values.dinar.amount,dinarCapital*0.12/12);
+              assert.deepStrictEqual(result.failed,[]);
+              console.log('FUTURE_INCOME_COMPILED_SCREEN_AND_CURRENT_CAPITAL_VERIFIED');
+            })().catch(error=>{console.error(error.message);process.exitCode=1;});
+            JS
+            python3 - <<'PY'
+            import os,pathlib,hashlib,tempfile
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE'])
+            expected={'ahmed-mobile/AppShell.js': '86413cb2814d2a82e2e884d27e32b3a2167f3eaf868214231c8b85a6de12f56d', 'ahmed-mobile/FutureMonthlyIncomeScreen.js': '0b07ceb826b79efe1ea1bef139ba90340f5eba9369f339da0de4fb37b816e33f', 'ahmed-mobile/futureMonthlyIncomeData.js': '75dc26a5b969084701b2699696486834ee93c87e85d2960846299cb9484fcbeb'}
+            owner=(root/'ahmed-mobile/AppShell.js').stat()
+            for name,digest in expected.items():
+                live=root/name
+                if live.exists():
+                    old=live.read_bytes();allowed={digest,'394f31bb82c429c1385d8951b62d6c7b92004fbcfe2657a8ca83c6c603729e36'} if name.endswith('/AppShell.js') else {digest}
+                    assert hashlib.sha256(old).hexdigest() in allowed,'Source changed during verification'
+                    backup=case/(live.name+'.before')
+                    if not backup.exists(): backup.write_bytes(old);os.chmod(str(backup),0o600)
+                fd,temp=tempfile.mkstemp(prefix='.future-income-',dir=str(live.parent))
+                try:
+                    with os.fdopen(fd,'wb') as stream: stream.write((case/'staged'/live.name).read_bytes());stream.flush();os.fsync(stream.fileno())
+                    os.chmod(temp,0o644);os.chown(temp,owner.st_uid,owner.st_gid);os.replace(temp,str(live))
+                finally:
+                    if os.path.exists(temp): os.unlink(temp)
+            print('FUTURE_INCOME_ONLY_THREE_SCOPED_MOBILE_FILES_UPDATED')
+            PY
+            RUNTIME="$(dirname "$ROOT")"
+            mkdir -p "$RUNTIME/.cache" "$RUNTIME/.tmp"
+            export CI=1 BROWSER=none EXPO_NO_TELEMETRY=1 EXPO_NO_DEVTOOLS=1 REACT_NATIVE_PACKAGER_HOSTNAME=ahmed.pm.sa
+            export XDG_CACHE_HOME="$RUNTIME/.cache" TMPDIR="$RUNTIME/.tmp" TMP="$RUNTIME/.tmp" TEMP="$RUNTIME/.tmp"
+            python3 - <<'PY'
+            import os,pathlib,subprocess,signal,time
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT'])
+            pids=subprocess.run(['lsof','-tiTCP:8082','-sTCP:LISTEN'],stdout=subprocess.PIPE,universal_newlines=True).stdout.split()
+            for pid in pids:
+                assert os.path.realpath('/proc/'+pid+'/cwd')==str(root/'ahmed-mobile')
+                command=pathlib.Path('/proc/'+pid+'/cmdline').read_bytes().replace(b'\0',b' ').decode()
+                assert 'expo start' in command and '8082' in command
+            for pid in pids: os.kill(int(pid),signal.SIGTERM)
+            remaining=''
+            for attempt in range(20):
+                remaining=subprocess.run(['lsof','-tiTCP:8082','-sTCP:LISTEN'],stdout=subprocess.PIPE,universal_newlines=True).stdout.strip()
+                if not remaining: break
+                time.sleep(0.5)
+            assert not remaining,'Expo port did not close'
+            PY
+            nohup npx expo start --clear --go --host lan --port 8082 > "$CASE/expo-income.log" 2>&1 </dev/null &
+            echo $! > "$RUNTIME/ahmed-expo-8082.pid"
+            READY=0
+            for ATTEMPT in $(seq 1 45); do
+              if curl -fsS --max-time 2 http://127.0.0.1:8082/status | grep -q 'packager-status:running'; then READY=1; break; fi
+              sleep 1
+            done
+            if [ "$READY" -ne 1 ]; then tail -50 "$CASE/expo-income.log"; exit 1; fi
+            python3 - <<'PY'
+            import subprocess,re
+            bundle=subprocess.check_output(['curl','-fsS','--max-time','180','http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0']).decode('utf-8')
+            decoded=re.sub(r'\\u([0-9a-fA-F]{4})',lambda m:chr(int(m.group(1),16)),bundle)
+            for marker in ['future-income-redesign-v1','future-income-summary','future-income-total','fetchFutureIncomeData','outstanding_investments','التقدير السنوي','تفاصيل المصدر']:
+                assert marker in decoded,'Expo delivered an old page: '+marker
+            assert '#S-121' not in decoded,'Removed screen identifier is still delivered'
+            print('FUTURE_INCOME_EXPO_GO_DELIVERY_VERIFIED')
+            PY
+            if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/web-build" > "$CASE/web-build.log" 2>&1; then tail -60 "$CASE/web-build.log"; exit 1; fi
+            python3 - <<'PY'
+            import os,pathlib,shutil,tempfile,re,subprocess,hashlib
+            root=pathlib.Path(os.environ['AHMED_INCOME_ROOT']);case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);build=case/'web-build'
+            html=(build/'index.html').read_text()
+            for attr in ['src','href']:
+                for prefix in ['/_expo/','/assets/']: html=html.replace(attr+'="'+prefix,attr+'="/webapp'+prefix)
+            (build/'index.html').write_text(html)
+            for dest in [root/'ahmed-mobile/dist-web',root/'ahmed-api/public/webapp']:
+                dest.mkdir(parents=True,exist_ok=True)
+                for source in build.rglob('*'):
+                    if not source.is_file() or source.relative_to(build)==pathlib.Path('index.html'): continue
+                    target=dest/source.relative_to(build);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(str(source),str(target));os.chmod(str(target),0o644)
+                    folder=target.parent
+                    while True:
+                        os.chmod(str(folder),0o755)
+                        if folder==dest: break
+                        folder=folder.parent
+                previous=case/('before-'+dest.parent.name+'-index.html')
+                if (dest/'index.html').exists() and not previous.exists(): previous.write_bytes((dest/'index.html').read_bytes());os.chmod(str(previous),0o600)
+                fd,temp=tempfile.mkstemp(prefix='.sulfa-income-index-',dir=str(dest))
+                with os.fdopen(fd,'wb') as stream: stream.write(html.encode())
+                os.chmod(temp,0o644);os.replace(temp,str(dest/'index.html'))
+            scripts=re.findall(r'<script[^>]+src="([^"]+)"',html);assert scripts
+            for src in scripts:
+                if '/_expo/' not in src: continue
+                url='https://ahmed.pm.sa'+src if src.startswith('/') else 'https://ahmed.pm.sa/webapp/'+src
+                body=subprocess.check_output(['curl','-fsS','--max-time','30',url])
+                local=root/'ahmed-api/public'/src.lstrip('/') if src.startswith('/') else root/'ahmed-api/public/webapp'/src
+                assert hashlib.sha256(body).hexdigest()==hashlib.sha256(local.read_bytes()).hexdigest()
+                decoded=re.sub(r'\\u([0-9a-fA-F]{4})',lambda m:chr(int(m.group(1),16)),body.decode())
+                assert 'future-income-redesign-v1' in decoded and 'تفاصيل المصدر' in decoded and '#S-121' not in decoded,'Served web is stale'
+            print('FUTURE_INCOME_PUBLIC_WEB_VERIFIED')
+            PY
+            if [ ! -f "$CASE/native-update.json" ]; then
+              if ! npx eas-cli update --channel production --platform all --environment production --message "Rebuild future income with compact source cards and monthly annual summary" --non-interactive --json > "$CASE/native-update.json" 2> "$CASE/native-update.log"; then rm -f "$CASE/native-update.json"; tail -50 "$CASE/native-update.log"; exit 1; fi
+            fi
+            python3 - <<'PY'
+            import os,pathlib,json,subprocess
+            case=pathlib.Path(os.environ['AHMED_INCOME_CASE']);updates=json.loads((case/'native-update.json').read_text())
+            assert {x['platform'] for x in updates}=={'ios','android'} and all(x['runtimeVersion']=='1.0.19' for x in updates)
+            for name,url,data,expected in [('health','https://ahmed.pm.sa/api/health',None,200),('invalid-login','https://ahmed.pm.sa/api/ahmed/session',{'username':'__income_health_check__','password':'not-a-real-password'},422),('protected-session','https://ahmed.pm.sa/api/ahmed/session',None,401)]:
+                out=case/(name+'.json');cmd=['curl','-sS','--max-time','30','-H','Accept: application/json','-o',str(out),'-w','%{http_code}',url]
+                if data is not None: cmd+=['-H','Content-Type: application/json','--data',json.dumps(data)]
+                actual=int(subprocess.check_output(cmd,universal_newlines=True));json.loads(out.read_text());os.chmod(str(out),0o600)
+                assert actual==expected,'Unexpected authentication response';print('FUTURE_INCOME_HTTP_VERIFIED',name,actual)
+            result={'complete':True,'source_commit':os.environ['AHMED_INCOME_COMMIT'],'platforms':sorted(x['platform'] for x in updates),'group':updates[0]['group'],'database_modified':False,'expo_go_verified':True}
+            (case/'complete.json').write_text(json.dumps(result));os.chmod(str(case/'complete.json'),0o600)
+            print('FUTURE_INCOME_PUBLISHED',json.dumps(result,sort_keys=True))
+            PY
