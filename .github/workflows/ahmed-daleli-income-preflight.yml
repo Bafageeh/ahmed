@@ -33,7 +33,7 @@ jobs:
             for rel in ['ahmed-api/app/Http/Controllers/Api/MonthlyIncomeController.php','ahmed-mobile/FutureMonthlyIncomeScreen.js','ahmed-mobile/futureMonthlyIncomeData.js','ahmed-mobile/AppShell.js']:
              p=root/rel;report['ahmed_sources'][rel]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
             if com.exists():
-             paths=[com/'com-api/app/Http/Controllers/Api/ComAdminController.php',com/'com-mobile/App.js',com/'com-mobile/App.tsx',com/'com-api/routes/api.php',com/'com-api/routes/web.php',com/'com-mobile/app/index.tsx',com/'com-mobile/src/app/index.tsx']
+             paths=[com/'com-mobile/index.js',com/'com-api/app/Http/Controllers/Api/ComAdminController.php',com/'com-mobile/App.js',com/'com-mobile/App.tsx',com/'com-api/routes/api.php',com/'com-api/routes/web.php',com/'com-mobile/app/index.tsx',com/'com-mobile/src/app/index.tsx']
              for base in ['api','public/api','com-api/public/api']:
               for rel in ['v1/integrations/ahmed/summary/index.php','integrations/ahmed/summary/index.php']:paths.append(com/base/rel)
              for p in (com/'com-api/app').rglob('*.php'):
