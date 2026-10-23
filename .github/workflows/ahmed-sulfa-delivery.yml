@@ -1,0 +1,91 @@
+name: Ahmed Sulfa Delivery
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-sulfa-delivery.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ahmed-sulfa-delivery
+  cancel-in-progress: false
+
+jobs:
+  inspect-delivered-bundles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect source, delivered web, native update and Expo bundles
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 8m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            CASE="/home/pmsa/secure-backups/ahmed/sulfa-delivery-20261023"
+            export AHMED_SULFA_ROOT="$ROOT" AHMED_SULFA_CASE="$CASE"
+            mkdir -p "$CASE"
+            chmod 700 "$CASE"
+            python3 - <<'PY'
+            import os,pathlib,subprocess,json,hashlib,re,email
+            root=pathlib.Path(os.environ['AHMED_SULFA_ROOT']);case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
+            previous=pathlib.Path('/home/pmsa/secure-backups/ahmed/sulfa-sync-20261023')
+            def fetch(url,headers=None,timeout=150):
+                cmd=['curl','-fsS','--max-time',str(timeout)]
+                for h in headers or []: cmd+=['-H',h]
+                return subprocess.check_output(cmd+[url])
+            def markers(body):
+                return {k:(k.encode('utf-8') in body or k.encode('utf-16le') in body) for k in ['platform_snapshot','الاستثمارات القائمة','ملخص سلفة','حركة موثقة','إجمالي المبالغ المستثمرة']}
+            plan=json.loads((previous/'import-plan.json').read_text())
+            for item in plan['source_files']:
+                body=(root/item['path']).read_bytes()
+                print('DELIVERY_SOURCE',json.dumps({'path':item['path'],'matches_saved_source':hashlib.sha256(body).hexdigest()==item['target_sha256'],'markers':markers(body)},ensure_ascii=True))
+            html=fetch('https://ahmed.pm.sa/webapp/').decode('utf-8')
+            scripts=re.findall(r'<script[^>]+src="([^"]+)"',html)
+            for src in scripts:
+                if '/_expo/' not in src: continue
+                url='https://ahmed.pm.sa'+src if src.startswith('/') else 'https://ahmed.pm.sa/webapp/'+src
+                body=fetch(url);(case/'served-web.js').write_bytes(body)
+                print('DELIVERY_WEB',json.dumps({'asset':src,'sha256':hashlib.sha256(body).hexdigest(),'markers':markers(body)},ensure_ascii=True))
+            for platform in ['android','ios']:
+                headers=['Accept: application/expo+json,application/json','expo-protocol-version: 1','expo-platform: '+platform,'expo-runtime-version: 1.0.19','expo-channel-name: production']
+                try:
+                    raw=fetch('https://u.expo.dev/85d588cc-f97a-4907-a248-0e778d83d674',headers)
+                    manifest=json.loads(raw.decode('utf-8'))
+                    (case/(platform+'-manifest.json')).write_text(json.dumps(manifest));os.chmod(str(case/(platform+'-manifest.json')),0o600)
+                    asset=manifest.get('launchAsset',{}).get('url')
+                    body=fetch(asset) if asset else b''
+                    (case/(platform+'-launch-asset')).write_bytes(body)
+                    print('DELIVERY_NATIVE',json.dumps({'platform':platform,'id':manifest.get('id'),'runtime':manifest.get('runtimeVersion'),'metadata':manifest.get('metadata'),'asset_bytes':len(body),'markers':markers(body)},ensure_ascii=True))
+                except Exception as error:
+                    print('DELIVERY_NATIVE_INSPECT_ERROR',platform,type(error).__name__)
+            try:
+                print('DELIVERY_EXPO_STATUS',fetch('http://127.0.0.1:8082/status',timeout=5).decode('utf-8').strip())
+                pids=subprocess.check_output(['lsof','-tiTCP:8082','-sTCP:LISTEN'],universal_newlines=True).split()
+                for pid in pids:
+                    print('DELIVERY_EXPO_PROCESS',json.dumps({'pid':pid,'cwd':os.readlink('/proc/'+pid+'/cwd'),'command':pathlib.Path('/proc/'+pid+'/cmdline').read_bytes().replace(b'\0',b' ').decode('utf-8')},ensure_ascii=True))
+                body=fetch('http://127.0.0.1:8082/index.bundle?platform=android&dev=true&hot=false&lazy=false&minify=false&transform.engine=hermes&transform.bytecode=0',timeout=180)
+                (case/'expo-android.js').write_bytes(body)
+                print('DELIVERY_EXPO_BUNDLE',json.dumps({'sha256':hashlib.sha256(body).hexdigest(),'bytes':len(body),'markers':markers(body)},ensure_ascii=True))
+            except Exception as error:
+                print('DELIVERY_EXPO_INSPECT_ERROR',type(error).__name__)
+            PY
+            /usr/local/bin/php "$CASE/../sulfa-sync-20261023/staged/scripts/verify-sulfa-observations.php" "$ROOT" "$ROOT/ahmed-api/database/database.sqlite" "$ROOT/ahmed-api/app/Http/Controllers/Api/SulfaInvestmentController.php" "$CASE/../sulfa-sync-20261023/import-plan.json"
+            cd "$ROOT/ahmed-mobile"
+            export CI=1 EXPO_NO_TELEMETRY=1
+            if npx eas-cli build:list --platform android --limit 3 --non-interactive --json > "$CASE/android-builds.json" 2> "$CASE/android-builds.log"; then
+              python3 - <<'PY'
+            import os,pathlib,json
+            case=pathlib.Path(os.environ['AHMED_SULFA_CASE'])
+            for build in json.loads((case/'android-builds.json').read_text()):
+                print('DELIVERY_ANDROID_BUILD',json.dumps({k:build.get(k) for k in ['id','status','appVersion','appBuildVersion','runtimeVersion','channel','createdAt']},ensure_ascii=True))
+            PY
+            fi
