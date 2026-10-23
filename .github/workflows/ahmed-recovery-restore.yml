@@ -95,6 +95,7 @@ jobs:
             (case/"source-restore-verification.json").write_text(json.dumps({"restored":True,"source_files_changed":len(changed),"verified_build_inputs":len(proof)-2,"investor_profit_retained":True,"database_restored":False}))
             print("SOURCE_RESTORED_VERIFIED",json.dumps({"source_files_changed":len(changed),"verified_build_inputs":len(proof)-2,"investor_profit_retained":True,"database_restored":False}))
             PY
+            umask 022
             cd "$ROOT/ahmed-api"
             /usr/local/bin/php artisan optimize:clear
             cat > "$CASE/api-read-check.php" <<'PHP'
