@@ -140,7 +140,7 @@ jobs:
             done
             if [ "$READY" -ne 1 ]; then tail -60 "$CASE/expo-recovered.log"; exit 1; fi
             echo "EXPO_RECOVERED_AND_READY"
-            if ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/recovered-web-build" > "$CASE/web-recovery-build.log" 2>&1; then
+            if [ ! -f "$CASE/recovered-web-build/index.html" ] && ! EXPO_BASE_URL=/webapp npx expo export --platform web --output-dir "$CASE/recovered-web-build" > "$CASE/web-recovery-build.log" 2>&1; then
               tail -80 "$CASE/web-recovery-build.log"; exit 1
             fi
             python3 - <<'PY'
@@ -156,7 +156,12 @@ jobs:
                 dest.mkdir(parents=True,exist_ok=True)
                 for p in build.rglob("*"):
                     if not p.is_file() or p.relative_to(build)==pathlib.Path("index.html"): continue
-                    target=dest/p.relative_to(build);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(str(p),str(target))
+                    target=dest/p.relative_to(build);target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(str(p),str(target));os.chmod(str(target),0o644)
+                    folder=target.parent
+                    while str(folder).startswith(str(dest)):
+                        os.chmod(str(folder),0o755)
+                        if folder==dest: break
+                        folder=folder.parent
                 previous=case/("before-"+dest.name+"-index.html")
                 if (dest/"index.html").is_file() and not previous.exists(): shutil.copy2(str(dest/"index.html"),str(previous))
                 handle,temp=tempfile.mkstemp(prefix=".recovered-index-",dir=str(dest))
@@ -168,7 +173,8 @@ jobs:
             for src in scripts:
                 if "/_expo/" not in src: continue
                 url="https://ahmed.pm.sa"+src if src.startswith("/") else "https://ahmed.pm.sa/webapp/"+src
-                remote=urllib.request.urlopen(url,timeout=30).read()
+                print("VERIFY_WEB_ASSET",url)
+                remote=__import__("subprocess").check_output(["curl","-fsS","--retry","2","--max-time","30",url])
                 local=root/"ahmed-api/public"/src.lstrip("/") if src.startswith("/") else root/"ahmed-api/public/webapp"/src
                 assert hashlib.sha256(remote).hexdigest()==hashlib.sha256(local.read_bytes()).hexdigest(),"Served web bundle does not match restored build"
             print("WEB_RESTORE_VERIFIED")
