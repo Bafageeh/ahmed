@@ -2,18 +2,25 @@
   "expo": {
     "name": "Ahmed",
     "slug": "ahmed",
-    "version": "1.0.19",
+    "version": "1.0.20",
     "orientation": "portrait",
     "scheme": "ahmed",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1e104e"
-    },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#1e104e",
+          "imageWidth": 200
+        }
+      ],
+      "expo-font"
     ],
     "updates": {
       "enabled": true,
@@ -37,7 +44,7 @@
     },
     "android": {
       "package": "sa.pm.ahmed",
-      "versionCode": 20,
+      "versionCode": 21,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e104e"
@@ -45,7 +52,7 @@
     },
     "extra": {
       "apiUrl": "https://ahmed.pm.sa/api",
-      "buildLabel": "2026-08-22-auto-updates-v1",
+      "buildLabel": "2026-10-24-sdk58",
       "eas": {
         "projectId": "85d588cc-f97a-4907-a248-0e778d83d674"
       }
