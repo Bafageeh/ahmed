@@ -1,0 +1,4 @@
+<resources>
+  <string name="ahmed_income_widget_name">أحمد · الدخل المتوقع</string>
+  <string name="ahmed_income_widget_description">الدخل الشهري والسنوي ومصادره، مع إمكانية إخفاء المبلغ</string>
+</resources>

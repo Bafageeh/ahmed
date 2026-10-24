@@ -1,3 +1,5 @@
+import { synchronizeIncomeWidgetSession } from './incomeWidgetSync';
+
 let currentSession = null;
 
 export function setCurrentAhmedUserId(id) {
@@ -6,16 +8,19 @@ export function setCurrentAhmedUserId(id) {
   } else {
     currentSession = null;
   }
+  synchronizeIncomeWidgetSession(currentSession);
 }
 
 export function setCurrentAhmedSession(session) {
   currentSession = session && session.user && session.sessionKey
     ? { user: session.user, sessionKey: String(session.sessionKey) }
     : null;
+  synchronizeIncomeWidgetSession(currentSession);
 }
 
 export function clearCurrentAhmedSession() {
   currentSession = null;
+  synchronizeIncomeWidgetSession(null);
 }
 
 export function getCurrentAhmedSession() {
