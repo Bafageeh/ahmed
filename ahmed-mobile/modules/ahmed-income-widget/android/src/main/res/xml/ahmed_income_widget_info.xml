@@ -1,0 +1,9 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="280dp" android:minHeight="220dp"
+  android:minResizeWidth="250dp" android:minResizeHeight="190dp"
+  android:targetCellWidth="4" android:targetCellHeight="3"
+  android:initialLayout="@layout/ahmed_income_widget"
+  android:previewLayout="@layout/ahmed_income_widget"
+  android:description="@string/ahmed_income_widget_description"
+  android:updatePeriodMillis="1800000" android:resizeMode="horizontal|vertical"
+  android:widgetCategory="home_screen" />

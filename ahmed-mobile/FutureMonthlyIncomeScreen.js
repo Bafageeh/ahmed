@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
-import { ArrowDownWideNarrow, Check, ChevronLeft, Eye, EyeOff, Plus, X } from 'lucide-react-native';
+import { ActivityIndicator, Alert, AppState, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ArrowDownWideNarrow, Check, ChevronLeft, Eye, EyeOff, LayoutGrid, Plus, X } from 'lucide-react-native';
 import UiIcon from './UiIcon';
+import { publishIncomeWidgetSnapshot, requestIncomeWidgetPin } from './incomeWidgetSync';
 import { ahmedUserHeaders, getCurrentAhmedUser } from './ahmedCurrentUser';
 import { fetchFutureIncomeData, FUTURE_INCOME_SOURCES, incomeNumber, parseIncomeAmount } from './futureMonthlyIncomeData';
 
@@ -98,6 +99,19 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
     })),
     ...snapshot.manual.map((row) => ({ id: `manual-${row.id}`, recordId: row.id, name: row.name, amount: incomeNumber(row.amount), kind: 'manual', readonly: Boolean(row.readonly), icon: 'wallet', color: '#58736F', tint: '#EDF5F3', caption: 'دخل مضاف يدويًا', formula: 'المبلغ الشهري الذي أدخلته لهذا المصدر', stale: snapshot.failed.includes('manual') })),
   ], [snapshot, includeFinance]);
+  useEffect(() => {
+    if (snapshot.updatedAt) publishIncomeWidgetSnapshot(snapshot, getCurrentAhmedUser()?.id);
+  }, [snapshot]);
+
+  const addHomeWidget = async () => {
+    const result = await requestIncomeWidgetPin();
+    if (result === 'requested') return;
+    Alert.alert('ودجت الدخل المتوقع', result === 'unavailable'
+      ? 'يلزم تثبيت نسخة تطبيق أحمد التي تدعم الودجت. لا يمكن إضافته من Expo Go.'
+      : result === 'signed-out' ? 'سجّل الدخول إلى حسابك أولًا.'
+      : 'اضغط مطولًا على الشاشة الرئيسية، ثم الأدوات، واختر أحمد · الدخل المتوقع.');
+  };
+
   const total = sources.reduce((sum, source) => sum + incomeNumber(source.amount), 0);
   const positiveTotal = sources.reduce((sum, source) => sum + Math.max(0, incomeNumber(source.amount)), 0);
   const activeCount = sources.filter((source) => incomeNumber(source.amount) > 0).length;
@@ -166,6 +180,7 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
       <View style={s.composition} accessibilityLabel="توزيع الدخل بين المصادر">{sources.filter((source) => source.amount > 0).map((source) => <View key={source.id} style={{ flex: source.amount / (positiveTotal || 1), backgroundColor: source.color, minWidth: 2 }} />)}</View>
       <View style={s.heroFoot}><Text style={s.updated}>{refreshing ? 'جارٍ التحديث…' : snapshot.updatedAt ? `آخر تحديث ${snapshot.updatedAt.toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' })}` : 'بانتظار البيانات'}</Text><View style={s.sourceCount}><Text style={s.sourceCountText}>{loading ? '—' : activeCount} مصادر نشطة</Text><UiIcon name="stats" size={15} color="#A9C8BE" /></View></View>
     </View>
+    {Platform.OS === 'android' ? <Pressable accessibilityRole="button" accessibilityLabel="إضافة ودجت الدخل إلى الشاشة الرئيسية" onPress={addHomeWidget} style={pressStyle(s.widgetButton)} testID="income-widget-add"><Text style={s.widgetButtonText}>إضافة ودجت للشاشة الرئيسية</Text><LayoutGrid size={18} color="#157B6E" /></Pressable> : null}
     {snapshot.failed.length > 0 && !loading ? <View style={s.warning}><View style={s.warningText}><Text style={s.warningTitle}>بعض المصادر لم تُحدّث</Text><Text style={s.warningCopy}>احتفظنا بآخر قيم متاحة. قد يكون الإجمالي غير مكتمل.</Text></View><Pressable accessibilityRole="button" accessibilityLabel="إعادة تحديث المصادر" onPress={() => reloadAll(true)} style={s.retry}><UiIcon name="refresh" color="#94652D" size={20} /></Pressable></View> : null}
     <View style={s.sectionHeading}><Text style={s.sourceSubtitle}>{visibleSources.length} مصادر</Text><Text style={s.sectionTitle}>مصادر الدخل</Text></View>
     <View style={s.toolbar}>
@@ -212,6 +227,8 @@ export default function FutureMonthlyIncomeScreen({ onBack }) {
 }
 
 const s = StyleSheet.create({
+  widgetButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, borderRadius: 15, backgroundColor: '#E8F2ED', borderWidth: 1, borderColor: '#CFE3D8', marginTop: -10, marginBottom: 20 },
+  widgetButtonText: { color: '#176B5D', fontSize: 13, fontWeight: '700', textAlign: 'right' },
   safe: { flex: 1, backgroundColor: '#F4F7F6' },
   pageHeader: { flexDirection: 'row', direction: 'ltr', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18, maxWidth: 760, width: '100%', alignSelf: 'center' },
   iconButton: { width: 44, height: 44, borderRadius: 15, backgroundColor: '#FFF', borderColor: '#E2E9E6', borderWidth: 1, alignItems: 'center', justifyContent: 'center' },

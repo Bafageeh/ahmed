@@ -1,0 +1,40 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@+id/income_widget_root" android:layout_width="match_parent" android:layout_height="match_parent"
+  android:orientation="vertical" android:layoutDirection="ltr" android:background="@drawable/ahmed_income_background"
+  android:padding="16dp">
+  <LinearLayout android:layout_width="match_parent" android:layout_height="38dp" android:orientation="horizontal" android:gravity="center_vertical" android:layoutDirection="ltr">
+    <LinearLayout android:layout_width="wrap_content" android:layout_height="36dp" android:orientation="horizontal" android:background="@drawable/ahmed_income_unselected" android:padding="2dp">
+      <TextView android:id="@+id/income_widget_annual" android:layout_width="52dp" android:layout_height="match_parent"
+        android:text="سنوي" android:textSize="12sp" android:textColor="#B7D2C9" android:gravity="center" android:fontFamily="sans-serif-medium" android:background="@drawable/ahmed_income_unselected"
+        android:contentDescription="عرض الدخل السنوي" />
+      <TextView android:id="@+id/income_widget_monthly" android:layout_width="52dp" android:layout_height="match_parent"
+        android:text="شهري" android:textSize="12sp" android:textColor="#174F46" android:gravity="center" android:fontFamily="sans-serif-medium" android:background="@drawable/ahmed_income_selected"
+        android:contentDescription="عرض الدخل الشهري" />
+    </LinearLayout>
+    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="دخل متوقع  ●" android:textColor="#A5D3BF" android:textSize="12sp" android:gravity="right" android:fontFamily="sans-serif-medium" />
+  </LinearLayout>
+  <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:orientation="vertical" android:gravity="center_vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="30dp" android:orientation="horizontal" android:gravity="center_vertical" android:layoutDirection="ltr">
+      <ImageView android:id="@+id/income_widget_eye" android:layout_width="36dp" android:layout_height="30dp" android:padding="6dp" android:src="@drawable/ahmed_income_eye" android:contentDescription="إخفاء المبلغ" />
+      <TextView android:id="@+id/income_widget_title" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        android:text="إجمالي الدخل الشهري" android:textColor="#B5D3C7" android:textSize="14sp" android:gravity="right" android:fontFamily="sans-serif" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:orientation="horizontal" android:gravity="right|center_vertical" android:layoutDirection="ltr">
+      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ر.س" android:textSize="14sp" android:textColor="#B5D3C7" android:layout_marginRight="10dp" />
+      <TextView android:id="@+id/income_widget_amount" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:gravity="center_vertical|right"
+        android:autoSizeTextType="uniform" android:autoSizeMinTextSize="18sp" android:autoSizeMaxTextSize="36sp" android:autoSizeStepGranularity="2sp" android:text="—" android:textColor="#FFFFFF" android:textSize="36sp" android:textStyle="bold" android:fontFamily="sans-serif" android:includeFontPadding="false" android:singleLine="true" android:textDirection="ltr" />
+    </LinearLayout>
+    <TextView android:id="@+id/income_widget_hint" android:layout_width="match_parent" android:layout_height="wrap_content"
+      android:text="افتح تطبيق أحمد وسجّل الدخول" android:textColor="#A8C9BB" android:textSize="10sp" android:gravity="right" android:maxLines="2" android:layout_marginTop="2dp" />
+  </LinearLayout>
+  <ImageView android:id="@+id/income_widget_bar" android:layout_width="match_parent" android:layout_height="5dp" android:scaleType="fitXY"
+    android:background="#355D59" android:contentDescription="توزيع مصادر الدخل" android:layout_marginBottom="10dp" />
+  <LinearLayout android:layout_width="match_parent" android:layout_height="22dp" android:orientation="horizontal" android:gravity="center_vertical" android:layoutDirection="ltr">
+    <TextView android:id="@+id/income_widget_updated" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+      android:text="بانتظار المزامنة" android:textColor="#97BBAA" android:textSize="9sp" android:gravity="left" android:singleLine="true" />
+    <TextView android:id="@+id/income_widget_count" android:layout_width="wrap_content" android:layout_height="wrap_content"
+      android:text="الدخل المتوقع" android:textColor="#B4D4C5" android:textSize="10sp" android:gravity="right" android:singleLine="true" />
+    <ImageView android:layout_width="17dp" android:layout_height="17dp" android:layout_marginLeft="6dp" android:src="@drawable/ahmed_income_chart" android:contentDescription="مصادر الدخل" />
+  </LinearLayout>
+</LinearLayout>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Linking, Modal, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import StatsDashboardScreen from './StatsDashboardScreen';
 import AccountsHomeScreen from './AccountsHomeScreen';
@@ -53,6 +53,17 @@ export default function AppShell({ currentUser, onLogout }) {
   const [activeTab, setActiveTab] = useState('wealth');
   const [investmentScreen, setInvestmentScreen] = useState('list');
   const isAdmin = Boolean(currentUser?.is_admin);
+
+  useEffect(() => {
+    const openWidget = (url) => {
+      if (['ahmed://future-income', 'ahmed://future-income/'].includes(String(url || '').split(/[?#]/)[0].toLowerCase())) {
+        setActiveTab('futureMonthlyIncome'); setInvestmentScreen('list');
+      }
+    };
+    Linking.getInitialURL().then(openWidget).catch(() => {});
+    const subscription = Linking.addEventListener('url', ({ url }) => openWidget(url));
+    return () => subscription.remove();
+  }, []);
 
   const openTab = async (tab) => {
     if (tab === 'secureVault') {
