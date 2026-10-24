@@ -55,6 +55,9 @@ const result = (amount) => ({ values: { investment: { amount } }, manual: [], fa
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 (async () => {
+  native.owner = 'previous-account'; native.data = { monthlyAmount: 999 };
+  sync.synchronizeIncomeWidgetSession(null);
+  assert.equal(native.data, null, 'Starting without a session clears any persisted widget snapshot');
   sync.synchronizeIncomeWidgetSession({ user: { id: 1, is_admin: true }, sessionKey: 'test-token-A' });
   assert.equal(pending[0].options.includeFinance, true);
   sync.synchronizeIncomeWidgetSession({ user: { id: 2, is_admin: false }, sessionKey: 'test-token-B' });

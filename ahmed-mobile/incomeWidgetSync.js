@@ -53,7 +53,7 @@ export function refreshIncomeWidget() {
 
 export function synchronizeIncomeWidgetSession(session) {
   const next = session?.user?.id && session?.sessionKey ? session : null;
-  if (next?.user?.id === activeSession?.user?.id && next?.sessionKey === activeSession?.sessionKey && Boolean(next?.user?.is_admin) === Boolean(activeSession?.user?.is_admin)) return;
+  if (next && next.user.id === activeSession?.user?.id && next.sessionKey === activeSession?.sessionKey && Boolean(next.user.is_admin) === Boolean(activeSession?.user?.is_admin)) return;
   generation += 1;
   activeSession = next;
   lastSnapshot = { values: {}, manual: [], failed: [], updatedAt: null };
