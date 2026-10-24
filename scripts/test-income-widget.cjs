@@ -10,6 +10,8 @@ const data = buildIncomeWidgetData({ values: { investment: { amount: 120.125 }, 
 assert.equal(data.monthlyAmount, 125.13);
 assert.equal(data.annualAmount, 1501.5, 'Annual total uses the unrounded monthly total');
 assert.equal(data.activeCount, 2);
+const negative = buildIncomeWidgetData({ values: { investment: { amount: -10.005 } }, manual: [], updatedAt: 1000 }, definitions, false, 2);
+assert.equal(negative.monthlyText, '-10.01', 'Widget rounding must match the income screen for negative totals');
 assert.equal(data.ownerId, '2');
 assert.equal(data.updatedAt, 1000);
 assert(Math.abs(data.segments.reduce((sum, segment) => sum + segment.fraction, 0) - 1) < 1e-9);

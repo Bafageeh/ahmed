@@ -11,10 +11,13 @@ function buildIncomeWidgetData(snapshot, definitions, includeFinance, userId) {
   const positive = sources.filter((source) => source.amount > 0);
   const positiveTotal = positive.reduce((sum, source) => sum + source.amount, 0);
   const updatedAt = snapshot.updatedAt instanceof Date ? snapshot.updatedAt.getTime() : finite(snapshot.updatedAt);
+  const monthlyText = total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const annualText = (total * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return {
     ownerId: String(userId),
-    monthlyAmount: Math.round((total + Number.EPSILON) * 100) / 100,
-    annualAmount: Math.round((total * 12 + Number.EPSILON) * 100) / 100,
+    monthlyAmount: Number(monthlyText.replace(/,/g, '')),
+    annualAmount: Number(annualText.replace(/,/g, '')),
+    monthlyText, annualText,
     activeCount: positive.length,
     updatedAt,
     stale: Boolean(snapshot.failed?.length),

@@ -81,7 +81,7 @@ internal object IncomeWidgetState {
     val amount = snapshot.optDouble(if (annual) "annualAmount" else "monthlyAmount", 0.0)
 
     views.setTextViewText(R.id.income_widget_title, if (annual) "التقدير السنوي" else "إجمالي الدخل الشهري")
-    views.setTextViewText(R.id.income_widget_amount, when { !ready -> "—"; hidden -> "••••••"; else -> money.format(amount) })
+    views.setTextViewText(R.id.income_widget_amount, when { !ready -> "—"; hidden -> "••••••"; else -> snapshot.optString(if (annual) "annualText" else "monthlyText", money.format(amount)) })
     views.setTextViewTextSize(R.id.income_widget_amount, TypedValue.COMPLEX_UNIT_SP, if (narrow) 28f else 36f)
     views.setTextViewText(R.id.income_widget_hint, when {
       owner.isEmpty() -> "افتح تطبيق أحمد وسجّل الدخول"
