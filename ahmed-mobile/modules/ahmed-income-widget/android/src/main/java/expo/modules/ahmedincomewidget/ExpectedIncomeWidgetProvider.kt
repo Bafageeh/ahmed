@@ -74,7 +74,7 @@ internal object IncomeWidgetState {
     val annual = prefs.getBoolean("annual_$id", false)
     val hidden = prefs.getBoolean("hidden_$id", false)
     val options = manager.getAppWidgetOptions(id)
-    val compact = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 210) < 190
+    val compact = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 220) < 220
     val narrow = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 320) < 290
     val views = RemoteViews(context.packageName, R.layout.ahmed_income_widget)
     val money = NumberFormat.getNumberInstance(Locale.US).apply { minimumFractionDigits = 2; maximumFractionDigits = 2 }
