@@ -16,11 +16,14 @@ internal object SmsCompletionNotifier {
   private const val CHANNEL = "ta3meed-sms-payments"
 
   @Synchronized fun show(context: Context, owner: String, outcomes: JSONArray) {
+    // Share the store monitor with bindUser/disable/capture for the entire read-modify-write.
+    // Otherwise an account switch could be overwritten by a stale notification configuration.
+    synchronized(SmsCaptureStore) {
     val state = SmsCaptureStore.config(context)
     if (!state.optBoolean("enabled") || state.optString("owner") != owner) return
     if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
     val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    manager.createNotificationChannel(NotificationChannel(CHANNEL, "سداد تعميد التلقائي", NotificationManager.IMPORTANCE_HIGH))
+    if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "سداد تعميد التلقائي", NotificationManager.IMPORTANCE_HIGH))
     val handled = state.optJSONObject("notifiedPayments") ?: org.json.JSONObject()
     for (i in 0 until outcomes.length()) {
       val outcome = outcomes.optJSONObject(i) ?: continue
@@ -32,7 +35,7 @@ internal object SmsCompletionNotifier {
         addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         putExtra("ahmed_sms_message_id", id)
       }
-      val builder = Notification.Builder(context, CHANNEL)
+      val builder = (if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context))
         .setSmallIcon(android.R.drawable.stat_notify_more)
         .setContentTitle(content.optString("title"))
         .setContentText(content.optString("body"))
@@ -45,6 +48,7 @@ internal object SmsCompletionNotifier {
       handled.put(id.toString(), true)
       state.put("notifiedPayments", handled)
       SmsCaptureStore.saveConfig(context, state)
+    }
     }
   }
 }
