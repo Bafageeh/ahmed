@@ -1,0 +1,84 @@
+name: Ahmed Ta3meed capital installment safeguard
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-ta3meed-sms-installment.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-ta3meed-sms-installment
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, openssl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check mobile permissions, old-version gating and account switches
+        run: node --experimental-vm-modules scripts/test-sms-client.cjs
+      - name: Install API dependencies for isolated tests
+        working-directory: ahmed-api
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Verify new-message cutoff, sender, encryption, retries and account isolation
+        env:
+          APP_ENV: testing
+          CACHE_STORE: array
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php scripts/test-sms-capture.php "$GITHUB_WORKSPACE"
+  deliver:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Apply the verified parser safeguard without replacing other source
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 3m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            python3 - <<'PYCODE'
+            from pathlib import Path
+            import os,hashlib,subprocess,tempfile,urllib.request,urllib.error
+            root=Path(os.environ['AHMED_SMS_ROOT']);name='ahmed-api/app/Support/Ta3meedSmsParser.php';live=root/name
+            oldhash='4fdac0ef3a724cf938eba1500e0be106c67e5ffb57261a22143b2c115af54b80';newhash='005c98c754147ccc33ae428a0d7fde19b4fee3bd14bcea5d65354d3642850acb'
+            assert hashlib.sha256(live.read_bytes()).hexdigest() in {oldhash,newhash},'Production parser changed since review'
+            data=subprocess.check_output(['git','show',os.environ['AHMED_SMS_SHA']+':'+name],cwd=root)
+            assert hashlib.sha256(data).hexdigest()==newhash
+            case=root.parent.parent/'secure-backups/ahmed/ta3meed-sms-installment-20261026';case.mkdir(parents=True,exist_ok=True);case.chmod(0o700)
+            backup=case/'parser-before.php'
+            if not backup.exists():backup.write_bytes(live.read_bytes());backup.chmod(0o600)
+            owner=live.stat();fd,tmp=tempfile.mkstemp(prefix='.sms-parser-',dir=live.parent)
+            try:
+                with os.fdopen(fd,'wb') as f:f.write(data);f.flush();os.fsync(f.fileno())
+                subprocess.run(['/usr/local/bin/php','-l',tmp],check=True)
+                os.chmod(tmp,0o644)
+                if os.geteuid()==0:os.chown(tmp,owner.st_uid,owner.st_gid)
+                assert hashlib.sha256(live.read_bytes()).hexdigest() in {oldhash,newhash}
+                os.replace(tmp,live)
+            finally:
+                if os.path.exists(tmp):os.unlink(tmp)
+            assert hashlib.sha256(live.read_bytes()).hexdigest()==newhash
+            for path,expected in [('/health',200),('/sms/messages',401)]:
+                try:r=urllib.request.urlopen(urllib.request.Request('https://ahmed.pm.sa/api'+path,headers={'Accept':'application/json'}),timeout=20)
+                except urllib.error.HTTPError as e:r=e
+                assert r.code==expected
+            print('TA3MEED_CAPITAL_INSTALLMENT_SAFEGUARD_VERIFIED '+newhash)
+            PYCODE

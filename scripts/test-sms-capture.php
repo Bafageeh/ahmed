@@ -154,6 +154,8 @@ verifySms(DB::table('investment_opportunities')->where('id', 10)->value('actual_
 verifySms(DB::table('investment_opportunities')->where('id', 10)->value('start_date') === '2026-01-01', 'payment processing preserves investment funding dates');
 [$early] = receivePayment('تم سداد مبكر للفرصة INV-TEST11 بقيمة 1,050.00 ريال');
 verifySms($early['status'] === 'applied' && DB::table('investment_opportunities')->where('id', 11)->value('actual_profit_amount') == 50, 'early settlement uses actual received profit');
+[$installment] = receivePayment('تم إيداع دفعة من رأس المال والأرباح للفرصة INV-TEST14 بقيمة 100 ريال');
+verifySms($installment['status'] === 'applied' && DB::table('investment_opportunities')->where('id', 14)->value('status') === 'partial_received', 'a capital-and-profit installment cannot close an opportunity prematurely');
 $receiptCount = DB::table('ta3meed_receipts')->count();
 foreach ([
     ['تم سداد الفرصة INV-OTHER12 بقيمة 100 ريال', 'opportunity_not_found'],

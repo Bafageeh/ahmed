@@ -53,7 +53,8 @@ final class Ta3meedSmsParser
         $cents = ((int) $whole * 100) + (int) str_pad($fraction, 2, '0');
         if ($cents <= 0) return $result;
         $result['amount'] = $cents / 100;
-        $partial = preg_match('/جزئي|جزء|partial/iu', $text);
+        // A capital-and-profit installment must not prematurely close the investment.
+        $partial = preg_match('/جزئي|جزء|دفعة|قسط|partial/iu', $text);
         $early = preg_match('/(?:تسوية|سداد)\s+مبكر|early\s+settlement/iu', $text);
         $full = preg_match('/سداد\s+(?:كلي|كامل)|بالكامل|fully\s+repaid|final\s+repayment/iu', $text)
             || (! $partial && preg_match('/ر[اأ]س\s+المال\s+و[اأإ]?ل?ارباح|ر[اأ]س\s+المال\s+والأرباح/u', $text));
