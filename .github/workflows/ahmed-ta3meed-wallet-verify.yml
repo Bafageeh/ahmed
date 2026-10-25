@@ -1,0 +1,29 @@
+name: Verify published Ta3meed wallet app update
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-ta3meed-wallet-verify.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Read official production channel and published wallet update group
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 4m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="${{ github.sha }}" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-wallet-20261026"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/verify-ta3meed-wallet-update.py" > "$AHMED_SMS_CASE/verify-native-update.py"
+            python3 "$AHMED_SMS_CASE/verify-native-update.py"

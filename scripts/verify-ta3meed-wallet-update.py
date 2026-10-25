@@ -25,13 +25,6 @@ def inspect(args, name):
     return json.loads((case / (name + '.json')).read_text())
 
 
-channel = inspect(['channel:view', 'production'], 'wallet-production-channel')
-group_view = inspect(['update:view', group], 'wallet-published-group')
-serialized_group = json.dumps(group_view)
-assert all(item['id'] in serialized_group for item in updates), 'Published platform update not found in the update group'
-assert channel.get('name') == 'production' and not channel.get('isPaused', False), 'Production channel is unavailable'
-
-
 def walk(value):
     if isinstance(value, dict):
         yield value
@@ -40,6 +33,17 @@ def walk(value):
     elif isinstance(value, list):
         for nested in value:
             yield from walk(nested)
+
+
+channel = inspect(['channel:view', 'production'], 'wallet-production-channel')
+group_view = inspect(['update:view', group], 'wallet-published-group')
+serialized_group = json.dumps(group_view)
+assert all(item['id'] in serialized_group for item in updates), 'Published platform update not found in the update group'
+production_records = [node for node in walk(channel) if node.get('name') == 'production']
+print('EAS_WALLET_MANAGEMENT_STRUCTURE ' + json.dumps({'channel_fields': list(channel), 'production_records': [{'name': node.get('name'), 'isPaused': node.get('isPaused'), 'fields': list(node)} for node in production_records], 'group_type': type(group_view).__name__}), flush=True)
+assert production_records and not any(node.get('isPaused', False) for node in production_records), 'Production channel is unavailable'
+
+
 
 
 branch_ids = set()
@@ -56,7 +60,7 @@ serialized_channel = json.dumps(channel)
 same_updates = any(item['id'] in serialized_channel for item in updates) or group in serialized_channel
 same_branch = any(value in serialized_channel for value in branch_ids)
 if not same_branch and branch_names:
-    active_branches = channel.get('updateBranches') or channel.get('branches') or []
+    active_branches = channel.get('updateBranches') or channel.get('branches') or channel.get('branchInfo') or []
     same_branch = bool(branch_names.intersection(node.get('name') for node in walk(active_branches)))
 assert same_updates or same_branch, 'Production channel does not reference the published wallet branch'
 result = {'web_url': 'https://ahmed.pm.sa/webapp/', 'runtime': '1.0.23', 'production_channel_verified': True,
