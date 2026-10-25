@@ -15,6 +15,7 @@ class IncomingSmsReceiver : BroadcastReceiver() {
       val slot = intent.getIntExtra("slot", -1)
       parts.groupBy { it.originatingAddress ?: "" }.values.forEach { group ->
         val first = group.first()
+        if (!SmsCaptureStore.allowedSender(first.originatingAddress ?: "")) return@forEach
         SmsCaptureStore.capture(context, first.originatingAddress ?: "", group.joinToString("") { it.messageBody ?: "" }, first.timestampMillis, subscription, slot)
       }
       SmsUploadJob.schedule(context)

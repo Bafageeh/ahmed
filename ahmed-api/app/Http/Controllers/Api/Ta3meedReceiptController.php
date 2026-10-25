@@ -11,6 +11,51 @@ use Illuminate\Support\Facades\Schema;
 
 class Ta3meedReceiptController extends Controller
 {
+    /** Internal, account-scoped entry point; never registered as a public route. */
+    public function recordIncomingSms(int $userId, array $parsed, string $message, string $date): array
+    {
+        return DB::transaction(function () use ($userId, $parsed, $message, $date) {
+            $review = fn ($reason) => ['status' => 'needs_review', 'reason' => $reason];
+            $platformId = DB::table('investment_platforms')->where('code', 'ta3meed')->value('id');
+            if (! $platformId || $userId <= 0) return $review('opportunity_not_found');
+            $reference = str_replace('-', '', $this->cleanOpportunityReference($parsed['reference_number']));
+            $matches = DB::table('investment_opportunities')->where('platform_id', $platformId)->where('user_id', $userId)
+                ->whereRaw('LOWER(REPLACE(reference_number, \'-\', \'\')) = ?', [strtolower($reference)])
+                ->orderBy('id')->lockForUpdate()->limit(2)->get();
+            if ($matches->count() !== 1) return $review($matches->isEmpty() ? 'opportunity_not_found' : 'ambiguous_opportunity');
+            $investment = $matches->first();
+            $receipts = DB::table('ta3meed_receipts')->where('opportunity_id', $investment->id)->where('user_id', $userId);
+            $same = (clone $receipts)->where('amount', $parsed['amount'])->get();
+            foreach ($same as $receipt) {
+                if (substr((string) $receipt->receipt_date, 0, 10) === $date && $receipt->source_message && \App\Support\Ta3meedSmsParser::normalize($receipt->source_message) === \App\Support\Ta3meedSmsParser::normalize($message)) {
+                    return ['status' => 'duplicate', 'reason' => 'receipt_already_exists', 'receipt_id' => $receipt->id];
+                }
+                if (substr((string) $receipt->receipt_date, 0, 10) === $date) return $review('possible_duplicate_receipt');
+            }
+            if (in_array(strtolower($investment->status), ['received', 'completed', 'closed', 'settled', 'cancelled', 'canceled'], true)
+                || (clone $receipts)->whereIn('receipt_type', ['full', 'early_settlement'])->exists()) return $review('opportunity_already_closed');
+            $paid = (int) round((float) (clone $receipts)->sum('amount') * 100);
+            $principal = (int) round((float) $investment->principal_amount * 100);
+            $due = $principal + (int) round((float) $investment->expected_profit_amount * 100);
+            $amount = (int) round((float) $parsed['amount'] * 100);
+            $meta = json_decode($investment->metadata ?: '{}', true) ?: [];
+            if ((int) round((float) ($meta['ta3meed_received_total'] ?? 0) * 100) > $paid + 1) return $review('receipt_balance_mismatch');
+            if ($amount <= 0 || $due <= $paid || $amount > $due - $paid + 1) return $review('amount_exceeds_remaining');
+            $final = in_array($parsed['receipt_type'], ['full', 'early_settlement'], true);
+            if ($final && $amount < max(0, $principal - $paid)) return $review('final_amount_below_remaining_principal');
+            $receipt = $this->record($investment, ['amount' => $parsed['amount'], 'receipt_type' => $parsed['receipt_type'],
+                'receipt_date' => $date, 'reference_number' => $investment->reference_number,
+                'source_message' => $message, 'notes' => 'سداد مسجل تلقائيًا من رسالة Ta3meed',
+                'force_complete' => $final, 'allow_duplicate' => false, 'deduplicate_date' => true]);
+            if ($final || $paid + $amount >= $due - 1) {
+                $dates = [];
+                foreach (['completed_at', 'received_at'] as $column) if (Schema::hasColumn('investment_opportunities', $column)) $dates[$column] = $date;
+                if ($dates) DB::table('investment_opportunities')->where('id', $investment->id)->update($dates);
+            }
+            return ['status' => $receipt['duplicate'] ? 'duplicate' : 'applied', 'receipt_id' => $receipt['id']];
+        });
+    }
+
     public function parse(Request $request)
     {
         $data = $request->validate(['message' => ['required', 'string']]);
@@ -353,6 +398,8 @@ class Ta3meedReceiptController extends Controller
     private function record($investment, array $data): array
     {
         return DB::transaction(function () use ($investment, $data) {
+            // Serialize automatic ingestion with existing manual receipt writers.
+            $investment = DB::table('investment_opportunities')->where('id', $investment->id)->lockForUpdate()->first();
             $amount = round((float) $data['amount'], 2);
             $receiptType = $data['receipt_type'] ?? 'partial';
             $receiptDate = $data['receipt_date'] ?? now()->toDateString();
@@ -371,6 +418,7 @@ class Ta3meedReceiptController extends Controller
 
                 if ($sourceMessage) {
                     $duplicateQuery->where('source_message', $sourceMessage);
+                    if ($data['deduplicate_date'] ?? false) $duplicateQuery->where('receipt_date', $receiptDate);
                 } else {
                     $duplicateQuery->where('receipt_date', $receiptDate);
                 }

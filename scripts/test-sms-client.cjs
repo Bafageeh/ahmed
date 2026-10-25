@@ -9,7 +9,7 @@ async function fixture(platform = 'android', available = true) {
   const state = { owner: '', enabled: false, permission: async () => 'granted', fetch: null };
   const native = {
     bindUser(owner) { calls.push(['owner', owner]); if (owner !== state.owner) state.enabled = false; state.owner = owner; },
-    async getStatus() { return { installationId: 'ef1884e5-81b3-4806-985e-d3817819604b', enabled: state.enabled, pendingCount: 0 }; },
+    async getStatus() { return { installationId: 'ef1884e5-81b3-4806-985e-d3817819604b', enabled: state.enabled, pendingCount: 0, capturePolicyVersion: state.policyVersion ?? 2 }; },
     async syncNow() { calls.push(['sync']); return this.getStatus(); },
     async enableCapture(...args) { calls.push(['enable', ...args]); state.enabled = true; return this.getStatus(); },
     async disableCapture() { calls.push(['disable']); state.enabled = false; return this.getStatus(); },
@@ -70,8 +70,11 @@ const user = (id) => ({ user: { id }, sessionKey: 'signed-in-' + id });
   f = await fixture();
   f.api.synchronizeSmsCaptureSession(user(1));
   let releasePermission;
-  f.state.permission = () => new Promise((resolve) => { releasePermission = resolve; });
+  let permissionStarted;
+  const permissionReady = new Promise((resolve) => { permissionStarted = resolve; });
+  f.state.permission = () => new Promise((resolve) => { releasePermission = resolve; permissionStarted(); });
   const pending = f.api.enableSmsCapture();
+  await permissionReady;
   f.api.synchronizeSmsCaptureSession(user(2));
   releasePermission('granted');
   await assert.rejects(pending);
@@ -92,5 +95,11 @@ const user = (id) => ({ user: { id }, sessionKey: 'signed-in-' + id });
   assert.equal(f.state.owner, '2');
   assert.equal(f.state.enabled, false);
   assert.equal(f.calls.filter((x) => x[0] === 'enable').length, 0);
+  f = await fixture();
+  f.state.policyVersion = 1;
+  f.api.synchronizeSmsCaptureSession(user(1));
+  await assert.rejects(f.api.enableSmsCapture(), /Ta3meed/);
+  assert.equal(f.state.enabled, false, 'the old all-sender receiver cannot be re-enabled');
+  assert.equal(f.calls.filter((x) => x[0] === 'fetch' || x[0] === 'permission').length, 0);
   console.log('SMS_CLIENT_PERMISSION_OFFLINE_STOP_AND_ACCOUNT_SWITCH_CHECKS_PASSED');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

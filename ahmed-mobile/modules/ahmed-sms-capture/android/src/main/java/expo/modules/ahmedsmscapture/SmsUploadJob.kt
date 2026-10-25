@@ -94,6 +94,13 @@ class SmsUploadJob : JobService() {
           val sent = messages.map { it.getString("client_id") }.toSet()
           val ids = (0 until acknowledged.length()).map { acknowledged.getString(it) }.filter { it in sent }
           if (ids.isEmpty()) return true
+          val outcomes = response.optJSONArray("outcomes") ?: JSONArray()
+          val ours = JSONArray()
+          for (i in 0 until outcomes.length()) {
+            val outcome = outcomes.optJSONObject(i) ?: continue
+            if (outcome.optString("client_id") in ids) ours.put(outcome)
+          }
+          SmsCompletionNotifier.show(context, owner, ours)
           SmsCaptureStore.acknowledge(context, owner, ids)
         } finally { connection.disconnect() }
       }

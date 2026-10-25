@@ -5,6 +5,8 @@ import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 import { disableSmsCapture, enableSmsCapture, fetchSmsArchive, getSmsCaptureStatus, syncSmsCapture } from './smsCapture';
 
 const date = (value) => value ? new Date(Number(value)).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short', calendar: 'gregory' }) : '—';
+const analysisLabel = (item) => ({ applied: 'تم تسجيل السداد', duplicate: 'مسجلة سابقًا · دون تكرار', needs_review: 'تحتاج مراجعة', non_payment: 'محفوظة · ليست سدادًا', archived: 'محفوظة', pending: 'جارٍ التحليل' }[item?.analysis?.status] || 'محفوظة');
+const reasonLabel = (reason) => ({ opportunity_not_found: 'لم توجد فرصة مطابقة في حسابك.', ambiguous_opportunity: 'يوجد أكثر من تطابق لرقم الفرصة.', missing_or_ambiguous_reference: 'رقم الفرصة ناقص أو غير واضح.', missing_or_ambiguous_amount: 'مبلغ السداد ناقص أو يحتمل أكثر من قيمة.', possible_duplicate_receipt: 'توجد دفعة بالقيمة والتاريخ نفسيهما؛ راجعها قبل الإضافة.', opportunity_already_closed: 'الفرصة مغلقة أو مسددة سابقًا.', amount_exceeds_remaining: 'المبلغ يتجاوز المتبقي في سجل الفرصة.', final_amount_below_remaining_principal: 'مبلغ السداد النهائي أقل من رأس المال المتبقي.', receipt_balance_mismatch: 'رصيد الفرصة يحتاج مطابقة مع سجل الدفعات.', invalid_payment_date: 'تاريخ السداد غير صحيح.', ambiguous_payment_date: 'تاريخ السداد غير واضح.', conflicting_payment_type: 'نوع السداد غير واضح.', payment_not_confirmed: 'الرسالة لا تؤكد إتمام السداد.', processing_failed: 'حُفظت الرسالة وتعذر إكمال التسجيل؛ راجع سجل الدفعات.' }[reason] || '');
 
 export default function SmsArchiveScreen({ onBack }) {
   const [status, setStatus] = useState({ supported: false, enabled: false, pendingCount: 0 });
@@ -45,7 +47,7 @@ export default function SmsArchiveScreen({ onBack }) {
       const next = await (enabled ? enableSmsCapture() : disableSmsCapture());
       if (mounted.current) {
         setStatus(next);
-        setMessage(enabled ? 'تم التفعيل. ستُحفظ الرسائل الجديدة مع المرسل من الآن.' : 'تم إيقاف استقبال الرسائل الجديدة.');
+        setMessage(enabled ? 'تم التفعيل: Ta3meed فقط. يُسجل السداد الواضح تلقائيًا مع تنبيه عند إتمامه.' : 'تم إيقاف استقبال الرسائل الجديدة.');
       }
     } catch (error) { if (mounted.current) setMessage(error.message); }
     finally { if (mounted.current) setBusy(false); }
@@ -68,9 +70,11 @@ export default function SmsArchiveScreen({ onBack }) {
         <View style={styles.captureCard}>
           <View style={styles.captureRow}>
             {busy ? <ActivityIndicator color="#6d28d9" /> : <Switch accessibilityLabel="استقبال الرسائل الجديدة تلقائيًا" value={Boolean(status.enabled && status.permissionGranted)} disabled={!status.supported} onValueChange={toggle} trackColor={{ false: '#cbd5e1', true: '#7c3aed' }} thumbColor="#fff" />}
-            <View style={styles.captureText}><Text style={styles.captureTitle}>استقبال الرسائل الجديدة تلقائيًا</Text><Text style={styles.secondary}>{status.enabled && status.permissionGranted ? 'مفعّل · الحفظ مع المرسل ووقت الوصول' : 'متوقف'}</Text></View>
+            <View style={styles.captureText}><Text style={styles.captureTitle}>رسائل Ta3meed والسداد التلقائي</Text><Text style={styles.secondary}>{status.enabled && status.permissionGranted ? 'مفعّل · Ta3meed فقط' : 'متوقف'}</Text></View>
           </View>
-          <Text style={styles.explanation}>عند التفعيل تُحفظ الرسائل الجديدة ومرسلها في حسابك على السيرفر للتحليل. يبدأ الحفظ من وقت التفعيل فقط.</Text>
+          <Text style={styles.explanation}>يُحفظ المرسل والنص ووقت الوصول لرسائل Ta3meed الجديدة فقط، ثم يُسجل السداد الواضح في الفرصة وحصص المستثمرين ويصلك تنبيه بالإتمام. تُمنع الدفعات المكررة، والرسالة غير الواضحة تُحفظ للمراجعة.</Text>
+          {status.requiresUpdate ? <Text style={styles.note}>ثبّت تحديث أندرويد لتطبيق فلتر Ta3meed قبل الحفظ والتنبيه في الخلفية.</Text> : null}
+          {status.enabled && status.notificationPermissionGranted === false ? <TouchableOpacity onPress={() => Linking.openSettings()}><Text style={styles.link}>فعّل إذن الإشعارات لاستلام تنبيه الإتمام</Text></TouchableOpacity> : null}
           {!status.supported ? <Text style={styles.note}>{Platform.OS === 'android' ? 'ثبّت نسخة APK المحدثة لتفعيل الاستقبال التلقائي.' : 'الاستقبال التلقائي متاح على أندرويد. يمكنك تصفح الأرشيف من هنا.'}</Text> : null}
           {status.supported && !status.permissionGranted ? <TouchableOpacity onPress={() => Linking.openSettings()}><Text style={styles.link}>إعدادات صلاحية الرسائل</Text></TouchableOpacity> : null}
           {status.enabled ? <Text style={styles.note}>يعمل الاستقبال بالخلفية. إيقاف التطبيق إجباريًا يوقفه حتى فتحه مجددًا. وقد يحجب النظام بعض رسائل التحقق.</Text> : null}
@@ -86,6 +90,7 @@ export default function SmsArchiveScreen({ onBack }) {
           <TouchableOpacity key={String(item.id)} onPress={() => setSelected(item)} style={styles.messageRow} accessibilityLabel={`رسالة من ${item.sender || 'مرسل غير معروف'}، ${date(item.received_at_ms)}`}>
             <View style={styles.rowHeader}><Text style={styles.time}>{date(item.received_at_ms)}</Text><Text style={styles.sender} numberOfLines={1}>{item.sender || 'مرسل غير معروف'}</Text></View>
             <Text numberOfLines={2} style={styles.preview}>{item.body || 'رسالة فارغة'}</Text>
+            <Text style={[styles.analysis, item.analysis?.status === 'applied' ? styles.applied : item.analysis?.status === 'needs_review' ? styles.review : null]}>{analysisLabel(item)}</Text>
           </TouchableOpacity>
         ))}
         {hasMore ? <TouchableOpacity onPress={() => load(true)} style={styles.more}><Text style={styles.link}>عرض رسائل أقدم</Text></TouchableOpacity> : null}
@@ -96,6 +101,10 @@ export default function SmsArchiveScreen({ onBack }) {
           <Text style={styles.fieldLabel}>المرسل</Text><Text selectable style={styles.detailSender}>{selected?.sender || 'مرسل غير معروف'}</Text>
           <Text style={styles.fieldLabel}>وقت الوصول</Text><Text style={styles.detailTime}>{date(selected?.received_at_ms)}</Text>
           {selected?.sim_slot != null ? <Text style={styles.detailTime}>الشريحة: {Number(selected.sim_slot) + 1}</Text> : null}
+          <Text style={styles.fieldLabel}>حالة السداد</Text><Text style={styles.analysis}>{analysisLabel(selected)}</Text>
+          {selected?.analysis?.reference_number ? <Text selectable style={styles.detailTime}>الفرصة: {selected.analysis.reference_number}</Text> : null}
+          {selected?.analysis?.amount != null ? <Text style={styles.detailTime}>المبلغ: {Number(selected.analysis.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ر.س</Text> : null}
+          {reasonLabel(selected?.analysis?.reason) ? <Text style={styles.note}>{reasonLabel(selected.analysis.reason)}</Text> : null}
           <ScrollView style={styles.bodyScroll}><Text selectable style={styles.body}>{selected?.body || 'رسالة فارغة'}</Text></ScrollView>
           <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(`${selected?.sender || ''}\n${selected?.body || ''}`); setMessage('تم نسخ الرسالة مع المرسل.'); setSelected(null); }} style={styles.copy}><Text style={styles.copyText}>نسخ الرسالة مع المرسل</Text></TouchableOpacity>
         </View></View>
@@ -111,6 +120,7 @@ const styles = StyleSheet.create({
   captureCard: { backgroundColor: '#fff', padding: 14, borderRadius: 18, borderWidth: 1, borderColor: '#e9eaf0' }, captureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, captureText: { flex: 1, alignItems: 'flex-end' },
   captureTitle: { fontSize: 15, color: '#172033', fontWeight: '800', textAlign: 'right' }, secondary: { marginTop: 4, color: '#6b7280', fontSize: 12, textAlign: 'right' }, explanation: { marginTop: 12, color: '#475569', lineHeight: 21, fontSize: 12, textAlign: 'right' },
   note: { color: '#64748b', fontSize: 11, lineHeight: 19, textAlign: 'right', marginTop: 10 }, link: { color: '#6d28d9', fontSize: 13, fontWeight: '700', textAlign: 'right', paddingVertical: 7 },
+  analysis: { color: '#64748b', fontSize: 12, fontWeight: '700', textAlign: 'right', marginTop: 8 }, applied: { color: '#15803d' }, review: { color: '#b45309' },
   metrics: { flexDirection: 'row-reverse', gap: 10, marginTop: 12 }, metric: { flex: 1, borderRadius: 16, backgroundColor: '#fff', padding: 13, alignItems: 'flex-end', borderWidth: 1, borderColor: '#e9eaf0' }, metricValue: { color: '#5b21b6', fontSize: 23, fontWeight: '800' },
   syncTime: { color: '#64748b', fontSize: 11, marginTop: 9, textAlign: 'right' }, feedback: { color: '#5b21b6', backgroundColor: '#ede9fe', borderRadius: 12, overflow: 'hidden', padding: 11, marginTop: 12, textAlign: 'right', fontSize: 12, lineHeight: 21 },
   listHeading: { marginTop: 22, marginBottom: 10, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, listTitle: { fontSize: 16, color: '#172033', fontWeight: '800' },

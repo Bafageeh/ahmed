@@ -16,16 +16,23 @@ export function synchronizeSmsCaptureSession(session) {
   activeSession = next;
   const capture = nativeCapture();
   if (!capture) return;
+  const mine = generation;
   try {
     capture.bindUser(next ? String(next.user.id) : '');
-    if (next) capture.syncNow().catch(() => {});
+    if (next) capture.getStatus().then(async (status) => {
+      if (mine !== generation) return;
+      // Older native receivers collect all senders. Stop until the filtered APK is installed.
+      if (Number(status.capturePolicyVersion || 1) < 2) { await capture.disableCapture(); return; }
+      await capture.syncNow();
+    }).catch(() => {});
   } catch { /* Native SMS availability must not interrupt login or logout. */ }
 }
 
 export async function getSmsCaptureStatus() {
   const capture = nativeCapture();
   if (!capture) return { supported: false, enabled: false, pendingCount: 0 };
-  return { supported: true, ...(await capture.getStatus()) };
+  const status = await capture.getStatus();
+  return { supported: true, ...status, requiresUpdate: Number(status.capturePolicyVersion || 1) < 2 };
 }
 
 export async function enableSmsCapture() {
@@ -34,14 +41,26 @@ export async function enableSmsCapture() {
   if (!activeSession) throw new Error('سجل الدخول أولًا لربط الرسائل بحسابك.');
   const mine = generation;
   const ownerId = String(activeSession.user.id);
+  const status = await capture.getStatus();
+  if (mine !== generation) throw new Error('تغير الحساب. افتح صفحة الرسائل من جديد.');
+  if (Number(status.capturePolicyVersion || 1) < 2) {
+    await capture.disableCapture();
+    throw new Error('ثبّت تحديث أندرويد لتفعيل حفظ Ta3meed فقط والسداد التلقائي.');
+  }
   const permission = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECEIVE_SMS, {
     title: 'استقبال رسائل SMS الجديدة',
-    message: 'يسمح ذلك بحفظ الرسائل الجديدة مع المرسل ووقت الوصول في حسابك للتحليل، من وقت التفعيل.',
+    message: 'يحفظ التطبيق الرسائل الجديدة من Ta3meed فقط مع المرسل ووقت الوصول، ويسجل السداد الواضح تلقائيًا ويُنبهك عند إتمامه.',
     buttonPositive: 'متابعة', buttonNegative: 'إلغاء',
   });
   if (permission !== PermissionsAndroid.RESULTS.GRANTED) throw new Error('لم تُمنح صلاحية استقبال SMS. يمكنك منحها من إعدادات التطبيق.');
   if (mine !== generation || !activeSession || String(activeSession.user.id) !== ownerId) throw new Error('تغير الحساب. افتح صفحة الرسائل من جديد.');
-  const status = await capture.getStatus();
+  if (Number(Platform.Version) >= 33 && PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS) {
+    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS, {
+      title: 'تنبيهات إتمام سداد تعميد', message: 'يسمح بعرض تنبيه بعد تسجيل السداد بنجاح أو عند حاجة الرسالة للمراجعة.',
+      buttonPositive: 'متابعة', buttonNegative: 'إلغاء',
+    });
+    if (mine !== generation) throw new Error('تغير الحساب. لم يتم تفعيل استقبال الرسائل.');
+  }
   const response = await fetch(`${API_URL}/sms/devices`, {
     method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify({ installation_id: status.installationId, label: 'تطبيق أحمد على أندرويد' }),

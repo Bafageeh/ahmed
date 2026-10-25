@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Support\Ta3meedSmsParser;
+use App\Support\Ta3meedSmsProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -53,7 +55,7 @@ class SmsCaptureController extends Controller
 
         // This device token permits SMS ingestion only, never access to account data.
         return response()->json([
-            'data' => ['installation_id' => $device->installation_id, 'capture_from_ms' => (int) $device->capture_from_ms],
+            'data' => ['installation_id' => $device->installation_id, 'capture_from_ms' => (int) $device->capture_from_ms, 'allowed_senders' => ['Ta3meed'], 'capture_policy_version' => 2],
             'upload_token' => $token,
             'server_time_ms' => $serverTime,
         ])->header('Cache-Control', 'no-store, private');
@@ -92,14 +94,24 @@ class SmsCaptureController extends Controller
             'messages.*.sim_slot' => ['nullable', 'integer', 'min:0', 'max:100'],
         ])->validate();
 
-        $accepted = DB::transaction(function () use ($device, $data) {
+        $result = DB::transaction(function () use ($device, $data) {
+            // One account lock serializes matching and deduplication across all its devices.
+            DB::table('users')->where('id', $device->user_id)->lockForUpdate()->first();
             // Serialize with token revocation; a disabled token cannot write a later batch.
             $current = DB::table('sms_capture_devices')->where('id', $device->id)->lockForUpdate()->first();
             abort_unless($current && $current->enabled && hash_equals((string) $current->token_hash, (string) $device->token_hash), 401);
             $accepted = [];
+            $outcomes = [];
+            $ignored = [];
             foreach ($data['messages'] as $message) {
                 $sender = $message['sender'];
-                DB::table('sms_archive_messages')->insertOrIgnore([
+                $accepted[] = $message['client_id'];
+                // Acknowledge excluded senders so an older client's queue can drain without storing them.
+                if (! Ta3meedSmsParser::allowedSender($sender)) {
+                    $ignored[] = $message['client_id'];
+                    continue;
+                }
+                $inserted = DB::table('sms_archive_messages')->insertOrIgnore([
                     'user_id' => $device->user_id, 'device_id' => $device->id,
                     'client_id' => $message['client_id'],
                     'sender' => Crypt::encryptString($sender),
@@ -109,17 +121,31 @@ class SmsCaptureController extends Controller
                     'sent_at_ms' => $message['sent_at_ms'] ?? null,
                     'subscription_id' => $message['subscription_id'] ?? null,
                     'sim_slot' => $message['sim_slot'] ?? null,
+                    'analysis_status' => 'pending',
                     'created_at' => now(), 'updated_at' => now(),
                 ]);
-                // A retry is acknowledged with the same id and never creates another record.
-                $accepted[] = $message['client_id'];
+                $row = DB::table('sms_archive_messages')->where('device_id', $device->id)->where('client_id', $message['client_id'])->first();
+                if ($inserted) {
+                    try {
+                        // A failed update rolls back its receipt changes while retaining the archived SMS.
+                        DB::transaction(fn () => app(Ta3meedSmsProcessor::class)->process($row, $message['body']));
+                    } catch (\Throwable $error) {
+                        DB::table('sms_archive_messages')->where('id', $row->id)->update([
+                            'analysis_status' => 'needs_review', 'analysis_reason' => 'processing_failed', 'analyzed_at' => now(), 'updated_at' => now(),
+                        ]);
+                        logger()->warning('SMS payment analysis failed', ['message_id' => $row->id, 'error_type' => get_class($error)]);
+                    }
+                    $row = DB::table('sms_archive_messages')->where('id', $row->id)->first();
+                }
+                $outcomes[] = Ta3meedSmsProcessor::outcome($row);
             }
             DB::table('sms_capture_devices')->where('id', $device->id)->update(['last_received_at' => now(), 'updated_at' => now()]);
 
-            return $accepted;
+            return ['accepted_client_ids' => $accepted, 'ignored_client_ids' => $ignored, 'outcomes' => $outcomes, 'allowed_senders' => ['Ta3meed'], 'capture_policy_version' => 2];
         });
 
-        return response()->json(['accepted_client_ids' => $accepted])->header('Cache-Control', 'no-store, private');
+        // The transaction has committed before an app can show a completion notification.
+        return response()->json($result)->header('Cache-Control', 'no-store, private');
     }
 
     public function index(Request $request)
@@ -140,6 +166,7 @@ class SmsCaptureController extends Controller
             'body' => Crypt::decryptString($row->body), 'received_at_ms' => (int) $row->received_at_ms,
             'sent_at_ms' => $row->sent_at_ms === null ? null : (int) $row->sent_at_ms,
             'subscription_id' => $row->subscription_id, 'sim_slot' => $row->sim_slot,
+            'analysis' => Ta3meedSmsProcessor::outcome($row),
         ])->values();
 
         return response()->json(['data' => $items, 'total' => $total, 'has_more' => $hasMore])

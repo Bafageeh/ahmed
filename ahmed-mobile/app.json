@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ahmed",
     "slug": "ahmed",
-    "version": "1.0.22",
+    "version": "1.0.23",
     "orientation": "portrait",
     "scheme": "ahmed",
     "userInterfaceStyle": "automatic",
@@ -44,7 +44,7 @@
     },
     "android": {
       "package": "sa.pm.ahmed",
-      "versionCode": 23,
+      "versionCode": 26,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1e104e"
@@ -52,7 +52,7 @@
     },
     "extra": {
       "apiUrl": "https://ahmed.pm.sa/api",
-      "buildLabel": "2026-10-25-new-sms-sender",
+      "buildLabel": "2026-10-26-ta3meed-sms-auto-payment",
       "eas": {
         "projectId": "85d588cc-f97a-4907-a248-0e778d83d674"
       }

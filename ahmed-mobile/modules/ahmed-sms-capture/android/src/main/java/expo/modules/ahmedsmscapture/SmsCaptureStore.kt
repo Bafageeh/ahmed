@@ -21,6 +21,8 @@ internal object SmsCaptureStore {
   private const val KEY_ALIAS = "ahmed.sms.capture.v1"
   private const val CONFIG_FILE = "ahmed-sms-connection.v1"
 
+  fun allowedSender(sender: String): Boolean = sender.trim().equals("Ta3meed", ignoreCase = true)
+
   @Synchronized private fun key(): SecretKey {
     val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     (store.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
@@ -106,6 +108,8 @@ internal object SmsCaptureStore {
   }
 
   @Synchronized fun capture(context: Context, sender: String, body: String, sentAt: Long, subscription: Int, slot: Int) {
+    // Enforce the allowlist before reading configuration, opening SQLite or encrypting content.
+    if (!allowedSender(sender)) return
     val state = config(context)
     val owner = state.optString("owner")
     if (!state.optBoolean("enabled") || owner.isEmpty() || state.optString("token").isEmpty()) return
@@ -127,9 +131,16 @@ internal object SmsCaptureStore {
   }
 
   @Synchronized fun batch(context: Context, owner: String): List<JSONObject> = database(context).use { db ->
-    db.rawQuery("SELECT payload FROM pending WHERE owner = ? ORDER BY id LIMIT 50", arrayOf(owner)).use { cursor ->
+    db.rawQuery("SELECT client_id, payload FROM pending WHERE owner = ? ORDER BY id", arrayOf(owner)).use { cursor ->
       val result = mutableListOf<JSONObject>()
-      while (cursor.moveToNext()) result.add(JSONObject(unseal(cursor.getString(0))))
+      val excluded = mutableListOf<String>()
+      while (cursor.moveToNext()) {
+        val payload = JSONObject(unseal(cursor.getString(1)))
+        if (!allowedSender(payload.optString("sender"))) excluded.add(cursor.getString(0))
+        else if (result.size < 50) result.add(payload)
+      }
+      // Discard excluded pending content retained by older installations, never upload it.
+      excluded.forEach { db.delete("pending", "owner = ? AND client_id = ?", arrayOf(owner, it)) }
       result
     }
   }
@@ -168,6 +179,8 @@ internal object SmsCaptureStore {
       "installationId" to installationId(context), "pendingCount" to count,
       "enabledAt" to state.optLong("enabledAt"), "lastReceivedAt" to state.optLong("lastReceivedAt"),
       "lastUploadedAt" to state.optLong("lastUploadedAt"), "lastError" to state.optString("lastError")
+      ,"capturePolicyVersion" to 2, "allowedSenders" to listOf("Ta3meed"),
+      "notificationPermissionGranted" to (android.os.Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
     )
   }
 }
