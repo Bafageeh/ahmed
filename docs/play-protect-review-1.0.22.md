@@ -1,6 +1,6 @@
 # Play Protect review status — Ahmed 1.0.22
 
-Status: VirusTotal upload completed; appeal form prepared. Submission attempted on 2026-10-25, but Google requires an interactive reCAPTCHA. No successful appeal submission or Google approval has been confirmed.
+Status: Appeal successfully submitted to Google on 2026-10-25. The authenticated form displayed “Your email has been sent”. Google Play Protect approval or removal of the installation block has not been confirmed.
 
 Official appeal form: https://support.google.com/googleplay/android-developer/contact/protectappeals
 
@@ -36,8 +36,10 @@ The owner explicitly authorized sharing this APK with Google and VirusTotal on 2
 - Verified VirusTotal report: https://www.virustotal.com/gui/file/f77346a16586785f812f70cc82ba22672a309441d5b11c433f221b6685e626c9?nocache=1
 - Completed report displayed 1/66 vendors flagging the file: AhnLab-V3, `PUP/Android.Malct.518314`. Other results include undetected, unsupported types, a timeout and failures. This is not a determination that the APK is safe or malicious, and is not Google Play Protect approval.
 - Google's appeal form was populated with the selected contact address, developer name, package and exact APK hash. Supporting text was shortened to the form's 1,000-character maximum (976 characters, including the VirusTotal result).
-- Clicking Submit did not produce a success confirmation. Google displayed “Complete the reCAPTCHA to continue” and an unchecked “I'm not a robot” control.
-- The prepared form is being handed to the owner to complete the interactive verification and Submit. No case number or acceptance is claimed. Reusing the existing live form avoids duplicate submissions.
+- The first submission attempt while signed out displayed “Complete the reCAPTCHA to continue”; it was not a successful submission.
+- On resuming after owner handoff, the existing browser was signed into the selected Google account. The form had cleared, so the authorized fields were restored without changing the APK or appeal scope.
+- The authenticated form was submitted once. Its visible form contents were replaced by the confirmation heading “Your email has been sent”. Submission is confirmed; no case number was shown. Google states that appeal decisions are final and that applicants will not receive a response.
+- No Google approval or lifting of the installation block is claimed. Do not resubmit this appeal merely because the warning remains.
 - No home-computer access, Play Protect disabling or package/signature change was used.
 
 Official warning guidance: https://developers.google.com/android/play-protect/warning-dev-guidance
