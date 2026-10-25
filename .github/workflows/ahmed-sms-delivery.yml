@@ -79,8 +79,8 @@ jobs:
         run: |
           mkdir -p apk-check
           curl --fail --location --retry 3 'https://pm.sa/downloads/ahmed-1.0.21-24-widget.apk' -o apk-check/previous.apk
-          AHMED_APKSIGNER="$(rg --files "$ANDROID_HOME/build-tools" -g apksigner | sort -V | tail -1)"
-          AHMED_AAPT="$(rg --files "$ANDROID_HOME/build-tools" -g aapt | sort -V | tail -1)"
+          AHMED_APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          AHMED_AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)"
           test -n "$AHMED_APKSIGNER"
           test -n "$AHMED_AAPT"
           echo "AHMED_APKSIGNER=$AHMED_APKSIGNER" >> "$GITHUB_ENV"
@@ -181,3 +181,4 @@ jobs:
               assert response.code==200 and int(response.headers.get('Content-Length',0))==p.stat().st_size
             print('SMS_APK_READY '+url+' sha256='+expected)
             PYCODE
+
