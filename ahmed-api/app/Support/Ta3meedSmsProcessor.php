@@ -37,6 +37,8 @@ final class Ta3meedSmsProcessor
             } else {
                 if ($paymentDate > $arrivalDate || $paymentDate < '2000-01-01') {
                     $result = ['status' => 'needs_review', 'reason' => 'invalid_payment_date'];
+                } elseif (Ta3meedWalletLedger::possibleReceiptCreditOverlap((int) $message->user_id, (int) round($parsed['amount'] * 100), $paymentDate)) {
+                    $result = ['status' => 'needs_review', 'reason' => 'possible_duplicate_wallet_transfer'];
                 } else {
                     $result = app(Ta3meedReceiptController::class)->recordIncomingSms((int) $message->user_id, $parsed, $body, $paymentDate);
                 }

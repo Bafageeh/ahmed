@@ -1,0 +1,90 @@
+name: Ahmed Ta3meed wallet cross-source duplicate protection
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-ta3meed-wallet-dedup.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-ta3meed-wallet-dedup
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, openssl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check mobile permissions, old-version gating and account switches
+        run: node --experimental-vm-modules scripts/test-sms-client.cjs
+      - name: Install API dependencies for isolated tests
+        working-directory: ahmed-api
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Verify new-message cutoff, sender, encryption, retries and account isolation
+        env:
+          APP_ENV: testing
+          CACHE_STORE: array
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: php scripts/test-ta3meed-wallet.php "$GITHUB_WORKSPACE"
+  deliver:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Preserve complete source and apply cross-source duplicate checks
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 3m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            python3 - <<'PYCODE'
+            from pathlib import Path
+            import os,json,hashlib,subprocess,tempfile,urllib.request,urllib.error
+            root=Path(os.environ['AHMED_SMS_ROOT']);sha=os.environ['AHMED_SMS_SHA']
+            read=lambda n:subprocess.check_output(['git','show',sha+':'+n],cwd=root)
+            m=json.loads(read('scripts/ta3meed-wallet-dedup-release.json'))
+            for name,expected in m['baseline'].items():
+                assert hashlib.sha256((root/name).read_bytes()).hexdigest() in {expected,m['files'].get(name)},'Production changed: '+name
+                assert hashlib.sha256(read(name)).hexdigest()==m['files'].get(name,expected),'Build differs from reviewed source: '+name
+            case=root.parent.parent/'secure-backups/ahmed/ta3meed-wallet-dedup-20261026';case.mkdir(parents=True,exist_ok=True);case.chmod(0o700)
+            for name,digest in m['files'].items():
+                live=root/name;data=read(name);assert hashlib.sha256(data).hexdigest()==digest
+                backup=case/live.name
+                if not backup.exists():backup.write_bytes(live.read_bytes());backup.chmod(0o600)
+                owner=live.stat();fd,tmp=tempfile.mkstemp(prefix='.wallet-dedup-',dir=live.parent)
+                try:
+                    with os.fdopen(fd,'wb') as f:f.write(data);f.flush();os.fsync(f.fileno())
+                    subprocess.run(['/usr/local/bin/php','-l',tmp],check=True)
+                    os.chmod(tmp,0o644)
+                    if os.geteuid()==0:os.chown(tmp,owner.st_uid,owner.st_gid)
+                    assert hashlib.sha256(live.read_bytes()).hexdigest() in {m['baseline'][name],digest}
+                    os.replace(tmp,live)
+                finally:
+                    if os.path.exists(tmp):os.unlink(tmp)
+                assert hashlib.sha256(live.read_bytes()).hexdigest()==digest
+            for path,expected in [('/health',200),('/ta3meed/wallet',401),('/sms/messages',401)]:
+                try:r=urllib.request.urlopen(urllib.request.Request('https://ahmed.pm.sa/api'+path,headers={'Accept':'application/json'}),timeout=20)
+                except urllib.error.HTTPError as e:r=e
+                assert r.code==expected
+            print('TA3MEED_WALLET_CROSS_SOURCE_DEDUP_VERIFIED files='+str(len(m['baseline'])))
+            PYCODE
+            export AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-wallet-20261026"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/verify-ta3meed-wallet-update.py" > "$AHMED_SMS_CASE/verify-native-update.py"
+            python3 "$AHMED_SMS_CASE/verify-native-update.py"

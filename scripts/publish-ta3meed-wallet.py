@@ -104,31 +104,8 @@ command(['npx', 'eas-cli', 'update', '--channel', 'production', '--platform', 'a
 updates = json.loads((case / 'native-wallet-update.json').read_text())
 assert isinstance(updates, list) and {item['platform'] for item in updates} == {'ios', 'android'}
 assert all(item['runtimeVersion'] == '1.0.23' for item in updates), 'Unexpected native runtime'
-android = next(item for item in updates if item['platform'] == 'android')
-project_id = config['extra']['eas']['projectId']
-manifest_headers = {'expo-platform': 'android', 'expo-runtime-version': '1.0.23', 'expo-channel-name': 'production',
-                    'expo-protocol-version': '1', 'Accept': 'application/expo+json,application/json,multipart/mixed', 'Cache-Control': 'no-cache'}
-manifest = None
-for attempt in range(5):
-    try:
-        body, headers = fetch('https://u.expo.dev/' + project_id, manifest_headers)
-        if 'multipart/' in headers.get('Content-Type', ''):
-            message = BytesParser(policy=policy.default).parsebytes(('Content-Type: ' + headers['Content-Type'] + '\r\nMIME-Version: 1.0\r\n\r\n').encode() + body)
-            parts = [part.get_payload(decode=True) for part in message.iter_parts() if part.get_param('name', header='content-disposition') == 'manifest']
-            assert len(parts) == 1
-            manifest = json.loads(parts[0])
-        else:
-            manifest = json.loads(body)
-        assert manifest['id'].replace('-', '').lower() == android['id'].replace('-', '').lower()
-        launch, _ = fetch(manifest['launchAsset']['url'])
-        assert b'ta3meed-cash-wallet' in launch, 'Native update asset is missing the wallet screen'
-        break
-    except Exception:
-        if attempt == 4:
-            raise
-        time.sleep(12)
-result = {'source_commit': sha, 'web_url': 'https://ahmed.pm.sa/webapp/', 'runtime': '1.0.23',
-          'updates': [{'id': item['id'], 'platform': item['platform'], 'group': item.get('group')} for item in updates],
-          'android_manifest_verified': True}
-(case / 'wallet-publication.json').write_text(json.dumps(result))
-print('TA3MEED_WALLET_WEB_AND_INSTALLED_APP_UPDATE_VERIFIED ' + json.dumps(result), flush=True)
+# The management API is the verification route for anonymous manifest endpoints
+# that reject server inspection clients. Do not retry a bot-policy denial.
+verifier = case / 'verify-native-update.py'
+verifier.write_bytes(subprocess.check_output(['git', 'show', sha + ':scripts/verify-ta3meed-wallet-update.py'], cwd=root))
+subprocess.run(['python3', str(verifier)], cwd=mobile, env=environment, check=True)

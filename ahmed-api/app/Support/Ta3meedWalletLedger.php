@@ -89,4 +89,13 @@ final class Ta3meedWalletLedger
         self::audit($userId, $id, 'created');
         return ['status' => 'applied', 'wallet_entry_id' => $id];
     }
+
+    public static function possibleReceiptCreditOverlap(int $userId, int $cents, string $date): bool
+    {
+        // A generic deposit reference and an opportunity reference describe different namespaces.
+        // Do not infer that they identify distinct cash movements solely from different references.
+        return self::active($userId)->where('e.kind', 'deposit')
+            ->whereRaw('('.self::amountSql().') = ?', [$cents])
+            ->whereRaw(self::dateSql().' = ?', [$date])->exists();
+    }
 }

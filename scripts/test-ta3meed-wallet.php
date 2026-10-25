@@ -104,6 +104,9 @@ verifySms(walletSummary($owner)['summary']['balance_cents'] === $cash, 'reviewed
 [$code, $manual] = walletManual('deposit', '77.00'); verifySms($code === 200, 'manual transfer recorded before a matching SMS'); $cash += 7700;
 [$possible] = receivePayment('تم إيداع مبلغ 77 ريال في محفظتك');
 verifySms($possible['status'] === 'needs_review' && $possible['reason'] === 'possible_duplicate_wallet_transfer', 'a matching manual movement is never counted again from SMS');
+[$possibleReceipt] = receivePayment('تم سداد جزئي للفرصة INV-WALLET20 بقيمة 77 ريال');
+verifySms($possibleReceipt['status'] === 'needs_review' && $possibleReceipt['reason'] === 'possible_duplicate_wallet_transfer'
+    && DB::table('investment_opportunities')->where('id', 20)->value('status') === 'active', 'a repayment arriving after an equal generic deposit is held before either receipt or wallet is changed');
 [$code, $otherDevice] = smsRequest('POST', '/api/sms/devices', ['installation_id' => (string) Str::uuid()], $other);
 [$otherIn] = receivePayment($inPayload['body'], [], ['X-Ahmed-SMS-Token' => $otherDevice['upload_token']]);
 verifySms($otherIn['status'] === 'applied' && walletSummary($other)['summary']['balance_cents'] === 20025, 'reference deduplication and wallet cash are account scoped');

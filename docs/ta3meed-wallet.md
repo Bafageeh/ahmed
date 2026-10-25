@@ -17,4 +17,4 @@ php scripts/test-ta3meed-wallet.php /path/to/ahmed
 node --experimental-vm-modules scripts/test-sms-client.cjs
 ```
 
-The suite includes the existing SMS, receipt and investor tests, plus manual balances, signed cent arithmetic, idempotency, concurrent-edit protection, audit-preserving deletion, account isolation, SMS deposits and withdrawals, duplicate/ambiguous transfers, receipt linkage, and failure rollback. Delivery compares the complete inspected source before applying explicit files. Publication verifies the served web bundle and the actual Android production update manifest and launch asset.
+The suite includes the existing SMS, receipt and investor tests, plus manual balances, signed cent arithmetic, idempotency, concurrent-edit protection, audit-preserving deletion, account isolation, SMS deposits and withdrawals, duplicate/ambiguous transfers, receipt linkage, and failure rollback. Delivery compares the complete inspected source before applying explicit files. Publication verifies the served web bundle and the authenticated EAS production channel, published update group, and installed-runtime compatibility.
