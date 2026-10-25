@@ -1,6 +1,6 @@
-# Play Protect review draft — Ahmed 1.0.22
+# Play Protect review status — Ahmed 1.0.22
 
-Status: prepared for owner review; not submitted.
+Status: VirusTotal upload completed; appeal form prepared. Submission attempted on 2026-10-25, but Google requires an interactive reCAPTCHA. No successful appeal submission or Google approval has been confirmed.
 
 Official appeal form: https://support.google.com/googleplay/android-developer/contact/protectappeals
 
@@ -13,7 +13,7 @@ Official appeal form: https://support.google.com/googleplay/android-developer/co
 - APK: https://pm.sa/downloads/ahmed-sms-1.0.22.apk
 - APK SHA-256: f77346a16586785f812f70cc82ba22672a309441d5b11c433f221b6685e626c9
 - Signing certificate SHA-256: fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c
-- Contact email: to be supplied by the owner.
+- Contact email: selected from the owner's connected account and populated in the form; omitted from this source document.
 
 ## Proposed additional information
 
@@ -29,8 +29,15 @@ Capture can be disabled in the SMS screen, including offline, and is disabled on
 
 The APK's signature matches the previously published Ahmed APK. We request review of this opt-in SMS backup use case and the installation block against Google's applicable policies. We do not claim that passing build or signature checks constitutes Play Protect approval.
 
-## Submission preparation
+## Submission progress
 
-The official form requests an email address, package name, the SHA-256 of the APK uploaded to VirusTotal, and supporting information. A VirusTotal upload/report has not been confirmed. No APK has been uploaded to a new scanning service and no appeal has been submitted as part of preparing this draft. Owner authorization and the intended contact email are needed before external submission.
+The owner explicitly authorized sharing this APK with Google and VirusTotal on 2026-10-25. The exact APK was downloaded, checked against the SHA-256 above, and uploaded to VirusTotal.
+
+- Verified VirusTotal report: https://www.virustotal.com/gui/file/f77346a16586785f812f70cc82ba22672a309441d5b11c433f221b6685e626c9?nocache=1
+- Completed report displayed 1/66 vendors flagging the file: AhnLab-V3, `PUP/Android.Malct.518314`. Other results include undetected, unsupported types, a timeout and failures. This is not a determination that the APK is safe or malicious, and is not Google Play Protect approval.
+- Google's appeal form was populated with the selected contact address, developer name, package and exact APK hash. Supporting text was shortened to the form's 1,000-character maximum (976 characters, including the VirusTotal result).
+- Clicking Submit did not produce a success confirmation. Google displayed “Complete the reCAPTCHA to continue” and an unchecked “I'm not a robot” control.
+- The prepared form is being handed to the owner to complete the interactive verification and Submit. No case number or acceptance is claimed. Reusing the existing live form avoids duplicate submissions.
+- No home-computer access, Play Protect disabling or package/signature change was used.
 
 Official warning guidance: https://developers.google.com/android/play-protect/warning-dev-guidance
