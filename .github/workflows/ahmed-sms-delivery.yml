@@ -54,22 +54,130 @@ jobs:
             git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
             git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/deliver-sms-capture.py" > "$AHMED_SMS_CASE/deliver.py"
             python3 "$AHMED_SMS_CASE/deliver.py"
-      - name: Build signed Android APK and verify its download URL
+  build-apk:
+    needs: deliver
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_API_URL: https://ahmed.pm.sa/api
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx4g
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ahmed-mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Read the installed release signing certificate and version
+        run: |
+          mkdir -p apk-check
+          curl --fail --location --retry 3 'https://pm.sa/downloads/ahmed-1.0.21-24-widget.apk' -o apk-check/previous.apk
+          AHMED_APKSIGNER="$(rg --files "$ANDROID_HOME/build-tools" -g apksigner | sort -V | tail -1)"
+          AHMED_AAPT="$(rg --files "$ANDROID_HOME/build-tools" -g aapt | sort -V | tail -1)"
+          test -n "$AHMED_APKSIGNER"
+          test -n "$AHMED_AAPT"
+          echo "AHMED_APKSIGNER=$AHMED_APKSIGNER" >> "$GITHUB_ENV"
+          echo "AHMED_AAPT=$AHMED_AAPT" >> "$GITHUB_ENV"
+          "$AHMED_APKSIGNER" verify --print-certs apk-check/previous.apk > apk-check/previous-signature.txt
+          "$AHMED_AAPT" dump badging apk-check/previous.apk > apk-check/previous-package.txt
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import json,re
+          package=Path('apk-check/previous-package.txt').read_text();assert "package: name='sa.pm.ahmed'" in package
+          previous=int(re.search(r"versionCode='([0-9]+)'",package).group(1))
+          p=Path('ahmed-mobile/app.json');config=json.loads(p.read_text());assert config['expo']['version']=='1.0.22'
+          config['expo']['android']['versionCode']=max(config['expo']['android']['versionCode'],previous+1)
+          p.write_text(json.dumps(config,indent=2)+'\n')
+          print('SMS_APK_VERSION_CODE',config['expo']['android']['versionCode'])
+          PYCODE
+      - name: Install the verified mobile dependencies
+        working-directory: ahmed-mobile
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Generate Android with the SMS and existing income-widget modules
+        working-directory: ahmed-mobile
+        run: npx expo prebuild --platform android --clean --non-interactive
+      - name: Confirm the signing key matches the previous installed APK
+        run: |
+          keytool -exportcert -keystore ahmed-mobile/android/app/debug.keystore -storepass android -alias androiddebugkey -file apk-check/candidate.der
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import hashlib,re
+          text=Path('apk-check/previous-signature.txt').read_text()
+          expected=re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]+)',text).group(1).lower()
+          actual=hashlib.sha256(Path('apk-check/candidate.der').read_bytes()).hexdigest()
+          assert actual==expected,'Signing certificate does not match the installed release'
+          print('SMS_PREVIOUS_SIGNING_CERTIFICATE_MATCHED',actual)
+          PYCODE
+      - name: Compile native Android and produce the release APK
+        working-directory: ahmed-mobile/android
+        run: |
+          chmod +x gradlew
+          timeout 38m ./gradlew :app:assembleRelease --no-daemon --console=plain --stacktrace --max-workers=2
+      - name: Verify signed APK, SMS permission, new-message-only access and preserved widget
+        id: apk_metadata
+        run: |
+          mkdir -p ahmed-mobile/build-output
+          cp ahmed-mobile/android/app/build/outputs/apk/release/*.apk ahmed-mobile/build-output/ahmed-sms-1.0.22.apk
+          "$AHMED_APKSIGNER" verify --print-certs ahmed-mobile/build-output/ahmed-sms-1.0.22.apk > apk-check/new-signature.txt
+          "$AHMED_AAPT" dump permissions ahmed-mobile/build-output/ahmed-sms-1.0.22.apk > apk-check/new-permissions.txt
+          "$AHMED_AAPT" dump xmltree ahmed-mobile/build-output/ahmed-sms-1.0.22.apk AndroidManifest.xml > apk-check/new-manifest.txt
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import hashlib,re,os
+          def fingerprint(name):return re.search(r'Signer #1 certificate SHA-256 digest: ([0-9a-fA-F]+)',Path(name).read_text()).group(1).lower()
+          assert fingerprint('apk-check/new-signature.txt')==fingerprint('apk-check/previous-signature.txt')
+          permissions=Path('apk-check/new-permissions.txt').read_text();assert 'android.permission.RECEIVE_SMS' in permissions
+          assert 'android.permission.READ_SMS' not in permissions
+          manifest=Path('apk-check/new-manifest.txt').read_text()
+          for entry in ['expo.modules.ahmedsmscapture.IncomingSmsReceiver','expo.modules.ahmedsmscapture.SmsUploadJob','ExpectedIncomeWidgetProvider']:
+            assert entry in manifest,'Required native entry is missing: '+entry
+          apk=Path('ahmed-mobile/build-output/ahmed-sms-1.0.22.apk');digest=hashlib.sha256(apk.read_bytes()).hexdigest()
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha256='+digest+'\n')
+          print('SMS_SIGNED_APK_VERIFIED bytes='+str(apk.stat().st_size)+' sha256='+digest)
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ahmed-sms-1.0.22-apk
+          path: ahmed-mobile/build-output/ahmed-sms-1.0.22.apk
+          if-no-files-found: error
+      - name: Publish the verified APK to the existing pm.sa downloads directory
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          source: ahmed-mobile/build-output/ahmed-sms-1.0.22.apk
+          target: /home/pmsa/public_html/downloads
+          strip_components: 2
+          overwrite: true
+          timeout: 120s
+          command_timeout: 10m
+      - name: Verify the live APK download
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
           username: ${{ secrets.AHMED_SSH_USER }}
           key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
           port: 2222
-          command_timeout: 60m
+          command_timeout: 2m
           script: |
-            set -eu
-            umask 022
-            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
-            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/sms-20261025" AHMED_SMS_SHA="${{ github.sha }}"
-            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/build-sms-apk.py" > "$AHMED_SMS_CASE/build-apk.py"
-            python3 "$AHMED_SMS_CASE/build-apk.py"
-
-# Server deployment supports the existing Python 3.6 runtime.
-# Preserve namespace-isolated Metro listeners and verify the served bundle.
+            python3 - <<'PYCODE'
+            from pathlib import Path
+            import hashlib,urllib.request
+            p=Path('/home/pmsa/public_html/downloads/ahmed-sms-1.0.22.apk')
+            expected='${{ steps.apk_metadata.outputs.sha256 }}'
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==expected
+            p.chmod(0o644)
+            url='https://pm.sa/downloads/ahmed-sms-1.0.22.apk'
+            with urllib.request.urlopen(urllib.request.Request(url,method='HEAD'),timeout=30) as response:
+              assert response.code==200 and int(response.headers.get('Content-Length',0))==p.stat().st_size
+            print('SMS_APK_READY '+url+' sha256='+expected)
+            PYCODE
