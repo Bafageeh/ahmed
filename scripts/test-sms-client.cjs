@@ -6,7 +6,7 @@ const source = fs.readFileSync(path.join(__dirname, '../ahmed-mobile/smsCapture.
 
 async function fixture(platform = 'android', available = true) {
   const calls = [];
-  const state = { owner: '', enabled: false, permission: async () => 'granted', fetch: null };
+  const state = { owner: '', enabled: false, permission: async () => 'granted', notificationPermission: async () => 'granted', fetch: null };
   const native = {
     bindUser(owner) { calls.push(['owner', owner]); if (owner !== state.owner) state.enabled = false; state.owner = owner; },
     async getStatus() { return { installationId: 'ef1884e5-81b3-4806-985e-d3817819604b', enabled: state.enabled, pendingCount: 0, capturePolicyVersion: state.policyVersion ?? 2 }; },
@@ -23,10 +23,14 @@ async function fixture(platform = 'android', available = true) {
   await module.link(async (name) => {
     if (name === 'react-native') {
       return new vm.SyntheticModule(['PermissionsAndroid', 'Platform'], function () {
-        this.setExport('Platform', { OS: platform });
+        this.setExport('Platform', { OS: platform, Version: 34 });
         this.setExport('PermissionsAndroid', {
-          PERMISSIONS: { RECEIVE_SMS: 'android.permission.RECEIVE_SMS' }, RESULTS: { GRANTED: 'granted' },
-          request: async (permission) => { assert.equal(permission, 'android.permission.RECEIVE_SMS'); calls.push(['permission']); return state.permission(); },
+          PERMISSIONS: { RECEIVE_SMS: 'android.permission.RECEIVE_SMS', POST_NOTIFICATIONS: 'android.permission.POST_NOTIFICATIONS' }, RESULTS: { GRANTED: 'granted' },
+          request: async (permission) => {
+            assert.ok(['android.permission.RECEIVE_SMS', 'android.permission.POST_NOTIFICATIONS'].includes(permission));
+            calls.push(['permission', permission]);
+            return permission === 'android.permission.RECEIVE_SMS' ? state.permission() : state.notificationPermission();
+          },
         });
       }, { context });
     }
@@ -101,5 +105,24 @@ const user = (id) => ({ user: { id }, sessionKey: 'signed-in-' + id });
   await assert.rejects(f.api.enableSmsCapture(), /Ta3meed/);
   assert.equal(f.state.enabled, false, 'the old all-sender receiver cannot be re-enabled');
   assert.equal(f.calls.filter((x) => x[0] === 'fetch' || x[0] === 'permission').length, 0);
+  f = await fixture();
+  f.api.synchronizeSmsCaptureSession(user(1));
+  f.state.notificationPermission = async () => 'denied';
+  await f.api.enableSmsCapture();
+  assert.equal(f.state.enabled, true, 'denying notifications does not lose incoming payment records');
+  assert.ok(f.calls.some((call) => call[0] === 'permission' && call[1] === 'android.permission.POST_NOTIFICATIONS'));
+
+  f = await fixture();
+  f.api.synchronizeSmsCaptureSession(user(1));
+  let notificationStarted, releaseNotification;
+  const notificationReady = new Promise((resolve) => { notificationStarted = resolve; });
+  f.state.notificationPermission = () => new Promise((resolve) => { releaseNotification = resolve; notificationStarted(); });
+  const permissionSwitch = f.api.enableSmsCapture();
+  await notificationReady;
+  f.api.synchronizeSmsCaptureSession(user(2));
+  releaseNotification('granted');
+  await assert.rejects(permissionSwitch);
+  assert.equal(f.state.enabled, false);
+  assert.equal(f.calls.filter((call) => call[0] === 'fetch' || call[0] === 'enable').length, 0);
   console.log('SMS_CLIENT_PERMISSION_OFFLINE_STOP_AND_ACCOUNT_SWITCH_CHECKS_PASSED');
 })().catch((error) => { console.error(error); process.exitCode = 1; });

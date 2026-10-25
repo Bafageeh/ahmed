@@ -1,5 +1,19 @@
 # New SMS capture
 
+## Ta3meed-only automatic repayments (Android 1.0.23)
+
+Only the complete sender ID `Ta3meed` is accepted, case-insensitively and with surrounding whitespace ignored. The Android receiver checks it before opening the queue or persisting content; the server independently enforces the same rule. Excluded records still pending from a previous version are discarded locally, or acknowledged without archive storage by the server. Historical archive contents are retained; they are never retroactively submitted as payments.
+
+New accepted messages retain their original sender, body, and arrival/sent timestamps. Each is analyzed once during ingestion. A confirmed repayment needs a single opportunity reference belonging to the same authenticated account, one unambiguous positive amount, and a valid payment date. Arabic digits and decimal/thousands separators are recognized. Reminders, future payments, marketing, and verification messages do not change the ledger. Missing or conflicting information, excessive amounts, a closed opportunity, or a possible previously entered manual payment are held for review.
+
+Automatic payments use the existing receipt and investor allocation writer. Partial receipts update remaining balances; full or early settlements update status and actual profit. Opportunity funding dates are preserved. An account row lock serializes device ingestion, and the opportunity row lock serializes receipt writes. Stable device/client IDs, normalized body plus payment date fingerprints, and existing-ledger checks prevent retry and cross-device duplication. Identical partial-payment text on different payment dates is not permanently suppressed.
+
+The payment, allocations, and successful analysis are committed before the API returns an `applied` result. A failure inside the receipt writer rolls back its changes while retaining the SMS as needing review. Android displays completion notifications only from these committed outcomes, never from parsing the SMS locally. Notification tags and persisted handled IDs prevent repeated alerts on network retries. Review notifications have distinct wording and never claim completion. Android notification permission must be granted to show background alerts; every result remains visible in the SMS archive.
+
+An older all-sender native module is disabled by the updated JavaScript and cannot be re-enabled until the filtered Android update is installed. New capture still requires user activation and `RECEIVE_SMS`; no `READ_SMS` or historical inbox import is added.
+
+The isolated integration suite covers actual partial/full/early receipt writes and investor allocation, Arabic amounts, retries, multiple devices, account isolation, malformed and ambiguous messages, excluded sender aliases, receipt rollback on an allocation failure, and the returned completion/review outcome. The JavaScript suite covers SMS and notification permission, offline stop, old-version gating, and account switching during both permission prompts and registration.
+
 Enable from **More → SMS messages** in the installed Android APK. Collection is disabled until the user turns it on and grants `RECEIVE_SMS`.
 
 The native receiver reads only incoming `SMS_RECEIVED` broadcasts. It requests no historical inbox permission. Multipart text is joined, and the original sender address or sender ID, full text, arrival time, original send time and available SIM information are retained. Arrival time determines the activation cutoff, so a newly arriving delayed message remains eligible.
