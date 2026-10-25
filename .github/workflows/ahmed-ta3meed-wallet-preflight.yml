@@ -1,0 +1,59 @@
+name: Ahmed Ta3meed wallet source preflight
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-ta3meed-wallet-preflight.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 5m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-wallet-20261026"
+            export AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            python3 - <<'PYTHON'
+            import pathlib,os,json,hashlib,subprocess,base64
+            root=pathlib.Path(os.environ['AHMED_SMS_ROOT']);case=pathlib.Path(os.environ['AHMED_SMS_CASE'])
+            excluded={'.git','node_modules','.expo','build','.gradle','dist-web','dist','apk','build-output','Pods','vendor','cache'}
+            extensions={'.js','.jsx','.ts','.tsx','.json','.kt','.java','.xml','.gradle','.kts','.php'}
+            sources=['ahmed-mobile','ahmed-api/app','ahmed-api/routes','ahmed-api/bootstrap','ahmed-api/config','ahmed-api/database/migrations','ahmed-api/tests']
+            baseline={}
+            for line in subprocess.check_output(['git','ls-tree','-r',os.environ['AHMED_SMS_SHA']],cwd=root).decode().splitlines():
+             meta,name=line.split('\t',1);baseline[name]=meta.split()[2]
+            report={'head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root).decode().strip(),'status':subprocess.check_output(['git','status','--porcelain','--untracked-files=all'],cwd=root).decode(),'files':{},'contents':{}}
+            for base in sources:
+             for p in (root/base).rglob('*'):
+              rel=p.relative_to(root)
+              if not p.is_file() or p.is_symlink() or any(part in excluded for part in rel.parts) or p.suffix not in extensions:continue
+              if p.name.startswith('.') or any(x in p.name.lower() for x in ['credential','private-key','google-services','service-account']):continue
+              data=p.read_bytes()
+              if len(data)>3000000:continue
+              report['files'][str(rel)]={'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)}
+              if hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()!=baseline.get(str(rel)):report['contents'][str(rel)]=base64.b64encode(data).decode()
+            p=case/'source-preflight.json';p.write_text(json.dumps(report,ensure_ascii=False));p.chmod(0o600)
+            print('SMS_SOURCE_PREFLIGHT_READ_COMPLETE files='+str(len(report['files'])))
+            PYTHON
+            /usr/local/bin/php <<'PHP'
+            <?php
+            $body=gzencode(file_get_contents(getenv('AHMED_SMS_CASE').'/source-preflight.json'),9);$key=random_bytes(32);$iv=random_bytes(12);$cipher=openssl_encrypt($body,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
+            $pub=base64_decode('LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFwVllyRGJ1T0w4Sk9wK1lIN0NJSwpta05jQmNVU2lRQ3BIM3NGK2lONG9IKzBYYUs4aDVLeDZQKzVLK3FTWHl5NmlMZmlUbE9naEdIWnRvUWZGcC94Ckg2UzYrb3crSnlMbFlPTkZnNTMxMmdmWXVPTThHRi9OZVBJbUVCckZRM0k0aW9oaDF2dTRGZmNmTktkSHoyblQKQi83bi9yS3BPOUhic0dSeUlCYzgxY00zdm9rdVlpdkJoU2ZhWkpReU9GOWF0QXFNWENHdlhCbVo3VzBvSzJRcAo5eHc3WEdZemNqdjJxUkFDZklJZXF6aCttSFVxa2xEREV5Wkl0S2Q5NnVDTjZKQ25mZVZUYVRQVTQ1Y3RJbllmCnkrWjZmSldiRi8zb2xjVnVpQWVPV05oMEZnVFIzWkVqc0ltY2lsOE5PT21HS29EbmI4NXd3Y0ROcUY3SmFkV2EKQVFJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==');if(!openssl_public_encrypt($key,$wrapped,$pub,OPENSSL_PKCS1_OAEP_PADDING))throw new RuntimeException('Report protection failed');
+            $encoded=strtoupper(bin2hex(json_encode(['key'=>base64_encode($wrapped),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($cipher)])));foreach(str_split($encoded,4000) as $i=>$part)echo "SMS_PREFLIGHT_PART_".$i."=".$part."\n";
+            PHP
+            cd "$ROOT/ahmed-mobile"
+            if [ -f node_modules/eas-cli/bin/run ]; then CI=1 node node_modules/eas-cli/bin/run whoami || true; fi
