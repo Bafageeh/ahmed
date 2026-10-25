@@ -70,3 +70,5 @@ jobs:
             export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/sms-20261025" AHMED_SMS_SHA="${{ github.sha }}"
             git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/build-sms-apk.py" > "$AHMED_SMS_CASE/build-apk.py"
             python3 "$AHMED_SMS_CASE/build-apk.py"
+
+# Server deployment supports the existing Python 3.6 runtime.

@@ -122,7 +122,7 @@ for name, expected in manifest['files'].items():
         raise RuntimeError('Installed source checksum mismatch: ' + name)
 
 # Restart only the verified Ahmed Metro process; no reset/deployment scripts are used.
-listeners = subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, text=True).stdout.split()
+listeners = subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, universal_newlines=True).stdout.split()
 for value in listeners:
     pid = int(value)
     if os.path.realpath('/proc/' + value + '/cwd') != str(root / 'ahmed-mobile'):
@@ -133,7 +133,7 @@ for value in listeners:
 for value in listeners:
     os.kill(int(value), signal.SIGTERM)
 for _ in range(30):
-    if not subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, text=True).stdout.strip():
+    if not subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, universal_newlines=True).stdout.strip():
         break
     time.sleep(.5)
 else:
