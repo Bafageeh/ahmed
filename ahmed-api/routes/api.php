@@ -30,6 +30,8 @@ use App\Http\Controllers\Api\MonthlyIncomeController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
+require __DIR__.'/sms.php';
+
 Route::get('/health', function () {
     return response()->json([
         'ok' => true,

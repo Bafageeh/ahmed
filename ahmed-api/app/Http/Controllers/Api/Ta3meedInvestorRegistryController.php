@@ -16,7 +16,11 @@ class Ta3meedInvestorRegistryController extends Controller
         $userId = Policy::userId($request);
         $items = DB::table('investment_investors')->where('user_id', $userId)->orderByDesc('is_active')->orderBy('id')->get();
         $counts = DB::table('investment_opportunity_allocations')->where('user_id', $userId)->selectRaw('investor_id, count(*) as opportunity_count')->groupBy('investor_id')->pluck('opportunity_count', 'investor_id');
-        foreach ($items as $item) $item->opportunity_count = (int) ($counts[$item->id] ?? 0);
+        $entries = DB::table('ta3meed_investor_account_entries')->where('user_id', $userId)->selectRaw('investor_id, count(*) as entry_count')->groupBy('investor_id')->pluck('entry_count', 'investor_id');
+        foreach ($items as $item) {
+            $item->opportunity_count = (int) ($counts[$item->id] ?? 0);
+            $item->account_entry_count = (int) ($entries[$item->id] ?? 0);
+        }
         return response()->json(['data' => $items]);
     }
 

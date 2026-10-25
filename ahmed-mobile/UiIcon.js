@@ -29,6 +29,7 @@ import {
   CircleDollarSign,
   Hexagon,
   Settings,
+  MessageSquare,
 } from 'lucide-react-native';
 
 export const ICON_COLOR = '#7c3aed';
@@ -67,6 +68,7 @@ const iconMap = {
   sulfa: Banknote,
   tokenize: Hexagon,
   settings: Settings,
+  sms: MessageSquare,
 };
 
 export default function UiIcon({ name, size = 22, color = ICON_COLOR, style }) {

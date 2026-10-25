@@ -1,4 +1,5 @@
 import { synchronizeIncomeWidgetSession } from './incomeWidgetSync';
+import { synchronizeSmsCaptureSession } from './smsCapture';
 
 let currentSession = null;
 
@@ -9,6 +10,7 @@ export function setCurrentAhmedUserId(id) {
     currentSession = null;
   }
   synchronizeIncomeWidgetSession(currentSession);
+  synchronizeSmsCaptureSession(currentSession);
 }
 
 export function setCurrentAhmedSession(session) {
@@ -16,11 +18,13 @@ export function setCurrentAhmedSession(session) {
     ? { user: session.user, sessionKey: String(session.sessionKey) }
     : null;
   synchronizeIncomeWidgetSession(currentSession);
+  synchronizeSmsCaptureSession(currentSession);
 }
 
 export function clearCurrentAhmedSession() {
   currentSession = null;
   synchronizeIncomeWidgetSession(null);
+  synchronizeSmsCaptureSession(null);
 }
 
 export function getCurrentAhmedSession() {

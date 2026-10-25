@@ -17,6 +17,7 @@ import AhmedUsersManagerPanel from './AhmedUsersManagerPanel';
 import SecureVaultScreen from './SecureVaultScreen';
 import PersonalExpensesScreen from './PersonalExpensesScreen';
 import DebtsScreen from './DebtsScreen';
+import SmsArchiveScreen from './SmsArchiveScreen';
 import UiIcon, { ICON_COLOR, ICON_COLOR_DARK, ICON_COLOR_SOFT } from './UiIcon';
 import { ahmedUserHeaders } from './ahmedCurrentUser';
 import * as LocalAuthentication from 'expo-local-authentication';
@@ -39,7 +40,7 @@ const tabs = [
 ];
 
 const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
-const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'debts', 'financeImports', 'stats'];
+const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'debts', 'financeImports', 'stats', 'smsArchive'];
 
 const platforms = [
   { key: 'ta3meed', name: 'تعميد', icon: 'ta3meed', text: 'فرص تعميد والتصنيفات والمستثمرين.' },
@@ -92,6 +93,7 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'financeImports') return <FinanceImportsScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
     if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('reports')} />;
+    if (activeTab === 'smsArchive') return <SmsArchiveScreen onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} openInvestment={openInvestment} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} />;
@@ -148,7 +150,7 @@ function FutureMonthlyIncomeScreen({ goTo }) {
 
 function ActualMonthlyIncomeScreen({ goTo }) { return <ScreenWrap><TopBar title="دخل شهري حقيقي" onBack={() => goTo('accounts')} /><Header badge="حساباتي" title="#S-122 دخل شهري حقيقي" subtitle="شاشة لحساب الدخل الشهري الفعلي." icon="wealth" /></ScreenWrap>; }
 function UsersManagerScreen({ onBack, currentUser }) { return <ScreenWrap><TopBar title="إدارة المستخدمين" onBack={onBack} /><Header badge="Ahmed" title="#S-151 إدارة المستخدمين" subtitle="هذه الشاشة للمدير فقط." icon="users" /><AhmedUsersManagerPanel currentUser={currentUser} /></ScreenWrap>; }
-function MoreScreen({ goTo, openInvestment, currentUser, isAdmin, onLogout }) { return <ScreenWrap><Header badge={currentUser?.name || 'Ahmed'} title="#S-150 مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.currentUserCard}><Text style={styles.currentUserTitle}>الحساب الحالي</Text><Text style={styles.currentUserText}>{currentUser?.name || '-'}</Text><Text style={styles.currentUserText}>اسم الدخول: {currentUser?.username || '-'}</Text></View><View style={styles.menu}>{isAdmin ? <MenuRow title="#S-151 إدارة المستخدمين" text="إضافة وتعديل المستخدمين للمدير فقط" icon="users" onPress={() => goTo('usersManager')} /> : null}<MenuRow title="قيم Finance المستوردة" text="جميع القيم المقروءة من مشروع Finance" icon="stats" onPress={() => goTo('financeImports')} /><MenuRow title="خروج" text="إقفال الجلسة والعودة لشاشة الدخول" icon="close" onPress={onLogout} danger last /></View></ScreenWrap>; }
+function MoreScreen({ goTo, openInvestment, currentUser, isAdmin, onLogout }) { return <ScreenWrap><Header badge={currentUser?.name || 'Ahmed'} title="#S-150 مزيد" subtitle="الاختصارات والإعدادات." icon="settings" /><View style={styles.currentUserCard}><Text style={styles.currentUserTitle}>الحساب الحالي</Text><Text style={styles.currentUserText}>{currentUser?.name || '-'}</Text><Text style={styles.currentUserText}>اسم الدخول: {currentUser?.username || '-'}</Text></View><View style={styles.menu}>{isAdmin ? <MenuRow title="#S-151 إدارة المستخدمين" text="إضافة وتعديل المستخدمين للمدير فقط" icon="users" onPress={() => goTo('usersManager')} /> : null}<MenuRow title="رسائل SMS" text="استقبال الرسائل الجديدة وحفظ المرسل" icon="sms" onPress={() => goTo('smsArchive')} /><MenuRow title="قيم Finance المستوردة" text="جميع القيم المقروءة من مشروع Finance" icon="stats" onPress={() => goTo('financeImports')} /><MenuRow title="خروج" text="إقفال الجلسة والعودة لشاشة الدخول" icon="close" onPress={onLogout} danger last /></View></ScreenWrap>; }
 function Quick({ title, text, icon, onPress }) { return <TouchableOpacity onPress={onPress} style={styles.card}><View style={styles.iconBox}><UiIcon name={icon} size={24} /></View><Text style={styles.cardTitle}>{title}</Text>{text ? <Text style={styles.cardText}>{text}</Text> : null}<Text style={styles.openText}>فتح الشاشة</Text></TouchableOpacity>; }
 function MenuRow({ title, text, icon, onPress, last, danger }) { return <TouchableOpacity onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast, danger && styles.menuRowDanger]}><View style={[styles.menuIcon, danger && styles.menuIconDanger]}><UiIcon name={icon} size={24} color={danger ? '#b91c1c' : ICON_COLOR_DARK} /></View><View style={styles.menuTextBlock}><Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>{title}</Text><Text style={[styles.menuText, danger && styles.menuTextDanger]}>{text}</Text></View><UiIcon name="back" size={22} color={danger ? '#b91c1c' : ICON_COLOR_SOFT} /></TouchableOpacity>; }
 

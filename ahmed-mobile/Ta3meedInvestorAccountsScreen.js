@@ -16,22 +16,31 @@ import { ahmedUserHeaders, getCurrentAhmedUserId } from './ahmedCurrentUser';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 
-function investorKey(allocation) {
-  return String(allocation?.investor_code || allocation?.investor_name || '').trim();
+function nameKey(name) {
+  return String(name || '').normalize('NFKC').replace(/[\u064b-\u065f\u0670\u200c-\u200f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
+// The registry is authoritative; duplicate historical records are grouped for display only.
 function buildInvestors(items) {
   const map = new Map();
-
-  items.forEach((item) => {
-    (item.allocations || []).forEach((allocation) => {
-      const code = investorKey(allocation);
-      const name = allocation.investor_name || code;
-      if (code && name) map.set(code, { code, name });
-    });
+  (items || []).forEach((item) => {
+    const code = String(item?.code || '').trim();
+    const name = String(item?.name || '').trim();
+    const activity = Number(item?.opportunity_count || 0) + Number(item?.account_entry_count || 0);
+    if (!code || !name || activity <= 0) return;
+    const key = nameKey(name);
+    const existing = map.get(key);
+    const entryCount = Number(item.account_entry_count || 0);
+    if (existing) {
+      existing.codes.push(code);
+      if (entryCount > existing.entryCount || (entryCount === existing.entryCount && Number(item.id) > existing.primaryId)) {
+        existing.code = code; existing.name = name; existing.entryCount = entryCount; existing.primaryId = Number(item.id);
+      }
+    } else {
+      map.set(key, { code, name, codes: [code], entryCount, primaryId: Number(item.id) });
+    }
   });
-
-  return Array.from(map.values());
+  return Array.from(map.values()).map(({ code, codes, name }) => ({ code, codes, name }));
 }
 
 export default function Ta3meedInvestorAccountsScreen({ onBack }) {
@@ -47,7 +56,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
     setLoading(true);
     setMessage('');
     try {
-      const response = await fetch(`${API_URL}/ta3meed/investments`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
+      const response = await fetch(`${API_URL}/ta3meed/investors`, { headers: ahmedUserHeaders({ Accept: 'application/json' }) });
       const json = await response.json();
       if (!response.ok) throw new Error(json.message || 'تعذر تحميل المستثمرين');
       setItems(Array.isArray(json.data) ? json.data : []);
@@ -79,7 +88,6 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
           <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
         <View style={screenStyles.titleBlock}>
-          <Text style={screenStyles.screenId}>#S-110</Text>
           <Text style={screenStyles.headerTitle}>حسابات المستثمرين</Text>
         </View>
         <View style={screenStyles.headerSpacer} />
@@ -90,12 +98,6 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor="#0f766e" />}
       >
-        <View style={screenStyles.heroCard}>
-          <Text style={screenStyles.heroKicker}>#S-110 · شاشة مستقلة</Text>
-          <Text style={screenStyles.heroTitle}>إدارة أرصدة مستثمري تعميد</Text>
-          <Text style={screenStyles.heroText}>كل حساب مستخدم له مستثمروه المستقلون. اختر المستثمر ثم أضف رصيدًا أو سجل سحبًا أو عدّل واحذف حركات الرصيد.</Text>
-        </View>
-
         {loading ? <ActivityIndicator color="#0f766e" style={screenStyles.loader} /> : null}
         {!!message && <Text style={screenStyles.message}>{message}</Text>}
 
@@ -106,18 +108,13 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
 }
 
 const screenStyles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f4f7fb' },
-  header: { paddingHorizontal: 28, paddingTop: 34, paddingBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f7fb' },
-  headerIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
+  safe: { flex: 1, backgroundColor: '#f4f8fc' },
+  header: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f8fc' },
+  headerIcon: { width: 45, height: 45, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe5ef', alignItems: 'center', justifyContent: 'center' },
   titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  screenId: { color: '#0f766e', fontSize: 12, fontWeight: '900', textAlign: 'center', marginBottom: 2 },
-  headerTitle: { color: '#0f172a', fontSize: 25, fontWeight: '900', textAlign: 'center' },
-  headerSpacer: { width: 70, height: 48 },
-  content: { paddingHorizontal: 18, paddingBottom: 36 },
-  heroCard: { marginTop: 8, backgroundColor: '#0f766e', borderRadius: 28, padding: 22, alignItems: 'flex-end' },
-  heroKicker: { color: '#ccfbf1', fontSize: 13, fontWeight: '900', textAlign: 'right' },
-  heroTitle: { marginTop: 8, color: '#ffffff', fontSize: 25, fontWeight: '900', textAlign: 'right' },
-  heroText: { marginTop: 10, color: '#ecfeff', fontSize: 14, fontWeight: '800', lineHeight: 23, textAlign: 'right' },
-  loader: { marginTop: 14 },
-  message: { marginTop: 12, color: '#075985', backgroundColor: '#eff6ff', borderRadius: 16, paddingVertical: 10, paddingHorizontal: 12, textAlign: 'right', fontWeight: '900', overflow: 'hidden' },
+  headerTitle: { color: '#111a2d', fontSize: 23, fontWeight: '900', textAlign: 'center' },
+  headerSpacer: { width: 45, height: 45 },
+  content: { paddingHorizontal: 12, paddingBottom: 34 },
+  loader: { marginTop: 12 },
+  message: { marginTop: 8, marginBottom: 8, color: '#075985', backgroundColor: '#eff6ff', borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10, textAlign: 'right', fontWeight: '800', overflow: 'hidden' },
 });
