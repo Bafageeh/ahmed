@@ -72,3 +72,4 @@ jobs:
             python3 "$AHMED_SMS_CASE/build-apk.py"
 
 # Server deployment supports the existing Python 3.6 runtime.
+# Preserve namespace-isolated Metro listeners and verify the served bundle.

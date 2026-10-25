@@ -123,28 +123,34 @@ for name, expected in manifest['files'].items():
 
 # Restart only the verified Ahmed Metro process; no reset/deployment scripts are used.
 listeners = subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, universal_newlines=True).stdout.split()
+owned = bool(listeners)
 for value in listeners:
-    pid = int(value)
-    if os.path.realpath('/proc/' + value + '/cwd') != str(root / 'ahmed-mobile'):
-        raise RuntimeError('Expo listener belongs to another project')
-    command = Path('/proc/' + value + '/cmdline').read_bytes().replace(b'\0', b' ').decode()
-    if 'expo' not in command or '8082' not in command:
-        raise RuntimeError('Unexpected process on Expo port')
-for value in listeners:
-    os.kill(int(value), signal.SIGTERM)
-for _ in range(30):
-    if not subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, universal_newlines=True).stdout.strip():
-        break
-    time.sleep(.5)
+    try:
+        same_project = os.path.samefile('/proc/' + value + '/cwd', root / 'ahmed-mobile')
+        command = Path('/proc/' + value + '/cmdline').read_bytes().replace(b'\0', b' ').decode()
+        owned = owned and same_project and 'expo' in command and '8082' in command
+    except OSError:
+        owned = False
+if owned or not listeners:
+    for value in listeners:
+        os.kill(int(value), signal.SIGTERM)
+    for _ in range(30):
+        if not subprocess.run(['lsof', '-tiTCP:8082', '-sTCP:LISTEN'], stdout=subprocess.PIPE, universal_newlines=True).stdout.strip():
+            break
+        time.sleep(.5)
+    else:
+        raise RuntimeError('Expo port did not close')
+    runtime = root.parent
+    (runtime / '.cache').mkdir(exist_ok=True)
+    (runtime / '.tmp').mkdir(exist_ok=True)
+    environment = dict(os.environ, CI='1', BROWSER='none', EXPO_NO_TELEMETRY='1', EXPO_NO_DEVTOOLS='1', REACT_NATIVE_PACKAGER_HOSTNAME='ahmed.pm.sa', EXPO_PUBLIC_API_URL='https://ahmed.pm.sa/api', XDG_CACHE_HOME=str(runtime / '.cache'), TMPDIR=str(runtime / '.tmp'), TMP=str(runtime / '.tmp'), TEMP=str(runtime / '.tmp'))
+    with (case / 'expo-sms.log').open('ab') as log:
+        process = subprocess.Popen(['npx', 'expo', 'start', '--clear', '--go', '--host', 'lan', '--port', '8082'], cwd=root / 'ahmed-mobile', env=environment, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    (runtime / 'ahmed-expo-8082.pid').write_text(str(process.pid))
 else:
-    raise RuntimeError('Expo port did not close')
-runtime = root.parent
-(runtime / '.cache').mkdir(exist_ok=True)
-(runtime / '.tmp').mkdir(exist_ok=True)
-environment = dict(os.environ, CI='1', BROWSER='none', EXPO_NO_TELEMETRY='1', EXPO_NO_DEVTOOLS='1', REACT_NATIVE_PACKAGER_HOSTNAME='ahmed.pm.sa', EXPO_PUBLIC_API_URL='https://ahmed.pm.sa/api', XDG_CACHE_HOME=str(runtime / '.cache'), TMPDIR=str(runtime / '.tmp'), TMP=str(runtime / '.tmp'), TEMP=str(runtime / '.tmp'))
-with (case / 'expo-sms.log').open('ab') as log:
-    process = subprocess.Popen(['npx', 'expo', 'start', '--clear', '--go', '--host', 'lan', '--port', '8082'], cwd=root / 'ahmed-mobile', env=environment, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-(runtime / 'ahmed-expo-8082.pid').write_text(str(process.pid))
+    # A process outside this SSH user's visible namespace must be left alone.
+    # Existing Metro can serve the changed files; verify its actual bundle below.
+    print('SMS_EXISTING_EXPO_LISTENER_PRESERVED_AND_BUNDLE_WILL_BE_VERIFIED', flush=True)
 for _ in range(60):
     try:
         if b'packager-status:running' in urllib.request.urlopen('http://127.0.0.1:8082/status', timeout=3).read():
