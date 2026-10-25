@@ -31,6 +31,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 
 require __DIR__.'/sms.php';
+require __DIR__.'/ta3meed-wallet.php';
 
 Route::get('/health', function () {
     return response()->json([

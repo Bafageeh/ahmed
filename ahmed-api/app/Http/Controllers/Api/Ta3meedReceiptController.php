@@ -15,6 +15,7 @@ class Ta3meedReceiptController extends Controller
     public function recordIncomingSms(int $userId, array $parsed, string $message, string $date): array
     {
         return DB::transaction(function () use ($userId, $parsed, $message, $date) {
+            DB::table('users')->where('id', $userId)->lockForUpdate()->first();
             $review = fn ($reason) => ['status' => 'needs_review', 'reason' => $reason];
             $platformId = DB::table('investment_platforms')->where('code', 'ta3meed')->value('id');
             if (! $platformId || $userId <= 0) return $review('opportunity_not_found');
@@ -398,6 +399,7 @@ class Ta3meedReceiptController extends Controller
     private function record($investment, array $data): array
     {
         return DB::transaction(function () use ($investment, $data) {
+            if ((int) ($investment->user_id ?? 0) > 0) DB::table('users')->where('id', $investment->user_id)->lockForUpdate()->first();
             // Serialize automatic ingestion with existing manual receipt writers.
             $investment = DB::table('investment_opportunities')->where('id', $investment->id)->lockForUpdate()->first();
             $amount = round((float) $data['amount'], 2);
@@ -477,6 +479,8 @@ class Ta3meedReceiptController extends Controller
             }
 
             $this->recalculate($investment->id, (bool) ($data['force_complete'] ?? false));
+
+            \App\Support\Ta3meedWalletLedger::recordReceipt($receiptUserId, $receiptId);
 
             return [
                 'id' => $receiptId,

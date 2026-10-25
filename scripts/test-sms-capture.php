@@ -33,6 +33,7 @@ Schema::create('users', function ($table) {
 });
 (require $source.'/ahmed-api/database/migrations/2026_10_25_180000_create_sms_capture_tables.php')->up();
 (require $source.'/ahmed-api/database/migrations/2026_10_26_003000_add_sms_payment_analysis.php')->up();
+(require $source.'/ahmed-api/database/migrations/2026_10_26_020000_create_ta3meed_wallet.php')->up();
 require_once $source.'/ahmed-api/app/Http/Controllers/Api/SmsCaptureController.php';
 Route::prefix('api')->group($source.'/ahmed-api/routes/sms.php');
 

@@ -364,7 +364,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onOpenBackup, onEditOpportunity, onManageInvestors, selectedSortOrder, onSortOrderChange }) {
+export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onOpenBackup, onOpenWallet, onEditOpportunity, onManageInvestors, selectedSortOrder, onSortOrderChange }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -799,6 +799,12 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
           <Metric title="إجمالي المستلم" value={money(totals.received, 2)} wide />
         </View>
 
+        {onOpenWallet ? <TouchableOpacity onPress={onOpenWallet} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 9, backgroundColor: '#eaf5f1', borderRadius: 12, padding: 12, marginTop: 10 }} accessibilityLabel="فتح محفظة تعميد">
+          <UiIcon name="wallet" size={21} color="#0f766e" />
+          <Text style={{ color: '#0f766e', fontWeight: '900', fontSize: 13, flex: 1, textAlign: 'right' }}>محفظة تعميد</Text>
+          <Text style={{ color: '#517970', fontSize: 11 }}>إيداع وسحب ورصيد</Text>
+        </TouchableOpacity> : null}
+
         {!!message && <Text style={styles.message}>{message}</Text>}
         {loading ? <ActivityIndicator color="#0f766e" style={styles.loader} /> : null}
 
@@ -838,6 +844,11 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
             </View>
 
             <View style={styles.quickMenuGrid}>
+              {onOpenWallet ? <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); onOpenWallet(); }}>
+                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#eaf5f1' }]}><UiIcon name="wallet" size={26} color="#0f766e" /></View>
+                <Text style={styles.quickMenuItemTitle}>محفظة تعميد</Text>
+                <Text style={styles.quickMenuItemText}>الرصيد والإيداع والسحب اليدوي أو من الرسائل</Text>
+              </TouchableOpacity> : null}
               <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); setReceiptOpen(true); }}>
                 <View style={[styles.quickMenuItemIcon, { backgroundColor: '#ecfdf5' }]}><UiIcon name="payments" size={26} color="#0f766e" /></View>
                 <Text style={styles.quickMenuItemTitle}>السداد</Text>

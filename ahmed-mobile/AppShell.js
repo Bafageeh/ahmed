@@ -7,6 +7,7 @@ import Ta3meedScreen from './Ta3meedNoResetFilterScreen';
 import Ta3meedInvestorAccountsScreen from './Ta3meedInvestorAccountsScreen';
 import Ta3meedImageImportScreen from './Ta3meedImageImportScreen';
 import Ta3meedBackupScreen from './Ta3meedBackupScreen';
+import Ta3meedWalletScreen from './Ta3meedWalletScreen';
 import MoneyMoonScreen from './MoneyMoonActiveOnlyScreen';
 import DinarInvestmentsScreen from './DinarInvestmentsScreen';
 import FutureIncomeScreen from './FutureMonthlyIncomeScreen';
@@ -39,7 +40,7 @@ const tabs = [
   { key: 'more', label: 'مزيد', icon: 'more' },
 ];
 
-const activeInvestmentKeys = ['ta3meed', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
+const activeInvestmentKeys = ['ta3meed', 'ta3meedWallet', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
 const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'debts', 'financeImports', 'stats', 'smsArchive'];
 
 const platforms = [
@@ -96,7 +97,8 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'smsArchive') return <SmsArchiveScreen onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} openInvestment={openInvestment} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
     if (activeTab === 'investments') {
-      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} />;
+      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} onOpenWallet={() => setInvestmentScreen('ta3meedWallet')} />;
+      if (investmentScreen === 'ta3meedWallet') return <Ta3meedWalletScreen key={String(currentUser?.id)} onBack={() => setInvestmentScreen('ta3meed')} />;
       if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'ta3meedImageImport') return <Ta3meedImageImportScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'ta3meedBackup') return <Ta3meedBackupScreen onBack={() => setInvestmentScreen('ta3meed')} />;
