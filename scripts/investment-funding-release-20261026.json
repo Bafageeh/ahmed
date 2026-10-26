@@ -619,5 +619,7 @@
   ],
   "bundle_marker": "mark-sms-investment-uploaded",
   "update_message": "Add uploaded button to fund existing Ta3meed opportunity once",
-  "backend_verified_commit": "884d8fe2782a81eb4ffe7e8bc54517a7cf1fce27"
+  "backend_verified_commit": "e516c0e8f41ac19d06f2edeba5ec74e9f5312b7b",
+  "backend_verified_run": 40337888934,
+  "ui_verified_run": 40337888859
 }
