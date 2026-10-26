@@ -1,0 +1,177 @@
+name: Ahmed latest verified APK build 27
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-latest-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-latest-apk
+  cancel-in-progress: false
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read-only verification of production source, assets and existing API
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 6m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            CASE="/home/pmsa/secure-backups/ahmed/latest-apk-20261026"
+            mkdir -p "$CASE"
+            chmod 700 "$CASE"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/verify-live-apk-source.py" > "$CASE/verify.py"
+            python3 "$CASE/verify.py"
+  build-apk:
+    needs: verify-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_API_URL: https://ahmed.pm.sa/api
+      GRADLE_OPTS: -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=2 -Dorg.gradle.jvmargs=-Xmx4g
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ahmed-mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Read the previous installed signing certificate and set upgrade build 27
+        run: |
+          mkdir -p apk-check
+          curl --fail --location --retry 3 'https://pm.sa/downloads/ahmed-sms-1.0.23.apk?v=ee93a8f' -o apk-check/previous.apk
+          AHMED_APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          AHMED_AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)"
+          test -n "$AHMED_APKSIGNER"
+          test -n "$AHMED_AAPT"
+          echo "AHMED_APKSIGNER=$AHMED_APKSIGNER" >> "$GITHUB_ENV"
+          echo "AHMED_AAPT=$AHMED_AAPT" >> "$GITHUB_ENV"
+          "$AHMED_APKSIGNER" verify --print-certs apk-check/previous.apk > apk-check/previous-signature.txt
+          python3 scripts/apk-signer-fingerprint.py apk-check/previous.apk > apk-check/previous-fingerprint.txt
+          "$AHMED_AAPT" dump badging apk-check/previous.apk > apk-check/previous-package.txt
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import json,re
+          assert __import__('hashlib').sha256(Path('apk-check/previous.apk').read_bytes()).hexdigest() == '506842ebf33d3cce0505117fefbccedc1dac733995cc9a73141808c602443caa'
+          package=Path('apk-check/previous-package.txt').read_text();assert "package: name='sa.pm.ahmed'" in package
+          previous=int(re.search(r"versionCode='([0-9]+)'",package).group(1))
+          p=Path('ahmed-mobile/app.json');config=json.loads(p.read_text());assert config['expo']['version']=='1.0.23'
+          assert previous == 26, 'The installed APK changed; inspect its version before building'
+          config['expo']['android']['versionCode']=27
+          config['expo']['extra']['buildLabel']='2026-10-26-latest-sms-review-'+__import__('os').environ['GITHUB_SHA'][:12]
+          p.write_text(json.dumps(config,indent=2)+'\n')
+          print('SMS_APK_VERSION_CODE',config['expo']['android']['versionCode'])
+          PYCODE
+      - name: Install the verified mobile dependencies
+        working-directory: ahmed-mobile
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
+      - name: Generate Android from the complete verified source with SMS and income widget
+        working-directory: ahmed-mobile
+        run: npx expo prebuild --platform android --clean --non-interactive
+      - name: Confirm the signing key matches the previous installed APK
+        run: |
+          keytool -exportcert -keystore ahmed-mobile/android/app/debug.keystore -storepass android -alias androiddebugkey -file apk-check/candidate.der
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import hashlib,re
+          expected=Path('apk-check/previous-fingerprint.txt').read_text().strip()
+          actual=hashlib.sha256(Path('apk-check/candidate.der').read_bytes()).hexdigest()
+          assert actual==expected,'Signing certificate does not match the installed release'
+          print('SMS_PREVIOUS_SIGNING_CERTIFICATE_MATCHED',actual)
+          PYCODE
+      - name: Compile native Android and produce the release APK
+        working-directory: ahmed-mobile/android
+        run: |
+          chmod +x gradlew
+          timeout 38m ./gradlew :app:assembleRelease --no-daemon --console=plain --stacktrace --max-workers=2
+      - name: Verify signed APK, embedded latest screens, SMS access and preserved widget
+        id: apk_metadata
+        run: |
+          mkdir -p ahmed-mobile/build-output
+          cp ahmed-mobile/android/app/build/outputs/apk/release/*.apk ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          "$AHMED_APKSIGNER" verify --print-certs ahmed-mobile/build-output/ahmed-1.0.23-27.apk > apk-check/new-signature.txt
+          "$AHMED_AAPT" dump permissions ahmed-mobile/build-output/ahmed-1.0.23-27.apk > apk-check/new-permissions.txt
+          "$AHMED_AAPT" dump xmltree ahmed-mobile/build-output/ahmed-1.0.23-27.apk AndroidManifest.xml > apk-check/new-manifest.txt
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import hashlib,re,os,subprocess,json,zipfile
+          actual=subprocess.check_output(['python3','scripts/apk-signer-fingerprint.py','ahmed-mobile/build-output/ahmed-1.0.23-27.apk']).decode().strip()
+          assert actual==Path('apk-check/previous-fingerprint.txt').read_text().strip()
+          permissions=Path('apk-check/new-permissions.txt').read_text();assert 'android.permission.RECEIVE_SMS' in permissions
+          assert 'android.permission.POST_NOTIFICATIONS' in permissions
+          assert 'android.permission.READ_SMS' not in permissions
+          manifest=Path('apk-check/new-manifest.txt').read_text()
+          for entry in ['expo.modules.ahmedsmscapture.IncomingSmsReceiver','expo.modules.ahmedsmscapture.SmsUploadJob','ExpectedIncomeWidgetProvider']:
+            assert entry in manifest,'Required native entry is missing: '+entry
+          apk=Path('ahmed-mobile/build-output/ahmed-1.0.23-27.apk')
+          badging=subprocess.check_output([os.environ['AHMED_AAPT'],'dump','badging',str(apk)]).decode()
+          assert "package: name='sa.pm.ahmed'" in badging and "versionCode='27'" in badging and "versionName='1.0.23'" in badging
+          with zipfile.ZipFile(apk) as archive:
+            bundle=archive.read('assets/index.android.bundle')
+            for marker in [b'sms-review-auto-data',b'ahmed-settings-redesign',b'ta3meed-wallet-safe-header',b'ta3meed-investors-safe-header']:
+              assert marker in bundle,'Latest embedded app feature is missing: '+marker.decode()
+            assert not re.search(rb'#S-\d{2,4}\b',bundle),'Old screen identifiers remain embedded'
+            app_manifest=json.loads(archive.read('assets/app.manifest'))
+            assert app_manifest['runtimeVersion']=='1.0.23','Existing production OTA compatibility must be preserved'
+          print('LATEST_APK_EMBEDDED_FEATURES_RUNTIME_AND_UPGRADE_VERSION_VERIFIED')
+          digest=hashlib.sha256(apk.read_bytes()).hexdigest()
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha256='+digest+'\n')
+          print('SMS_SIGNED_APK_VERIFIED bytes='+str(apk.stat().st_size)+' sha256='+digest)
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ahmed-1.0.23-27-apk
+          path: ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          if-no-files-found: error
+      - name: Publish the verified APK to the existing pm.sa downloads directory
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          source: ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          target: /home/pmsa/public_html/downloads
+          strip_components: 2
+          overwrite: true
+          timeout: 120s
+          command_timeout: 10m
+      - name: Verify the live APK download
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 2m
+          script: |
+            python3 - <<'PYCODE'
+            from pathlib import Path
+            import hashlib,urllib.request
+            p=Path('/home/pmsa/public_html/downloads/ahmed-1.0.23-27.apk')
+            expected='${{ steps.apk_metadata.outputs.sha256 }}'
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==expected
+            p.chmod(0o644)
+            url='https://pm.sa/downloads/ahmed-1.0.23-27.apk?v=${{ github.sha }}'
+            with urllib.request.urlopen(urllib.request.Request(url,method='HEAD'),timeout=30) as response:
+              assert response.code==200 and int(response.headers.get('Content-Length',0))==p.stat().st_size
+            print('SMS_APK_READY '+url+' sha256='+expected)
+            PYCODE
