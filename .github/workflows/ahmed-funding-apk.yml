@@ -1,9 +1,6 @@
 name: Ahmed investment funding APK build 28
 # Runtime compatibility is stored in Android resources, not the embedded asset manifest.
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/ahmed-funding-apk.yml']
   workflow_dispatch:
 permissions:
   contents: read
