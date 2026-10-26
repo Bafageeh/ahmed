@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
+  StatusBar as NativeStatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -15,6 +17,7 @@ import { Ta3meedInvestorAccounts } from './ta3meed/Ta3meedInvestorAccounts';
 import { ahmedUserHeaders, getCurrentAhmedUserId } from './ahmedCurrentUser';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
+const ANDROID_STATUS_BAR_INSET = Platform.OS === 'android' ? Math.max(NativeStatusBar.currentHeight || 0, 24) : 0;
 
 function nameKey(name) {
   return String(name || '').normalize('NFKC').replace(/[\u064b-\u065f\u0670\u200c-\u200f]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -83,7 +86,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
   return (
     <SafeAreaView style={screenStyles.safe}>
       <StatusBar style="dark" />
-      <View style={screenStyles.header}>
+      <View style={screenStyles.header} testID="ta3meed-investors-safe-header">
         <TouchableOpacity style={screenStyles.headerIcon} onPress={requestBack} activeOpacity={0.85}>
           <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
         </TouchableOpacity>
@@ -109,7 +112,7 @@ export default function Ta3meedInvestorAccountsScreen({ onBack }) {
 
 const screenStyles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f8fc' },
-  header: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f8fc' },
+  header: { paddingHorizontal: 18, paddingTop: ANDROID_STATUS_BAR_INSET + 10, paddingBottom: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f4f8fc' },
   headerIcon: { width: 45, height: 45, borderRadius: 14, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe5ef', alignItems: 'center', justifyContent: 'center' },
   titleBlock: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { color: '#111a2d', fontSize: 23, fontWeight: '900', textAlign: 'center' },
