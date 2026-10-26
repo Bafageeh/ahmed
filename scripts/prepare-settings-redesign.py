@@ -37,14 +37,15 @@ subprocess.run(['node', str(test)], cwd=root / 'ahmed-mobile', check=True, timeo
 previews = []
 for mode in ['admin', 'user']:
     relative = Path('qa') / ('settings-' + secrets.token_hex(10) + '-' + mode + '.html')
-    destination = root / 'ahmed-api/public/webapp' / relative
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.parent.chmod(0o755)
     html = (case / ('settings-' + mode + '-preview.html')).read_text()
     html = html.replace('<meta charset="utf-8">', '<meta charset="utf-8"><meta name="robots" content="noindex,nofollow"><meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;; img-src data:; font-src &#39;self&#39;">')
-    destination.write_text(html)
-    destination.chmod(0o644)
-    previews.append({'mode': mode, 'path': str(relative), 'sha256': hashlib.sha256(destination.read_bytes()).hexdigest()})
+    for base in [root / 'ahmed-api/public/webapp', root / 'ahmed-mobile/dist-web']:
+        destination = base / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.parent.chmod(0o755)
+        destination.write_text(html)
+        destination.chmod(0o644)
+    previews.append({'mode': mode, 'path': str(relative), 'sha256': hashlib.sha256(html.encode()).hexdigest()})
     print('SETTINGS_PREVIEW_URL ' + mode + ' https://ahmed.pm.sa/webapp/' + str(relative), flush=True)
 proof = json.loads((case / 'settings-qa.json').read_text())
 proof['previews'] = previews

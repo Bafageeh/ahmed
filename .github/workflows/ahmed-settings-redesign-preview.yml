@@ -1,4 +1,5 @@
 name: Ahmed settings isolated behavior checks and visual preview
+# Use the installed CommonJS web components for the isolated server render.
 on:
   push:
     branches: [main]

@@ -66,6 +66,7 @@ const icon = evaluate(compile('UiIcon.js', true), iconModule, (name) => name ===
 const emptyComponent = () => null;
 const appRequire = (name) => {
   if (name === 'react-native') return RN;
+  if (name.startsWith('react-native-web/dist/exports/')) return { __esModule: true, default: RN[name.split('/').pop()] };
   if (name === './UiIcon') return icon;
   if (name === 'expo-status-bar') return { StatusBar: emptyComponent };
   if (name === 'expo-local-authentication') return {};
