@@ -1,4 +1,5 @@
 name: Ahmed SMS automatic review prefill without APK
+# Wait for actual review effects before checking the rendered form.
 on:
   push:
     branches: [main]

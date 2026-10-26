@@ -68,7 +68,8 @@ async function mount(suggestion, sources = {}) {
   h.byId = (id) => h.nodes.find((node) => node.props.testID === id)?.props;
   h.inputs = () => h.nodes.filter((node) => typeof node.props.onChangeText === 'function');
   h.text = () => h.nodes.filter((node) => typeof node.props.children === 'string').map((node) => node.props.children).join(' ');
-  h.render(); await Promise.resolve(); await Promise.resolve(); h.render();
+  h.render(); await new Promise(setImmediate); h.render();
+  check(!h.nodes.some((node) => node.props.style && node.type === RN.ActivityIndicator), "review load must finish before checking visible fields");
   return h;
 }
 (async () => {
