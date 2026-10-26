@@ -1,0 +1,61 @@
+name: Read-only encrypted Ta3meed opportunity lookup
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-opportunity-lookup.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lookup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 4m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT"
+            /usr/local/bin/php <<'PHP'
+            <?php
+            ini_set('display_errors','0');
+            $report=['ok'=>false];$connection=null;
+            try {
+                $root=getenv('AHMED_SMS_ROOT');
+                require $root.'/ahmed-api/vendor/autoload.php';
+                $app=require $root.'/ahmed-api/bootstrap/app.php';
+                $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+                $connection=Illuminate\Support\Facades\DB::connection();
+                if($connection->getDriverName()!=='mysql')throw new RuntimeException('Unexpected production database driver');
+                $connection->statement('SET TRANSACTION READ ONLY');$connection->beginTransaction();
+                $rows=$connection->table('investment_opportunities')->whereRaw("LOWER(REPLACE(REPLACE(reference_number,'-',''),' ','')) LIKE ?",['%szqn237%'])->limit(10)->get();
+                $items=[];
+                foreach($rows as $row){
+                    $item=[];
+                    foreach(['id','reference_number','user_id','account_id','platform_id','title','status','principal_amount','expected_profit_amount','start_date','maturity_date','received_at','completed_at','created_at','updated_at'] as $field){if(property_exists($row,$field))$item[$field]=$row->$field;}
+                    $meta=json_decode($row->metadata?:'{}',true)?:[];
+                    $item['metadata']=array_intersect_key($meta,array_flip(['category','withdrawal_date','funding_date','duration_months','ta3meed_received_total','ta3meed_remaining_amount','actual_profit','actual_duration_days']));
+                    $item['owner']=$connection->table('users')->where('id',$row->user_id)->first(['id','name','username']);
+                    $item['account']=$connection->table('investment_accounts')->where('id',$row->account_id)->first(['id','display_name','platform_id']);
+                    $item['platform']=$connection->table('investment_platforms')->where('id',$row->platform_id)->first(['id','code','name_ar']);
+                    $item['allocations']=$connection->table('investment_opportunity_allocations as a')->leftJoin('investment_investors as i','i.id','=','a.investor_id')->where('a.opportunity_id',$row->id)->get(['a.investor_id','i.name','i.code','a.invested_amount','a.expected_profit_amount']);
+                    $item['receipts']=$connection->table('ta3meed_receipts')->where('opportunity_id',$row->id)->where('user_id',$row->user_id)->orderBy('receipt_date')->get(['id','amount','receipt_date','receipt_type','reference_number']);
+                    $items[]=$item;
+                }
+                $connection->rollBack();$report=['ok'=>true,'reference'=>'ER-SZQN237','checked_at'=>now('Asia/Riyadh')->toIso8601String(),'items'=>$items];
+            }catch(Throwable $e){
+                if($connection && $connection->transactionLevel()>0)$connection->rollBack();
+                $report=['ok'=>false,'error_class'=>get_class($e),'message'=>$e->getMessage()];
+            }
+            $body=gzencode(json_encode($report,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),9);$key=random_bytes(32);$iv=random_bytes(12);$cipher=openssl_encrypt($body,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
+            $pub=base64_decode('LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFwVllyRGJ1T0w4Sk9wK1lIN0NJSwpta05jQmNVU2lRQ3BIM3NGK2lONG9IKzBYYUs4aDVLeDZQKzVLK3FTWHl5NmlMZmlUbE9naEdIWnRvUWZGcC94Ckg2UzYrb3crSnlMbFlPTkZnNTMxMmdmWXVPTThHRi9OZVBJbUVCckZRM0k0aW9oaDF2dTRGZmNmTktkSHoyblQKQi83bi9yS3BPOUhic0dSeUlCYzgxY00zdm9rdVlpdkJoU2ZhWkpReU9GOWF0QXFNWENHdlhCbVo3VzBvSzJRcAo5eHc3WEdZemNqdjJxUkFDZklJZXF6aCttSFVxa2xEREV5Wkl0S2Q5NnVDTjZKQ25mZVZUYVRQVTQ1Y3RJbllmCnkrWjZmSldiRi8zb2xjVnVpQWVPV05oMEZnVFIzWkVqc0ltY2lsOE5PT21HS29EbmI4NXd3Y0ROcUY3SmFkV2EKQVFJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==');if(!openssl_public_encrypt($key,$wrapped,$pub,OPENSSL_PKCS1_OAEP_PADDING))throw new RuntimeException('Report protection failed');
+            $encoded=strtoupper(bin2hex(json_encode(['key'=>base64_encode($wrapped),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($cipher)])));foreach(str_split($encoded,4000) as $i=>$part)echo 'OPPORTUNITY_LOOKUP_PART_'.$i.'='.$part."\n";
+            if(!$report['ok'])exit(1);
+            PHP
