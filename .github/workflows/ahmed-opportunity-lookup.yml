@@ -33,8 +33,11 @@ jobs:
                 $app=require $root.'/ahmed-api/bootstrap/app.php';
                 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
                 $connection=Illuminate\Support\Facades\DB::connection();
-                if($connection->getDriverName()!=='mysql')throw new RuntimeException('Unexpected production database driver');
-                $connection->statement('SET TRANSACTION READ ONLY');$connection->beginTransaction();
+                $driver=$connection->getDriverName();
+                if($driver==='mysql'){$connection->statement('SET TRANSACTION READ ONLY');$connection->beginTransaction();}
+                elseif($driver==='sqlite'){$connection->statement('PRAGMA query_only=ON');$connection->beginTransaction();}
+                elseif($driver==='pgsql'){$connection->beginTransaction();$connection->statement('SET TRANSACTION READ ONLY');}
+                else throw new RuntimeException('Unsupported read-only database driver: '.$driver);
                 $rows=$connection->table('investment_opportunities')->whereRaw("LOWER(REPLACE(REPLACE(reference_number,'-',''),' ','')) LIKE ?",['%szqn237%'])->limit(10)->get();
                 $items=[];
                 foreach($rows as $row){
