@@ -10,7 +10,7 @@ import urllib.request
 
 root = Path(os.environ['AHMED_SMS_ROOT']).resolve()
 sha = os.environ['AHMED_SMS_SHA']
-case = Path('/home/pmsa/secure-backups/ahmed/latest-apk-20261026')
+case = Path(os.environ.get('AHMED_APK_CASE', '/home/pmsa/secure-backups/ahmed/latest-apk-20261026'))
 excluded = {'.git', 'node_modules', '.expo', 'build', '.gradle', 'dist-web', 'dist', 'apk', 'build-output', 'Pods', 'vendor', 'cache'}
 extensions = {'.js', '.jsx', '.ts', '.tsx', '.json', '.kt', '.java', '.xml', '.gradle', '.kts', '.php', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', '.ttf', '.otf'}
 sources = ['ahmed-mobile', 'ahmed-api/app', 'ahmed-api/routes', 'ahmed-api/bootstrap', 'ahmed-api/config', 'ahmed-api/database/migrations', 'ahmed-api/tests']
@@ -44,7 +44,7 @@ case.chmod(0o700)
 proof = case / ('source-' + sha[:12] + '.json')
 proof.write_text(json.dumps({'commit': sha, 'files': actual}))
 proof.chmod(0o600)
-for path, method, data, expected_status in [('/health', 'GET', None, 200), ('/ahmed/session', 'POST', b'{}', 422), ('/sms/messages/1/review', 'GET', None, 401)]:
+for path, method, data, expected_status in [('/health', 'GET', None, 200), ('/ahmed/session', 'POST', b'{}', 422), ('/sms/messages/1/review', 'GET', None, 401), ('/sms/messages/1/investment/uploaded', 'POST', b'{}', 401)]:
     request = urllib.request.Request('https://ahmed.pm.sa/api' + path, data=data, method=method, headers={'Accept': 'application/json', 'Content-Type': 'application/json'})
     try: response = urllib.request.urlopen(request, timeout=25)
     except urllib.error.HTTPError as error: response = error

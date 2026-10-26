@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Inspect the signed build itself, resolving the manifest's actual runtime resource."""
 import hashlib
+import argparse
 import json
 from pathlib import Path
 import re
@@ -10,13 +11,19 @@ from loguru import logger
 logger.disable('androguard')
 from androguard.core.apk import APK
 
-path = Path(sys.argv[1])
-expected = sys.argv[2] if len(sys.argv) > 2 else None
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('path', type=Path)
+parser.add_argument('expected_sha256', nargs='?')
+parser.add_argument('--version-code', type=int, default=27)
+parser.add_argument('--require-investment-funding', action='store_true')
+args = parser.parse_args()
+path = args.path
+expected = args.expected_sha256
 digest = hashlib.sha256(path.read_bytes()).hexdigest()
 if expected: assert digest == expected, 'APK differs from the inspected build candidate'
 apk = APK(str(path))
 assert apk.get_package() == 'sa.pm.ahmed'
-assert apk.get_androidversion_code() == '27' and apk.get_androidversion_name() == '1.0.23'
+assert apk.get_androidversion_code() == str(args.version_code) and apk.get_androidversion_name() == '1.0.23'
 namespace = '{http://schemas.android.com/apk/res/android}'
 metadata = [node for node in apk.get_android_manifest_xml().iter('meta-data') if node.get(namespace + 'name') == 'expo.modules.updates.EXPO_RUNTIME_VERSION']
 assert len(metadata) == 1, 'Expected one native update runtime setting'
@@ -34,5 +41,8 @@ with zipfile.ZipFile(path) as archive:
     bundle = archive.read('assets/index.android.bundle')
     for marker in [b'sms-review-auto-data', b'ahmed-settings-redesign', b'ta3meed-wallet-safe-header', b'ta3meed-investors-safe-header']:
         assert marker in bundle, 'Latest embedded feature is missing: ' + marker.decode()
+    if args.require_investment_funding:
+        for marker in [b'mark-sms-investment-uploaded', b'sms-investment-review-actions', b'investment/uploaded', b'investment_funded']:
+            assert marker in bundle, 'Investment funding feature is missing: ' + marker.decode()
     assert not re.search(rb'#S-\d{2,4}\b', bundle), 'An old screen identifier remains embedded'
-print('LATEST_APK_BINARY_INSPECTION_PASSED ' + json.dumps({'sha256': digest, 'bytes': path.stat().st_size, 'package': apk.get_package(), 'versionCode': 27, 'runtime': '1.0.23', 'embedded_latest_features': True}))
+print('LATEST_APK_BINARY_INSPECTION_PASSED ' + json.dumps({'sha256': digest, 'bytes': path.stat().st_size, 'package': apk.get_package(), 'versionCode': args.version_code, 'runtime': '1.0.23', 'embedded_latest_features': True, 'investment_funding_verified': args.require_investment_funding}))
