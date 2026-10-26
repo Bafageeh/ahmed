@@ -1,0 +1,49 @@
+name: Import one explicitly requested missed SMS
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-assisted-sms-import.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-assisted-sms
+  cancel-in-progress: false
+jobs:
+  import-request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 5m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/assisted-sms-20261026"
+            export AHMED_SMS_SHA="${{ github.sha }}"
+            test -f "$AHMED_SMS_CASE/request-key.pem"
+            test -f "$AHMED_SMS_CASE/report-public.pem"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/import-assisted-sms.php" > "$AHMED_SMS_CASE/import.php"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/assisted-sms-request-20261026.encrypted.json" > "$AHMED_SMS_CASE/request-envelope.json"
+            chmod 600 "$AHMED_SMS_CASE/import.php" "$AHMED_SMS_CASE/request-envelope.json"
+            cd "$ROOT/ahmed-api"
+            /usr/local/bin/php -l "$AHMED_SMS_CASE/import.php"
+            /usr/local/bin/php "$AHMED_SMS_CASE/import.php" rehearse
+            /usr/local/bin/php "$AHMED_SMS_CASE/import.php" live
+            python3 - <<'PYTHON'
+            import urllib.request,urllib.error,json
+            for path,method,data,expected in [('/health','GET',None,200),('/ahmed/session','POST',b'{}',422),('/sms/messages','GET',None,401)]:
+             request=urllib.request.Request('https://ahmed.pm.sa/api'+path,method=method,data=data,headers={'Accept':'application/json','Content-Type':'application/json'})
+             try:response=urllib.request.urlopen(request,timeout=25)
+             except urllib.error.HTTPError as error:response=error
+             if response.code!=expected or 'application/json' not in response.headers.get('Content-Type',''):raise RuntimeError('Live API check failed')
+             json.loads(response.read())
+            print('ASSISTED_SMS_LIVE_API_VERIFIED')
+            PYTHON
