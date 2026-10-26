@@ -1,0 +1,46 @@
+name: Ahmed accepted investment SMS review and completion without APK
+# Wait for actual review effects before checking the rendered form.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-investment-sms-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ahmed-investment-sms-release
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Verify the passed backend integration run
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {data: run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:40308982784});
+            if(run.head_sha!=='5d767ccfa7ea37336007983bba4b7e4f7e159be5'||run.conclusion!=='success')throw new Error('The required isolated backend suite did not pass');
+      - name: Verify the actual form, apply three guarded sources and publish without APK
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 22m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/investment-sms-20261026" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_UI_RELEASE_MANIFEST="scripts/investment-sms-release-20261026.json"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/deliver-investment-sms.py" > "$AHMED_SMS_CASE/deliver.py"
+            python3 "$AHMED_SMS_CASE/deliver.py"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/publish-investment-sms.py" > "$AHMED_SMS_CASE/publish.py"
+            python3 "$AHMED_SMS_CASE/publish.py"

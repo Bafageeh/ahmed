@@ -614,6 +614,6 @@
   ],
   "bundle_marker": "sms-investment-review-actions",
   "update_message": "Complete accepted investment SMS in the existing opportunity form or discard without recording",
-  "backend_verified_commit": "f6de526a7eb4ecf79126a190a4367deb451d0624",
-  "backend_verified_run": 40307745354
+  "backend_verified_commit": "5d767ccfa7ea37336007983bba4b7e4f7e159be5",
+  "backend_verified_run": 40308982784
 }
