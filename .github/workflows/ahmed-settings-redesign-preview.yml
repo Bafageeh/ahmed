@@ -1,0 +1,35 @@
+name: Ahmed settings isolated behavior checks and visual preview
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-settings-redesign-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-settings-redesign-preview
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check settings permissions, navigation and labels; render synthetic previews
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 22m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/settings-redesign-20261026" AHMED_SMS_SHA="${{ github.sha }}"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/prepare-settings-redesign.py" > "$AHMED_SMS_CASE/prepare.py"
+            python3 "$AHMED_SMS_CASE/prepare.py"

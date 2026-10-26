@@ -102,8 +102,14 @@ module.exports = function appShellSettingsVaultTab({ types: t }) {
             if (t.isIdentifier(path.node.id, { name: 'MoreScreen' })) {
               path.traverse({
                 JSXOpeningElement(innerPath) {
+                  // The authored settings screen owns its compact header and menus.
+                  if (t.isJSXIdentifier(innerPath.node.name, { name: 'SettingsScreen' })) {
+                    settingsHeaderPatched = true;
+                    innerPath.stop();
+                    return;
+                  }
                   if (!t.isJSXIdentifier(innerPath.node.name, { name: 'Header' })) return;
-                  setJsxStringAttribute(innerPath.node, 'title', '#S-150 إعدادات');
+                  setJsxStringAttribute(innerPath.node, 'title', 'الإعدادات');
                   setJsxStringAttribute(innerPath.node, 'subtitle', 'الإعدادات والاختصارات.');
                   setJsxStringAttribute(innerPath.node, 'icon', 'settings');
                   settingsHeaderPatched = true;

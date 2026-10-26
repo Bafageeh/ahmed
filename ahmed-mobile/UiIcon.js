@@ -30,6 +30,7 @@ import {
   Hexagon,
   Settings,
   MessageSquare,
+  LogOut,
 } from 'lucide-react-native';
 
 export const ICON_COLOR = '#7c3aed';
@@ -69,6 +70,7 @@ const iconMap = {
   tokenize: Hexagon,
   settings: Settings,
   sms: MessageSquare,
+  logout: LogOut,
 };
 
 export default function UiIcon({ name, size = 22, color = ICON_COLOR, style }) {

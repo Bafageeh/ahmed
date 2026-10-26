@@ -103,6 +103,12 @@ module.exports = function bankStatementSchedulesPlugin({ types: t }) {
                 path.traverse({
                   JSXElement(innerPath) {
                     const opening = innerPath.node.openingElement;
+                    // SettingsScreen includes the manager-only schedule action explicitly.
+                    if (t.isJSXIdentifier(opening.name, { name: 'SettingsScreen' })) {
+                      settingsMenuPatched = true;
+                      innerPath.stop();
+                      return;
+                    }
                     if (!t.isJSXIdentifier(opening.name, { name: 'View' }) || !styleIs(opening, 'menu')) return;
                     const exists = innerPath.node.children.some((child) => containsString(child, 'bankStatementSchedules'));
                     if (!exists) {

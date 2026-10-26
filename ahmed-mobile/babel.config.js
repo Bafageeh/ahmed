@@ -30,6 +30,7 @@ module.exports = function (api) {
       './babel-plugin-bank-statement-schedules',
       './babel-plugin-card-edit-form-restore',
       './babel-plugin-secure-vault-statement-day-display',
+      './babel-plugin-hide-screen-codes',
     ],
   };
 };
