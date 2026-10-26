@@ -1,0 +1,49 @@
+name: Ahmed settings redesign publication without APK
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-settings-redesign.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-settings-redesign-release
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Publish the tested settings screen and clean screen labels without APK
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 22m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/settings-redesign-20261026" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_UI_RELEASE_MANIFEST="scripts/settings-redesign-release-20261026.json"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/deliver-settings-redesign.py" > "$AHMED_SMS_CASE/deliver.py"
+            python3 "$AHMED_SMS_CASE/deliver.py"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/publish-settings-redesign.py" > "$AHMED_SMS_CASE/publish.py"
+            python3 "$AHMED_SMS_CASE/publish.py"
+            python3 - <<'PYCODE'
+            from pathlib import Path
+            import os,json,hashlib
+            root=Path(os.environ['AHMED_SMS_ROOT']);case=Path(os.environ['AHMED_SMS_CASE'])
+            for item in json.loads((case/'settings-qa.json').read_text()).get('previews',[]):
+                relative=Path(item['path']);assert relative.parts[0]=='qa' and relative.name.startswith('settings-') and relative.suffix=='.html'
+                for base in [root/'ahmed-api/public/webapp', root/'ahmed-mobile/dist-web']:
+                    target=base/relative;target.resolve().relative_to(base.resolve())
+                    if target.exists() and hashlib.sha256(target.read_bytes()).hexdigest()==item['sha256']:target.unlink()
+            print('SETTINGS_SYNTHETIC_PREVIEWS_REMOVED')
+            PYCODE
