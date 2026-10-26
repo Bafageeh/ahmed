@@ -1,4 +1,5 @@
 name: Ahmed latest verified APK build 27
+# Runtime compatibility is stored in Android resources, not the embedded asset manifest.
 on:
   push:
     branches: [main]
@@ -102,6 +103,13 @@ jobs:
         run: |
           chmod +x gradlew
           timeout 38m ./gradlew :app:assembleRelease --no-daemon --console=plain --stacktrace --max-workers=2
+      - name: Preserve the build candidate for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: ahmed-latest-build-candidate
+          retention-days: 1
+          path: ahmed-mobile/android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
       - name: Verify signed APK, embedded latest screens, SMS access and preserved widget
         id: apk_metadata
         run: |
@@ -129,8 +137,10 @@ jobs:
             for marker in [b'sms-review-auto-data',b'ahmed-settings-redesign',b'ta3meed-wallet-safe-header',b'ta3meed-investors-safe-header']:
               assert marker in bundle,'Latest embedded app feature is missing: '+marker.decode()
             assert not re.search(rb'#S-\d{2,4}\b',bundle),'Old screen identifiers remain embedded'
-            app_manifest=json.loads(archive.read('assets/app.manifest'))
-            assert app_manifest['runtimeVersion']=='1.0.23','Existing production OTA compatibility must be preserved'
+          resources=subprocess.check_output([os.environ['AHMED_AAPT'],'dump','--values','resources',str(apk)]).decode()
+          runtime=re.search(r':string/expo_runtime_version:.*?(?=\n\s*resource |\Z)',resources,re.S)
+          assert runtime and '"1.0.23"' in runtime.group(0),'Existing production OTA runtime resource must be preserved'
+          assert 'expo.modules.updates.EXPO_RUNTIME_VERSION' in manifest,'Native update runtime metadata must be present'
           print('LATEST_APK_EMBEDDED_FEATURES_RUNTIME_AND_UPGRADE_VERSION_VERIFIED')
           digest=hashlib.sha256(apk.read_bytes()).hexdigest()
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha256='+digest+'\n')
