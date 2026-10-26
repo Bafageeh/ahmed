@@ -94,7 +94,7 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'financeImports') return <FinanceImportsScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
     if (activeTab === 'secureVault') return <SecureVaultScreen onBack={() => openTab('reports')} />;
-    if (activeTab === 'smsArchive') return <SmsArchiveScreen onBack={() => openTab('more')} />;
+    if (activeTab === 'smsArchive') return <SmsArchiveScreen key={String(currentUser?.id)} onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} openInvestment={openInvestment} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
     if (activeTab === 'investments') {
       if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} onOpenWallet={() => setInvestmentScreen('ta3meedWallet')} />;

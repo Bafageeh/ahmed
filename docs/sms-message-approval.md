@@ -1,0 +1,13 @@
+# Manual approval of Ta3meed SMS
+
+Open a message marked `needs_review`, choose **اعتماد الرسالة**, review its type, amount, date and reference, and confirm the transaction completed. The form supports wallet deposits, withdrawals and opportunity repayments. A repayment also requires an opportunity reference and a partial/full/early-settlement type.
+
+The authenticated owner can load `GET /api/sms/messages/{id}/review` and submit `POST /api/sms/messages/{id}/approve`. The server independently checks ownership, the exact Ta3meed sender, the current review version, positive two-decimal amounts, dates and explicit confirmation. Other senders, completed messages and non-payment messages cannot enter this flow. Existing encrypted sender/body values remain unchanged.
+
+Similar wallet entries are shown before an approval can add cash. The user can link a matching existing entry without adding money, or explicitly confirm a separate operation. That confirmation uses an account-scoped challenge covering the submitted data and the current candidates; changed data or movements invalidate it. Repayment links must also match opportunity and receipt type. Remaining balance, owner, platform and opportunity lifecycle protections always apply.
+
+All writes use the same account-first lock order as incoming SMS and manual ledger writes. The receipt, investor allocations, wallet entry, review audit and message status commit together. One approval per message makes repeated taps and lost-response retries idempotent; conflicting retries are rejected. An audit keeps the original review reason and the confirmed decision without copying SMS text into a plaintext audit.
+
+The archive changes from **تحتاج مراجعة** to **معتمدة · تم تسجيل الحركة**, or **معتمدة · مرتبطة بحركة مسجلة** for a link. In-app success is shown only after the committed response. Automatic processing still saves only new incoming Ta3meed SMS. No inbox-history access, native-module change, app-version change or APK build is required.
+
+Run the isolated database suite with `php scripts/test-sms-review.php PROJECT_ROOT`; it includes the SMS and wallet regression suites. `node --experimental-vm-modules scripts/test-sms-review-client.cjs` covers authentication, account changes, conflict details and timeout behavior for the approval API client.

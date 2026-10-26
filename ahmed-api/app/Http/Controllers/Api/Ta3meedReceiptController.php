@@ -12,9 +12,9 @@ use Illuminate\Support\Facades\Schema;
 class Ta3meedReceiptController extends Controller
 {
     /** Internal, account-scoped entry point; never registered as a public route. */
-    public function recordIncomingSms(int $userId, array $parsed, string $message, string $date): array
+    public function recordIncomingSms(int $userId, array $parsed, string $message, string $date, bool $reviewed = false): array
     {
-        return DB::transaction(function () use ($userId, $parsed, $message, $date) {
+        return DB::transaction(function () use ($userId, $parsed, $message, $date, $reviewed) {
             DB::table('users')->where('id', $userId)->lockForUpdate()->first();
             $review = fn ($reason) => ['status' => 'needs_review', 'reason' => $reason];
             $platformId = DB::table('investment_platforms')->where('code', 'ta3meed')->value('id');
@@ -27,7 +27,7 @@ class Ta3meedReceiptController extends Controller
             $investment = $matches->first();
             $receipts = DB::table('ta3meed_receipts')->where('opportunity_id', $investment->id)->where('user_id', $userId);
             $same = (clone $receipts)->where('amount', $parsed['amount'])->get();
-            foreach ($same as $receipt) {
+            foreach ($reviewed ? [] : $same as $receipt) {
                 if (substr((string) $receipt->receipt_date, 0, 10) === $date && $receipt->source_message && \App\Support\Ta3meedSmsParser::normalize($receipt->source_message) === \App\Support\Ta3meedSmsParser::normalize($message)) {
                     return ['status' => 'duplicate', 'reason' => 'receipt_already_exists', 'receipt_id' => $receipt->id];
                 }
@@ -46,8 +46,8 @@ class Ta3meedReceiptController extends Controller
             if ($final && $amount < max(0, $principal - $paid)) return $review('final_amount_below_remaining_principal');
             $receipt = $this->record($investment, ['amount' => $parsed['amount'], 'receipt_type' => $parsed['receipt_type'],
                 'receipt_date' => $date, 'reference_number' => $investment->reference_number,
-                'source_message' => $message, 'notes' => 'سداد مسجل تلقائيًا من رسالة Ta3meed',
-                'force_complete' => $final, 'allow_duplicate' => false, 'deduplicate_date' => true]);
+                'source_message' => $message, 'notes' => $reviewed ? 'سداد من رسالة Ta3meed معتمدة يدويًا' : 'سداد مسجل تلقائيًا من رسالة Ta3meed',
+                'force_complete' => $final, 'allow_duplicate' => $reviewed, 'deduplicate_date' => true]);
             if ($final || $paid + $amount >= $due - 1) {
                 $dates = [];
                 foreach (['completed_at', 'received_at'] as $column) if (Schema::hasColumn('investment_opportunities', $column)) $dates[$column] = $date;

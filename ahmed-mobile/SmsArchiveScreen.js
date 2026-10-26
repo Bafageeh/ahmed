@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Linking, Modal, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
+import SmsReviewForm from './SmsReviewForm';
 import { disableSmsCapture, enableSmsCapture, fetchSmsArchive, getSmsCaptureStatus, syncSmsCapture } from './smsCapture';
 
 const date = (value) => value ? new Date(Number(value)).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short', calendar: 'gregory' }) : '—';
-const analysisLabel = (item) => ({ applied: item?.analysis?.action_type === 'deposit' ? 'تم تسجيل الإيداع بالمحفظة' : item?.analysis?.action_type === 'withdrawal' ? 'تم تسجيل السحب من المحفظة' : 'تم تسجيل السداد', duplicate: 'مسجلة سابقًا · دون تكرار', needs_review: 'تحتاج مراجعة', non_payment: 'محفوظة · لا توجد حركة مكتملة', archived: 'محفوظة', pending: 'جارٍ التحليل' }[item?.analysis?.status] || 'محفوظة');
-const reasonLabel = (reason) => ({ wallet_reference_conflict: 'مرجع العملية مسجل بمبلغ مختلف؛ راجع الحركة.', possible_duplicate_wallet_transfer: 'توجد حركة بنفس القيمة والتاريخ؛ راجع السجل لتجنب التكرار.', wallet_fee_needs_review: 'الرسالة تتضمن رسومًا وتحتاج مراجعة قيمة الخصم.', ambiguous_wallet_direction: 'لم تتضح جهة الإيداع أو السحب.', ambiguous_wallet_reference: 'تتضمن الرسالة أكثر من مرجع للعملية.', wallet_transfer_not_confirmed: 'الرسالة لا تؤكد اكتمال الإيداع أو السحب.', opportunity_not_found: 'لم توجد فرصة مطابقة في حسابك.', ambiguous_opportunity: 'يوجد أكثر من تطابق لرقم الفرصة.', missing_or_ambiguous_reference: 'رقم الفرصة ناقص أو غير واضح.', missing_or_ambiguous_amount: 'مبلغ السداد ناقص أو يحتمل أكثر من قيمة.', possible_duplicate_receipt: 'توجد دفعة بالقيمة والتاريخ نفسيهما؛ راجعها قبل الإضافة.', opportunity_already_closed: 'الفرصة مغلقة أو مسددة سابقًا.', amount_exceeds_remaining: 'المبلغ يتجاوز المتبقي في سجل الفرصة.', final_amount_below_remaining_principal: 'مبلغ السداد النهائي أقل من رأس المال المتبقي.', receipt_balance_mismatch: 'رصيد الفرصة يحتاج مطابقة مع سجل الدفعات.', invalid_payment_date: 'تاريخ السداد غير صحيح.', ambiguous_payment_date: 'تاريخ السداد غير واضح.', conflicting_payment_type: 'نوع السداد غير واضح.', payment_not_confirmed: 'الرسالة لا تؤكد إتمام السداد.', processing_failed: 'حُفظت الرسالة وتعذر إكمال التسجيل؛ راجع سجل الدفعات.' }[reason] || '');
+const analysisLabel = (item) => item?.analysis?.reason === 'manually_linked' ? 'معتمدة · مرتبطة بحركة مسجلة' : item?.analysis?.reason === 'manually_approved' ? 'معتمدة · تم تسجيل الحركة' : ({ applied: item?.analysis?.action_type === 'deposit' ? 'تم تسجيل الإيداع بالمحفظة' : item?.analysis?.action_type === 'withdrawal' ? 'تم تسجيل السحب من المحفظة' : 'تم تسجيل السداد', duplicate: 'مسجلة سابقًا · دون تكرار', needs_review: 'تحتاج مراجعة', non_payment: 'محفوظة · لا توجد حركة مكتملة', archived: 'محفوظة', pending: 'جارٍ التحليل' }[item?.analysis?.status] || 'محفوظة');
+const reasonLabel = (reason) => reason === 'manually_linked' ? 'تم اعتماد الرسالة وربطها بالحركة المسجلة دون تكرار المبلغ.' : reason === 'manually_approved' ? 'تم اعتماد الرسالة وتحديث السجلات بنجاح.' : ({ wallet_reference_conflict: 'مرجع العملية مسجل بمبلغ مختلف؛ راجع الحركة.', possible_duplicate_wallet_transfer: 'توجد حركة بنفس القيمة والتاريخ؛ راجع السجل لتجنب التكرار.', wallet_fee_needs_review: 'الرسالة تتضمن رسومًا وتحتاج مراجعة قيمة الخصم.', ambiguous_wallet_direction: 'لم تتضح جهة الإيداع أو السحب.', ambiguous_wallet_reference: 'تتضمن الرسالة أكثر من مرجع للعملية.', wallet_transfer_not_confirmed: 'الرسالة لا تؤكد اكتمال الإيداع أو السحب.', opportunity_not_found: 'لم توجد فرصة مطابقة في حسابك.', ambiguous_opportunity: 'يوجد أكثر من تطابق لرقم الفرصة.', missing_or_ambiguous_reference: 'رقم الفرصة ناقص أو غير واضح.', missing_or_ambiguous_amount: 'مبلغ السداد ناقص أو يحتمل أكثر من قيمة.', possible_duplicate_receipt: 'توجد دفعة بالقيمة والتاريخ نفسيهما؛ راجعها قبل الإضافة.', opportunity_already_closed: 'الفرصة مغلقة أو مسددة سابقًا.', amount_exceeds_remaining: 'المبلغ يتجاوز المتبقي في سجل الفرصة.', final_amount_below_remaining_principal: 'مبلغ السداد النهائي أقل من رأس المال المتبقي.', receipt_balance_mismatch: 'رصيد الفرصة يحتاج مطابقة مع سجل الدفعات.', invalid_payment_date: 'تاريخ السداد غير صحيح.', ambiguous_payment_date: 'تاريخ السداد غير واضح.', conflicting_payment_type: 'نوع السداد غير واضح.', payment_not_confirmed: 'الرسالة لا تؤكد إتمام السداد.', processing_failed: 'حُفظت الرسالة وتعذر إكمال التسجيل؛ راجع سجل الدفعات.' }[reason] || '');
 
 export default function SmsArchiveScreen({ onBack }) {
   const [status, setStatus] = useState({ supported: false, enabled: false, pendingCount: 0 });
@@ -17,6 +18,7 @@ export default function SmsArchiveScreen({ onBack }) {
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState(null);
+  const [reviewing, setReviewing] = useState(false);
   const mounted = useRef(true);
 
   const refreshStatus = async () => {
@@ -95,8 +97,14 @@ export default function SmsArchiveScreen({ onBack }) {
         ))}
         {hasMore ? <TouchableOpacity onPress={() => load(true)} style={styles.more}><Text style={styles.link}>عرض رسائل أقدم</Text></TouchableOpacity> : null}
       </ScrollView>
-      <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
+      <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => { if (!reviewing) setSelected(null); }}>
         <View style={styles.overlay}><View style={styles.dialog}>
+          {reviewing && selected ? <SmsReviewForm key={selected.id} item={selected} onCancel={() => setReviewing(false)} onApproved={(result) => {
+            setRows((current) => current.map((row) => row.id === selected.id ? { ...row, analysis: result.analysis } : row));
+            setSelected((current) => current ? { ...current, analysis: result.analysis } : null); setReviewing(false);
+            setMessage(result.analysis.reason === 'manually_linked' ? 'تم اعتماد الرسالة وربطها بالحركة المسجلة دون تكرار المبلغ.' : 'تم اعتماد الرسالة وتحديث السجلات بنجاح.');
+            load();
+          }} /> : <>
           <View style={styles.rowHeader}><TouchableOpacity accessibilityLabel="إغلاق تفاصيل الرسالة" onPress={() => setSelected(null)} style={styles.iconButton}><UiIcon name="close" size={23} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.dialogTitle}>تفاصيل الرسالة</Text></View>
           <Text style={styles.fieldLabel}>المرسل</Text><Text selectable style={styles.detailSender}>{selected?.sender || 'مرسل غير معروف'}</Text>
           <Text style={styles.fieldLabel}>وقت الوصول</Text><Text style={styles.detailTime}>{date(selected?.received_at_ms)}</Text>
@@ -106,7 +114,9 @@ export default function SmsArchiveScreen({ onBack }) {
           {selected?.analysis?.amount != null ? <Text style={styles.detailTime}>المبلغ: {Number(selected.analysis.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ر.س</Text> : null}
           {reasonLabel(selected?.analysis?.reason) ? <Text style={styles.note}>{reasonLabel(selected.analysis.reason)}</Text> : null}
           <ScrollView style={styles.bodyScroll}><Text selectable style={styles.body}>{selected?.body || 'رسالة فارغة'}</Text></ScrollView>
-          <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(`${selected?.sender || ''}\n${selected?.body || ''}`); setMessage('تم نسخ الرسالة مع المرسل.'); setSelected(null); }} style={styles.copy}><Text style={styles.copyText}>نسخ الرسالة مع المرسل</Text></TouchableOpacity>
+          {selected?.analysis?.status === 'needs_review' && String(selected?.sender || '').trim().toLowerCase() === 'ta3meed' ? <TouchableOpacity testID="open-sms-message-review" accessibilityLabel="اعتماد الرسالة" onPress={() => setReviewing(true)} style={styles.copy}><Text style={styles.copyText}>اعتماد الرسالة</Text></TouchableOpacity> : null}
+          <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(`${selected?.sender || ''}\n${selected?.body || ''}`); setMessage('تم نسخ الرسالة مع المرسل.'); setSelected(null); }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>نسخ الرسالة مع المرسل</Text></TouchableOpacity>
+          </>}
         </View></View>
       </Modal>
     </SafeAreaView>
@@ -126,6 +136,7 @@ const styles = StyleSheet.create({
   listHeading: { marginTop: 22, marginBottom: 10, flexDirection: 'row-reverse', justifyContent: 'space-between', alignItems: 'center' }, listTitle: { fontSize: 16, color: '#172033', fontWeight: '800' },
   messageRow: { backgroundColor: '#fff', padding: 13, borderRadius: 15, marginBottom: 8, borderWidth: 1, borderColor: '#e9eaf0' }, rowHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }, sender: { flex: 1, fontSize: 14, fontWeight: '800', color: '#172033', textAlign: 'right' }, time: { fontSize: 10, color: '#64748b' }, preview: { fontSize: 13, lineHeight: 21, color: '#475569', textAlign: 'right', marginTop: 7 },
   empty: { backgroundColor: '#fff', borderRadius: 15, padding: 22, alignItems: 'center' }, emptyTitle: { color: '#334155', fontWeight: '700', marginBottom: 4 }, more: { alignItems: 'center', padding: 8 },
+  secondaryButton: { borderRadius: 13, borderWidth: 1, borderColor: '#ddd6fe', alignItems: 'center', padding: 12, marginTop: 10 }, secondaryButtonText: { color: '#6d28d9', fontWeight: '700', fontSize: 13 },
   overlay: { flex: 1, backgroundColor: '#0f172a66', alignItems: 'center', justifyContent: 'center', padding: 20 }, dialog: { width: '100%', maxWidth: 500, maxHeight: '80%', backgroundColor: '#fff', borderRadius: 22, padding: 18 }, dialogTitle: { fontSize: 18, fontWeight: '800', color: '#172033' },
   fieldLabel: { marginTop: 10, fontSize: 11, color: '#64748b', textAlign: 'right' }, detailSender: { color: '#5b21b6', fontSize: 17, fontWeight: '800', textAlign: 'right', marginTop: 4 }, detailTime: { color: '#475569', fontSize: 12, textAlign: 'right', marginTop: 4 }, bodyScroll: { marginTop: 16, flexShrink: 1 }, body: { color: '#172033', fontSize: 15, lineHeight: 26, textAlign: 'right' }, copy: { borderRadius: 13, backgroundColor: '#6d28d9', alignItems: 'center', padding: 13, marginTop: 18 }, copyText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 });
