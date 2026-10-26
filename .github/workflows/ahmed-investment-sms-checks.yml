@@ -1,4 +1,5 @@
 name: Ahmed accepted investment SMS isolated checks
+# Verify sender isolation for pre-existing archived acceptance messages.
 # Wait for actual review effects before checking the rendered form.
 on:
   push:

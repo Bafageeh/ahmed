@@ -498,7 +498,7 @@ export function AddOpportunityModal({ visible, onClose, onCreated, initialValues
 
           <View style={addStyles.footer}>
             <TouchableOpacity onPress={close} disabled={saving} style={addStyles.cancelButton} activeOpacity={0.82}>
-              <Text style={addStyles.cancelText}>إلغاء</Text>
+              <Text style={addStyles.cancelText}>{onSubmit ? 'رجوع للمراجعة' : 'إلغاء'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={createOpportunity}

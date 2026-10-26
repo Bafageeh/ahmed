@@ -162,7 +162,7 @@ export default function SmsArchiveScreen({ onBack }) {
       </Modal>
       <AddOpportunityModal key={investmentDraft?.id || 'sms-investment'} visible={Boolean(investmentDraft)}
         initialValues={investmentDraft?.initialValues}
-        intro={investmentDraft?.date_source === 'message' ? 'بيانات الرسالة معبأة. أكمل الحقول المتبقية ثم احفظ الفرصة.' : 'بيانات الرسالة معبأة. تاريخ التمويل من وقت الرسالة ويمكنك تعديله.'}
+        intro={['sent_at', 'received_at'].includes(investmentDraft?.date_source) ? 'بيانات الرسالة معبأة. تاريخ التمويل من وقت الرسالة ويمكنك تعديله.' : 'بيانات الرسالة معبأة. أكمل الحقول المتبقية ثم احفظ الفرصة.'}
         onClose={() => setInvestmentDraft(null)}
         onSubmit={(payload) => completeSmsInvestment(investmentDraft.id, { ...payload, version: investmentDraft.version }, sessionKey.current)}
         onCreated={(result) => {

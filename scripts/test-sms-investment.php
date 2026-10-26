@@ -109,6 +109,10 @@ verifySms($legacyItem['analysis']['action_type'] === 'investment' && $legacyItem
 verifySms(DB::table('sms_archive_messages')->where('id', $legacy['message_id'])->value('analysis_status') === 'non_payment', 'merely viewing an old acceptance never rewrites archive or financial data');
 $legacyReview = investmentReview($legacy['message_id']);
 verifySms($legacyReview['suggestion']['start_date'] === '2026-10-25' && $legacyReview['suggestion']['date_source'] === 'message', 'explicit funding date takes precedence over SMS arrival');
+DB::table('sms_archive_messages')->where('id', $legacy['message_id'])->update(['sender' => Crypt::encryptString('OtherService')]);
+[$code, $archive] = smsRequest('GET', '/api/sms/messages', [], $owner);
+$foreignLegacy = collect($archive['data'])->firstWhere('id', $legacy['message_id']);
+verifySms($foreignLegacy['analysis']['action_type'] !== 'investment', 'legacy messages from other senders never gain investment-completion actions');
 verifySms(walletSummary($owner)['summary']['balance_cents'] === $cashBeforeInvestment, 'all acceptance decisions preserve wallet cash until an actual wallet transaction occurs');
 $investmentSuiteComplete = true;
 echo 'SMS_INVESTMENT_INTEGRATION_PASSED investment_checks='.($checks - $investmentBaseline).' total_checks='.$checks."\n";

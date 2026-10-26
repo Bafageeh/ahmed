@@ -30,7 +30,8 @@ final class Ta3meedInvestmentSmsParser
     public static function forDisplay(object $row, string $body): object
     {
         if ($row->analysis_status === 'dismissed' || $row->analysis_status === 'investment_created'
-            || $row->receipt_id || ($row->wallet_entry_id ?? null) || ! self::recognizes($body)) return $row;
+            || $row->receipt_id || ($row->wallet_entry_id ?? null) || ! self::recognizes($body)
+            || ! Ta3meedSmsParser::allowedSender(Crypt::decryptString($row->sender))) return $row;
         $copy = clone $row;
         $facts = self::suggestion($row, $body);
         $copy->analysis_status = 'needs_review'; $copy->analysis_reason = 'investment_requires_completion';
