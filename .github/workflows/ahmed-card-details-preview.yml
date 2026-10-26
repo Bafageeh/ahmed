@@ -1,0 +1,32 @@
+name: Ahmed opportunity card company and rate checks
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-card-details-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 5m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/card-details-20261026"
+            export AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/prepare-card-details.py" > "$AHMED_SMS_CASE/prepare.py"
+            python3 "$AHMED_SMS_CASE/prepare.py"
+

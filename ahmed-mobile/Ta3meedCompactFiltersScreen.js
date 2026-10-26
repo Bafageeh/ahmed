@@ -250,34 +250,14 @@ function activeRemainingInvestmentAmount(items, selectedInvestor = 'all') {
 function actualAnnualRate(item, meta, receipts, allocations) {
   if (statusOf(item).key !== 'received') return null;
   const principal = n(item.principal_amount);
-  if (principal <= 0) return null;
-
-  const investmentDate = String(
-    meta.withdrawal_date ||
-    item.withdrawal_date ||
-    item.investment_date ||
-    item.start_date ||
-    ''
-  ).slice(0, 10);
-
-  const receiptDates = (receipts || [])
-    .map((receipt) => String(receipt.receipt_date || receipt.created_at || '').slice(0, 10))
-    .filter(Boolean)
-    .sort();
-
-  const lastReceiptDate = receiptDates.length ? receiptDates[receiptDates.length - 1] : '';
-
-  if (!investmentDate || !lastReceiptDate) return null;
-
-  const startDate = new Date(`${investmentDate}T00:00:00`);
-  const endDate = new Date(`${lastReceiptDate}T00:00:00`);
-  const days = Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)));
-
-  const receivedAmount = receivedAmountOf(item, meta, receipts, allocations);
-  const actualReceivedProfit = Math.max(0, receivedAmount - principal);
-
-  if (actualReceivedProfit <= 0) return null;
-
+  if (!Number.isFinite(principal) || principal <= 0) return null;
+  const days = realInvestmentDaysOf(item, meta, receipts);
+  if (days === null) return null;
+  const savedProfit = item.actual_profit_amount;
+  const actualReceivedProfit = savedProfit !== null && savedProfit !== undefined && savedProfit !== '' && Number.isFinite(Number(savedProfit))
+    ? Number(savedProfit)
+    : (receipts || []).length ? (receipts || []).reduce((total, receipt) => total + n(receipt.amount), 0) - principal : null;
+  if (actualReceivedProfit === null || !Number.isFinite(actualReceivedProfit)) return null;
   return ((actualReceivedProfit / principal) / days) * 365 * 100;
 }
 

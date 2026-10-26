@@ -51,6 +51,16 @@ function Amount({ label, value, primary, negative, compact, testID }) {
   </View>;
 }
 
+function CardRate({ label, value, actual, testID }) {
+  const known = value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+  return <View style={s.rateItem}>
+    <Text style={s.rateLabel}>{label}</Text>
+    <Text testID={testID} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}
+      accessibilityLabel={`نسبة الربح السنوية ${label} ${known ? rate(value) : 'غير متاحة'}`}
+      style={[s.rateValue, actual && s.actualRate, known && Number(value) < 0 && s.negative]}>{known ? rate(value) : '—'}</Text>
+  </View>;
+}
+
 export default function Ta3meedOpportunityCard({
   item, meta, status, category, tone, summary,
   onEdit, renderReceipt, renderInvestor,
@@ -69,6 +79,7 @@ export default function Ta3meedOpportunityCard({
   const fundingDate = meta.withdrawal_date || item.withdrawal_date || item.investment_date || item.start_date;
   const narrow = cardWidth < 335;
   const profit = completed ? summary.actualProfit : Number(item.expected_profit_amount || 0);
+  const companyName = String(meta.company_name || '').trim() || String(item.company_name || '').trim();
 
   useEffect(() => () => {
     clearTimeout(editTimer.current);
@@ -111,7 +122,18 @@ export default function Ta3meedOpportunityCard({
           <View style={[s.grade, { backgroundColor: tone.color }]}><Text style={s.gradeText}>{category}</Text></View>
         </View>
 
-        {!completed && status.key !== 'cancelled' && summary.daysLabel ? <Text style={[s.due, summary.isOverdue && s.negative]}>{summary.daysLabel}</Text> : null}
+        <View testID={`opportunity-card-header-details-${codeId}`} style={s.headerDetails}>
+          <View style={s.headerSide}>
+            {!completed && status.key !== 'cancelled' && summary.daysLabel ? <Text style={[s.due, summary.isOverdue && s.negative]}>{summary.daysLabel}</Text> : null}
+          </View>
+          <View testID={`opportunity-card-rates-${codeId}`} style={s.cardRates}>
+            <CardRate label="المسجلة" value={summary.annualRate} testID={`opportunity-registered-rate-${codeId}`} />
+            {completed ? <CardRate label="الفعلية" value={summary.realRate} actual testID={`opportunity-actual-rate-${codeId}`} /> : null}
+          </View>
+          <View style={[s.headerSide, s.companyBlock]}>
+            {companyName ? <Text testID={`opportunity-company-${codeId}`} accessibilityLabel={`الشركة ${companyName}`} numberOfLines={2} ellipsizeMode="tail" style={s.companyName}>{companyName}</Text> : null}
+          </View>
+        </View>
       </View>
 
       <View style={s.amounts}>
@@ -170,7 +192,7 @@ export default function Ta3meedOpportunityCard({
               <DetailRow label="النسبة المسجلة" value={summary.annualRate > 0 ? rate(summary.annualRate) : '—'} />
               {completed ? <DetailRow label="النسبة السنوية الفعلية" value={summary.realRate === null ? '—' : rate(summary.realRate)} /> : null}
               {meta.ta3meed_settlement_note ? <Text style={s.note}>{meta.ta3meed_settlement_note}</Text> : null}
-              {(meta.company_name || item.company_name) ? <DetailRow label="الشركة" value={meta.company_name || item.company_name} /> : null}
+              {companyName ? <DetailRow label="الشركة" value={companyName} /> : null}
               {(meta.tasks || item.tasks || meta.activity || item.activity || meta.description || item.description) ? <DetailRow label="المهام" value={meta.tasks || item.tasks || meta.activity || item.activity || meta.description || item.description} /> : null}
               {(meta.executor || item.executor) ? <DetailRow label="المنفذ" value={meta.executor || item.executor} /> : null}
               {(meta.notes || item.notes) ? <DetailRow label="ملاحظات" value={meta.notes || item.notes} /> : null}
@@ -213,7 +235,16 @@ const s = StyleSheet.create({
   gradeText: { fontSize: 15, fontWeight: '900', color: '#fff', writingDirection: 'ltr' },
   status: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, maxWidth: '48%', alignSelf: 'center' },
   statusText: { fontSize: 11.5, fontWeight: '800', textAlign: 'center' },
-  due: { marginTop: 4, fontSize: 12, color: '#64748b', textAlign: 'left' },
+  headerDetails: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5, minHeight: 30 },
+  headerSide: { flex: 1, minWidth: 0 },
+  companyBlock: { alignItems: 'flex-end' },
+  companyName: { color: '#475569', fontSize: 11, lineHeight: 15, fontWeight: '600', textAlign: 'right', width: '100%' },
+  cardRates: { flex: 1.2, minWidth: 0, flexDirection: 'row-reverse', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  rateItem: { flex: 1, minWidth: 0, alignItems: 'center' },
+  rateLabel: { color: '#64748b', fontSize: 9.5, lineHeight: 13, textAlign: 'center' },
+  rateValue: { color: '#334155', fontSize: 13, lineHeight: 17, fontWeight: '900', writingDirection: 'ltr', textAlign: 'center', width: '100%' },
+  actualRate: { color: '#0f766e' },
+  due: { fontSize: 11.5, lineHeight: 16, color: '#64748b', textAlign: 'left' },
   negative: { color: '#dc2626' },
   amounts: { flexDirection: 'row-reverse', alignItems: 'stretch', marginTop: 4 },
   amountColumn: { flex: 1, minWidth: 0, alignItems: 'center', justifyContent: 'center' },
