@@ -1,0 +1,72 @@
+name: Ahmed SMS automatic review prefill without APK
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-sms-review-prefill.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-sms-review-prefill-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, openssl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check mobile permissions, old-version gating and account switches
+        run: node --experimental-vm-modules scripts/test-sms-client.cjs
+      - name: Check review authentication, conflicts and uncertain-save retries
+        run: node --experimental-vm-modules scripts/test-sms-review-client.cjs
+      - name: Install API dependencies for isolated tests
+        working-directory: ahmed-api
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Verify new-message cutoff, sender, encryption, retries and account isolation
+        env:
+          APP_ENV: testing
+          CACHE_STORE: array
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          set -euo pipefail
+          php scripts/test-sms-review-prefill.php "$GITHUB_WORKSPACE" | tee /tmp/ahmed-sms-review-checks.log
+          python3 - <<'PY'
+          from pathlib import Path
+          assert 'SMS_REVIEW_PREFILL_INTEGRATION_PASSED ' in Path('/tmp/ahmed-sms-review-checks.log').read_text(), 'The complete review suite must pass'
+          PY
+  deliver:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Verify the actual form, apply three guarded sources and publish without APK
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 22m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/sms-review-prefill-20261026" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_UI_RELEASE_MANIFEST="scripts/sms-review-prefill-release-20261026.json"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/deliver-sms-review-prefill.py" > "$AHMED_SMS_CASE/deliver.py"
+            python3 "$AHMED_SMS_CASE/deliver.py"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/publish-sms-review-prefill.py" > "$AHMED_SMS_CASE/publish.py"
+            python3 "$AHMED_SMS_CASE/publish.py"

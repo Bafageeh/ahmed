@@ -6,8 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Support\Ta3meedAllocationPolicy;
 use App\Support\Ta3meedSmsParser;
 use App\Support\Ta3meedSmsProcessor;
+use App\Support\Ta3meedSmsReviewData;
 use App\Support\Ta3meedWalletLedger;
-use App\Support\Ta3meedWalletSmsParser;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -38,25 +38,17 @@ final class SmsReviewController extends Controller
 
     private function suggestion(object $row): array
     {
-        $body = Crypt::decryptString($row->body);
-        $wallet = Ta3meedWalletSmsParser::parse($body);
-        $receipt = Ta3meedSmsParser::parse($body);
-        $kind = in_array($row->action_type, ['deposit', 'withdrawal', 'repayment'], true)
-            ? $row->action_type : ($wallet['kind'] ?? 'repayment');
         $sent = (int) ($row->sent_at_ms ?? 0);
-        $date = CarbonImmutable::createFromTimestampMs($sent >= 946684800000 && $sent <= (int) $row->received_at_ms + 600000 ? $sent : (int) $row->received_at_ms, 'Asia/Riyadh')->toDateString();
-        $amount = $row->payment_amount ?? ($wallet['amount_cents'] !== null ? $wallet['amount_cents'] / 100 : $receipt['amount']);
-        return ['kind' => $kind, 'amount' => $amount === null ? '' : number_format((float) $amount, 2, '.', ''),
-            'entry_date' => ($kind === 'repayment' ? $receipt['receipt_date'] : $wallet['entry_date']) ?? $date,
-            'reference' => $row->payment_reference ?? ($kind === 'repayment' ? $receipt['reference_number'] : $wallet['transaction_reference']) ?? '',
-            'receipt_type' => $receipt['receipt_type']];
+        $useSent = $sent >= 946684800000 && $sent <= (int) $row->received_at_ms + 600000;
+        $date = CarbonImmutable::createFromTimestampMs($useSent ? $sent : (int) $row->received_at_ms, 'Asia/Riyadh')->toDateString();
+        return Ta3meedSmsReviewData::extract(Crypt::decryptString($row->body), $date, $useSent ? 'sent_at' : 'received_at');
     }
 
     public function show(Request $request, int $id)
     {
         $row = $this->message($this->owner($request), $id);
         abort_unless($row->analysis_status === 'needs_review', 409, 'حالة الرسالة تغيرت؛ حدّث الرسائل.');
-        return response()->json(['version' => $this->version($row), 'suggestion' => $this->suggestion($row)])
+        return response()->json(['version' => $this->version($row)] + $this->suggestion($row))
             ->header('Cache-Control', 'no-store, private');
     }
 
