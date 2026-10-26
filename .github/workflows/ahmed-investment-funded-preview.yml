@@ -29,3 +29,5 @@ jobs:
             chmod 700 "$AHMED_SMS_CASE"
             git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/prepare-investment-funding.py" > "$AHMED_SMS_CASE/prepare.py"
             python3 "$AHMED_SMS_CASE/prepare.py"
+
+# Reject missing capital even when an opportunity reference contains AMOUNT digits.

@@ -100,7 +100,8 @@ final class SmsInvestmentController extends Controller
             if ($row->analysis_status === 'investment_funded') {
                 $entry = DB::table('ta3meed_wallet_entries')->where('user_id', $owner)->where('id', $row->wallet_entry_id)
                     ->where('investment_opportunity_id', $row->investment_opportunity_id)->whereNull('voided_at')->first();
-                abort_unless($entry && $entry->kind === 'withdrawal' && (int) $entry->amount_cents < 0, 409, 'حركة تمويل الفرصة تحتاج مراجعة.');
+                abort_unless($entry && $entry->kind === 'withdrawal' && $entry->source === 'sms' && (int) $entry->amount_cents < 0
+                    && -(int) $entry->amount_cents === \App\Support\Ta3meedAllocationPolicy::savedCents($row->payment_amount), 409, 'حركة تمويل الفرصة تحتاج مراجعة.');
                 return ['analysis' => Ta3meedSmsProcessor::outcome($row), 'summary' => Ta3meedWalletLedger::summary($owner), 'replayed' => true];
             }
             abort_unless(($this->pending($row) || $row->analysis_status === 'investment_created') && hash_equals($this->version($row), $data['version']), 409, 'حُسمت الرسالة أو تغيرت؛ حدّث القائمة.');

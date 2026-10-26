@@ -102,6 +102,10 @@ DB::table('investment_opportunities')->where('id', 9008)->update(['status' => 'c
 [$code] = uploadedInvestment($closedId, $closedReview['version']); verifySms($code === 409, 'cancelled opportunities cannot consume wallet cash');
 [$noAmount] = receivePayment('تم قبول استثمارك في الفرصة رقم ER-NOAMOUNT009'); $noAmountReview = investmentReview($noAmount['message_id']);
 [$code] = uploadedInvestment($noAmount['message_id'], $noAmountReview['version']); verifySms($code === 422, 'missing message capital cannot be guessed');
+$referenceOnly = App\Support\Ta3meedSmsReviewData::extract('تم قبول استثمارك في الفرصة رقم ER-AMOUNT009', now('Asia/Riyadh')->toDateString(), 'received_at');
+verifySms($referenceOnly['suggestion']['amount'] === '', 'reference digits after the word AMOUNT are never interpreted as capital');
+$englishAmount = App\Support\Ta3meedSmsReviewData::extract('تم قبول استثمارك amount: 91.14 في الفرصة رقم ER-ENGLISH014', now('Asia/Riyadh')->toDateString(), 'received_at');
+verifySms($englishAmount['suggestion']['amount'] === '91.14', 'an explicit English amount label still supplies exact cents');
 fundingOpportunity(9009, 'ER-DATE009', '91.09');
 [$dateId, $dateReview] = fundingMessage('ER-DATE009', '91.09', 'بتاريخ 2099-01-01');
 [$code] = uploadedInvestment($dateId, $dateReview['version']); verifySms($code === 422, 'future or unclear funding dates cannot create cash deductions');
@@ -132,6 +136,13 @@ DB::statement("CREATE TRIGGER fail_funding_audit BEFORE INSERT ON ta3meed_wallet
 verifySms($code === 500 && DB::table('ta3meed_wallet_entries')->count() === $entryCount && DB::table('sms_archive_messages')->where('id', $rollbackId)->value('analysis_status') === 'needs_review', 'an audit failure cannot leave an untracked debit or a completed message');
 DB::statement('DROP TRIGGER fail_funding_audit');
 [$code] = uploadedInvestment($rollbackId, $rollbackReview['version']); verifySms($code === 200, 'rolled-back requests can retry the same version successfully');
+
+fundingOpportunity(9013, 'ER-LEGACY013', '91.13');
+[$legacyFundId] = fundingMessage('ER-LEGACY013', '91.13');
+DB::table('sms_archive_messages')->where('id', $legacyFundId)->update(['analysis_status' => 'non_payment', 'analysis_reason' => 'not_a_payment', 'action_type' => 'repayment', 'payment_amount' => null, 'payment_reference' => null]);
+$legacyFundingReview = investmentReview($legacyFundId);
+[$code, $legacyFunded] = uploadedInvestment($legacyFundId, $legacyFundingReview['version']);
+verifySms($code === 200 && $legacyFunded['analysis']['status'] === 'investment_funded', 'previously archived acceptance messages can be explicitly funded without automatic historical backfill');
 
 $createdReview = investmentReview($acceptId);
 $cash = walletSummary($owner)['summary']['balance_cents']; $opportunities = opportunityCount();

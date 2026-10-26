@@ -45,3 +45,5 @@ jobs:
           from pathlib import Path
           assert 'SMS_INVESTMENT_FUNDING_INTEGRATION_PASSED ' in Path('/tmp/ahmed-sms-review-checks.log').read_text(), 'The complete review suite must pass'
           PY
+
+# Reject missing capital even when an opportunity reference contains AMOUNT digits.

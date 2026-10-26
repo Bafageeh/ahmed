@@ -26,7 +26,7 @@ def git_file(name):
 
 
 manifest = json.loads(git_file(os.environ['AHMED_UI_RELEASE_MANIFEST']))
-assert set(manifest['files']) == set(['ahmed-api/database/migrations/2026_10_26_170000_link_wallet_investment_funding.php', 'ahmed-api/app/Support/Ta3meedInvestmentFunding.php', 'ahmed-api/app/Support/Ta3meedSmsProcessor.php', 'ahmed-api/app/Http/Controllers/Api/Ta3meedWalletController.php', 'ahmed-api/app/Http/Controllers/Api/SmsInvestmentController.php', 'ahmed-api/routes/sms.php', 'ahmed-mobile/smsReviewApi.js', 'ahmed-mobile/Ta3meedWalletScreen.js', 'ahmed-mobile/SmsArchiveScreen.js']), 'Unexpected investment funding release scope'
+assert set(manifest['files']) == set(['ahmed-api/database/migrations/2026_10_26_170000_link_wallet_investment_funding.php', 'ahmed-api/app/Support/Ta3meedInvestmentFunding.php', 'ahmed-api/app/Support/Ta3meedSmsProcessor.php', 'ahmed-api/app/Http/Controllers/Api/Ta3meedWalletController.php', 'ahmed-api/app/Http/Controllers/Api/SmsInvestmentController.php', 'ahmed-api/routes/sms.php', 'ahmed-mobile/smsReviewApi.js', 'ahmed-mobile/Ta3meedWalletScreen.js', 'ahmed-mobile/SmsArchiveScreen.js', 'ahmed-api/app/Support/Ta3meedSmsReviewData.php']), 'Unexpected investment funding release scope'
 for name,digest in manifest['files'].items():
     if name.startswith('ahmed-api/'):
         tested=subprocess.check_output(['git','show',manifest['backend_verified_commit']+':'+name],cwd=root)

@@ -15,7 +15,7 @@ final class Ta3meedSmsReviewData
         $kind = $repayment ? ($withdrawal ? '' : 'repayment') : ($wallet && $deposit !== $withdrawal ? ($deposit ? 'deposit' : 'withdrawal') : '');
 
         // Unlike the automatic parser, a missing reference must not discard an amount or type.
-        preg_match_all('/(?:بقيمة|بمبلغ|مبلغ(?:\s+السداد)?|القيمة(?:\s+المسددة)?|قيمة\s+العملية|amount(?:\s+of)?)\s*[:：=]?\s*([0-9][0-9,.]*)/iu', $text, $amounts);
+        preg_match_all('/(?:بقيمة|بمبلغ|مبلغ(?:\s+السداد)?|القيمة(?:\s+المسددة)?|قيمة\s+العملية|\bamount(?:\s+of)?(?=\s|[:：=]))\s*[:：=]?\s*([0-9][0-9,.]*)/iu', $text, $amounts);
         if (! $amounts[1]) preg_match_all('/([0-9][0-9,.]*)\s*(?:ريال(?:\s+سعودي)?|ر\.س|SAR)(?![A-Z])/iu', $text, $amounts);
         $amount = count($amounts[1]) === 1 ? self::money($amounts[1][0]) : '';
         // A fee-bearing message leaves the net debit for the reviewer to resolve.
