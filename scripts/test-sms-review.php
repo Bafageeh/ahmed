@@ -1,5 +1,10 @@
 <?php
 
+$reviewSuiteComplete = false;
+register_shutdown_function(static function () use (&$reviewSuiteComplete): void {
+    if (! $reviewSuiteComplete) { fwrite(STDERR, "SMS review suite did not finish successfully\n"); exit(1); }
+});
+
 require __DIR__.'/test-ta3meed-wallet.php';
 
 use Illuminate\Support\Facades\Crypt;
@@ -89,7 +94,7 @@ $receiptForm = reviewForm($receiptReview['message_id'], ['kind' => 'repayment', 
 [$code, $receiptResult] = approveReview($receiptReview['message_id'], $receiptForm);
 verifySms($code === 200 && $receiptResult['analysis']['receipt_id'] && $receiptResult['analysis']['wallet_entry_id'], 'missing opportunity references can be corrected and approved using the real receipt writer'); $cash += 2749;
 $receiptId = $receiptResult['analysis']['receipt_id'];
-verifySms(round(DB::table('ta3meed_receipt_allocations')->where('receipt_id', $receiptId)->sum('received_amount') * 100) === 2749, 'reviewed repayment updates investor allocations without losing cents');
+verifySms((int) round(DB::table('ta3meed_receipt_allocations')->where('receipt_id', $receiptId)->sum('received_amount') * 100) === 2749, 'reviewed repayment updates investor allocations without losing cents');
 verifySms(DB::table('investment_opportunities')->where('id', 40)->value('status') === 'partial_received', 'reviewed partial repayment preserves opportunity lifecycle');
 [$receiptRepeat] = receivePayment('تم سداد جزئي للفرصة INV-REVIEW40 بقيمة 27.49 ريال بتاريخ '.$day);
 $repeatForm = reviewForm($receiptRepeat['message_id']);
@@ -118,4 +123,5 @@ verifySms(walletSummary($owner)['summary']['balance_cents'] === $cash, 'all revi
 DB::table('sms_archive_messages')->where('id', $stale['message_id'])->update(['sender' => Crypt::encryptString('SaudiEnergy')]);
 [$code] = approveReview($stale['message_id'], $staleForm);
 verifySms($code === 422, 'legacy non-Ta3meed messages cannot be approved');
+$reviewSuiteComplete = true;
 echo 'SMS_REVIEW_INTEGRATION_PASSED review_checks='.($checks - $reviewBaseline).' total_checks='.$checks."\n";

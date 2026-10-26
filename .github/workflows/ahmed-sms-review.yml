@@ -36,7 +36,13 @@ jobs:
           CACHE_STORE: array
           DB_CONNECTION: sqlite
           DB_DATABASE: ':memory:'
-        run: php scripts/test-sms-review.php "$GITHUB_WORKSPACE"
+        run: |
+          set -euo pipefail
+          php scripts/test-sms-review.php "$GITHUB_WORKSPACE" | tee /tmp/ahmed-sms-review-checks.log
+          python3 - <<'PY'
+          from pathlib import Path
+          assert 'SMS_REVIEW_INTEGRATION_PASSED ' in Path('/tmp/ahmed-sms-review-checks.log').read_text(), 'The complete review suite must pass'
+          PY
   deliver:
     needs: verify
     runs-on: ubuntu-latest
