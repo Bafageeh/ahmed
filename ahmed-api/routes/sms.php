@@ -14,6 +14,7 @@ Route::middleware('ahmed.auth')->group(function () {
     Route::post('/sms/messages/{id}/approve', [SmsReviewController::class, 'approve'])->whereNumber('id');
     Route::get('/sms/messages/{id}/investment', [SmsInvestmentController::class, 'show'])->whereNumber('id');
     Route::post('/sms/messages/{id}/investment/complete', [SmsInvestmentController::class, 'complete'])->whereNumber('id');
+    Route::post('/sms/messages/{id}/investment/uploaded', [SmsInvestmentController::class, 'uploaded'])->whereNumber('id');
     Route::post('/sms/messages/{id}/investment/dismiss', [SmsInvestmentController::class, 'dismiss'])->whereNumber('id');
     Route::post('/sms/devices', [SmsCaptureController::class, 'registerDevice']);
     Route::delete('/sms/devices/{installation}', [SmsCaptureController::class, 'disableDevice'])->whereUuid('installation');

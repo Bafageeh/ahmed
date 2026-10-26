@@ -32,6 +32,7 @@ final class Ta3meedWalletController extends Controller
                 'entry_date' => substr($row->effective_date, 0, 10), 'source' => $row->source, 'notes' => $row->notes,
                 'transaction_reference' => $row->transaction_reference, 'receipt_id' => $row->receipt_id,
                 'sms_message_id' => $row->sms_message_id, 'revision' => $row->revision, 'editable' => $row->source === 'manual',
+                'investment_opportunity_id' => $row->investment_opportunity_id ?? null,
             ])->values();
         return response()->json(['data' => $items, 'summary' => Ta3meedWalletLedger::summary($userId),
             'total' => $total, 'page' => $page, 'has_more' => $page * 50 < $total])->header('Cache-Control', 'no-store, private');

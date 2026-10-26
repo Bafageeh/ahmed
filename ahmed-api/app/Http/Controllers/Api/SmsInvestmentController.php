@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Support\Ta3meedInvestmentSmsParser;
+use App\Support\Ta3meedInvestmentFunding;
 use App\Support\Ta3meedSmsParser;
 use App\Support\Ta3meedSmsProcessor;
+use App\Support\Ta3meedWalletLedger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -27,13 +29,13 @@ final class SmsInvestmentController extends Controller
         if ($row->analysis_status === 'dismissed' && $row->action_type === 'investment') return $row;
         abort_unless(Ta3meedSmsParser::allowedSender(Crypt::decryptString($row->sender))
             && Ta3meedInvestmentSmsParser::recognizes(Crypt::decryptString($row->body))
-            && ! $row->receipt_id && ! $row->wallet_entry_id, 422, 'هذه الرسالة ليست قبول استثمار يحتاج إكمالًا.');
+            && ! $row->receipt_id && (! $row->wallet_entry_id || ($row->analysis_status === 'investment_funded' && $row->action_type === 'investment')), 422, 'هذه الرسالة ليست قبول استثمار يحتاج إكمالًا.');
         return $row;
     }
 
     private function version(object $row): string
     {
-        return hash('sha256', json_encode([$row->id, $row->analysis_status, $row->analysis_reason, $row->updated_at, $row->investment_opportunity_id]));
+        return hash('sha256', json_encode([$row->id, $row->analysis_status, $row->analysis_reason, $row->updated_at, $row->investment_opportunity_id, $row->wallet_entry_id, $row->body]));
     }
 
     private function pending(object $row): bool
@@ -44,7 +46,7 @@ final class SmsInvestmentController extends Controller
     public function show(Request $request, int $id)
     {
         $row = $this->message($this->owner($request), $id);
-        abort_unless($this->pending($row), 409, 'حُسمت هذه الرسالة؛ حدّث القائمة.');
+        abort_unless($this->pending($row) || in_array($row->analysis_status, ['investment_created', 'investment_funded'], true), 409, 'حُسمت هذه الرسالة؛ حدّث القائمة.');
         return response()->json(['version' => $this->version($row), 'suggestion' => Ta3meedInvestmentSmsParser::suggestion($row)])
             ->header('Cache-Control', 'no-store, private');
     }
@@ -68,7 +70,7 @@ final class SmsInvestmentController extends Controller
         $result = DB::transaction(function () use ($request, $owner, $id, $validated, $hash) {
             DB::table('users')->where('id', $owner)->lockForUpdate()->first();
             $row = $this->message($owner, $id, true);
-            if ($row->analysis_status === 'investment_created') {
+            if (in_array($row->analysis_status, ['investment_created', 'investment_funded'], true)) {
                 abort_unless(hash_equals((string) $row->investment_decision_hash, $hash), 409, 'سبق إكمال الرسالة ببيانات أخرى.');
                 return ['data' => ['id' => $row->investment_opportunity_id], 'analysis' => Ta3meedSmsProcessor::outcome($row), 'replayed' => true];
             }
@@ -84,6 +86,32 @@ final class SmsInvestmentController extends Controller
                 'analyzed_at' => now(), 'updated_at' => now(),
             ]);
             return ['data' => $opportunity, 'analysis' => Ta3meedSmsProcessor::outcome(DB::table('sms_archive_messages')->where('id', $row->id)->first()), 'replayed' => false];
+        });
+        return response()->json($result)->header('Cache-Control', 'no-store, private');
+    }
+
+    public function uploaded(Request $request, int $id)
+    {
+        $owner = $this->owner($request);
+        $data = $request->validate(['version' => ['required', 'regex:/^[a-f0-9]{64}$/D']]);
+        $result = DB::transaction(function () use ($owner, $id, $data) {
+            DB::table('users')->where('id', $owner)->lockForUpdate()->first();
+            $row = $this->message($owner, $id, true);
+            if ($row->analysis_status === 'investment_funded') {
+                $entry = DB::table('ta3meed_wallet_entries')->where('user_id', $owner)->where('id', $row->wallet_entry_id)
+                    ->where('investment_opportunity_id', $row->investment_opportunity_id)->whereNull('voided_at')->first();
+                abort_unless($entry && $entry->kind === 'withdrawal' && (int) $entry->amount_cents < 0, 409, 'حركة تمويل الفرصة تحتاج مراجعة.');
+                return ['analysis' => Ta3meedSmsProcessor::outcome($row), 'summary' => Ta3meedWalletLedger::summary($owner), 'replayed' => true];
+            }
+            abort_unless(($this->pending($row) || $row->analysis_status === 'investment_created') && hash_equals($this->version($row), $data['version']), 409, 'حُسمت الرسالة أو تغيرت؛ حدّث القائمة.');
+            $funded = Ta3meedInvestmentFunding::record($row);
+            DB::table('sms_archive_messages')->where('id', $id)->update([
+                'analysis_status' => 'investment_funded', 'analysis_reason' => $funded['replayed'] ? 'investment_previously_funded' : 'investment_uploaded',
+                'action_type' => 'investment', 'investment_opportunity_id' => $funded['opportunity_id'], 'wallet_entry_id' => $funded['wallet_entry_id'],
+                'payment_reference' => $funded['reference'], 'payment_amount' => $funded['amount'], 'analyzed_at' => now(), 'updated_at' => now(),
+            ]);
+            return ['analysis' => Ta3meedSmsProcessor::outcome(DB::table('sms_archive_messages')->where('id', $id)->first()),
+                'summary' => Ta3meedWalletLedger::summary($owner), 'replayed' => $funded['replayed']];
         });
         return response()->json($result)->header('Cache-Control', 'no-store, private');
     }

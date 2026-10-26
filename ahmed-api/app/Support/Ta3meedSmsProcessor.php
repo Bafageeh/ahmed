@@ -94,7 +94,7 @@ final class Ta3meedSmsProcessor
         if ($action === 'investment') {
             return ['message_id' => $message->id, 'client_id' => $message->client_id, 'status' => $status, 'action_type' => $action,
                 'reason' => $message->analysis_reason, 'reference_number' => $reference, 'amount' => $message->payment_amount,
-                'receipt_id' => null, 'wallet_entry_id' => null, 'opportunity_id' => $message->investment_opportunity_id ?? null,
+                'receipt_id' => null, 'wallet_entry_id' => $message->wallet_entry_id ?? null, 'opportunity_id' => $message->investment_opportunity_id ?? null,
                 'notification' => $status === 'needs_review' ? ['title' => 'قبول استثمار يحتاج إكمالًا',
                     'body' => 'افتح رسالة تعميد لإكمال بيانات الفرصة أو إلغائها. لم تُسجل فرصة أو حركة مالية.'] : null];
         }

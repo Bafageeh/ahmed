@@ -9,6 +9,7 @@ const ANDROID_STATUS_BAR_INSET = Platform.OS === 'android' ? Math.max(NativeStat
 
 const KINDS = { opening_balance: 'رصيد افتتاحي', deposit: 'إيداع', withdrawal: 'سحب', repayment: 'سداد وارد' };
 const SOURCES = { manual: 'يدوي', sms: 'رسالة Ta3meed', receipt: 'سجل السداد' };
+const entryTitle = (entry) => entry?.investment_opportunity_id ? 'تمويل فرصة' : KINDS[entry?.kind];
 const money = (cents = 0) => (Number(cents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const today = () => {
   const parts = new Intl.DateTimeFormat('en', { timeZone: 'Asia/Riyadh', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
@@ -121,7 +122,7 @@ export default function Ta3meedWalletScreen({ onBack }) {
       <View style={s.filters}>{[['', 'الكل'], ...Object.entries(KINDS)].map(([key, label]) => <TouchableOpacity key={key || 'all'} onPress={() => setKind(key)} style={[s.chip, kind === key && s.chipActive]}><Text style={[s.chipText, kind === key && s.chipTextActive]}>{label}</Text></TouchableOpacity>)}</View>
       {!rows.length && !loading ? <View style={s.empty}><UiIcon name="wallet" size={32} color="#94a3b8" /><Text style={s.emptyTitle}>لا توجد حركات في هذا القسم</Text><Text style={s.muted}>أضف حركة يدويًا أو فعّل استقبال رسائل Ta3meed.</Text></View> : rows.map((item) => <TouchableOpacity key={item.id} onPress={() => { setSelected(item); setConfirmDelete(false); }} style={s.entry}>
         <View style={[s.entryIcon, { backgroundColor: item.amount_cents < 0 ? '#fff1e8' : '#e8f7f1' }]}><UiIcon name={item.amount_cents < 0 ? 'payments' : 'wallet'} size={20} color={item.amount_cents < 0 ? '#c2410c' : '#047857'} /></View>
-        <View style={s.entryCopy}><Text style={s.entryTitle}>{KINDS[item.kind]}</Text><Text style={s.entryMeta}>{item.entry_date} · {SOURCES[item.source]}</Text>{item.notes ? <Text numberOfLines={1} style={s.entryNotes}>{item.notes}</Text> : null}</View>
+        <View style={s.entryCopy}><Text style={s.entryTitle}>{entryTitle(item)}</Text><Text style={s.entryMeta}>{item.entry_date} · {SOURCES[item.source]}</Text>{item.notes ? <Text numberOfLines={1} style={s.entryNotes}>{item.notes}</Text> : null}</View>
         <Text style={[s.entryAmount, { color: item.amount_cents < 0 ? '#c2410c' : '#047857' }]}>{item.amount_cents < 0 ? '−' : '+'}{money(Math.abs(item.amount_cents))}</Text>
       </TouchableOpacity>)}
       {hasMore ? <TouchableOpacity style={s.more} disabled={loading} onPress={() => load(page + 1)}><Text style={s.moreText}>عرض حركات أقدم</Text></TouchableOpacity> : null}
@@ -142,7 +143,7 @@ export default function Ta3meedWalletScreen({ onBack }) {
       </View></KeyboardAvoidingView>
     </Modal>
     <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => { if (!busy) setSelected(null); }}><View style={s.overlay}><View style={s.dialog}>
-      <View style={s.dialogBar}><Text style={s.dialogTitle}>{KINDS[selected?.kind]}</Text><TouchableOpacity disabled={busy} onPress={() => setSelected(null)} style={s.iconButton} accessibilityLabel="إغلاق التفاصيل"><UiIcon name="close" size={22} color="#334155" /></TouchableOpacity></View>
+      <View style={s.dialogBar}><Text style={s.dialogTitle}>{entryTitle(selected)}</Text><TouchableOpacity disabled={busy} onPress={() => setSelected(null)} style={s.iconButton} accessibilityLabel="إغلاق التفاصيل"><UiIcon name="close" size={22} color="#334155" /></TouchableOpacity></View>
       <Text style={s.detailAmount}>{money(selected?.amount_cents)} ر.س</Text><Text style={s.detail}>{selected?.entry_date} · {SOURCES[selected?.source]}</Text>
       {selected?.transaction_reference ? <Text selectable style={s.detail}>المرجع: {selected.transaction_reference}</Text> : null}
       {selected?.notes ? <Text selectable style={s.detail}>{selected.notes}</Text> : null}
