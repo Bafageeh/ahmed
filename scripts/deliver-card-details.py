@@ -97,6 +97,25 @@ assert proof['test_sha256']==hashlib.sha256(git_file('scripts/check-ta3meed-card
 print('TA3MEED_CARD_DETAILS_VERIFIED_UI_REUSED checks='+str(proof['checks']),flush=True)
 print('TA3MEED_CARD_DETAILS_SOURCE_AND_BEHAVIOR_PASSED', flush=True)
 
+assert proof['source_commit']==manifest['ui_verified_commit'] and proof['checks']>=20, 'Actual card checks must match the reviewed commit'
+assert manifest['visual_verified_widths']==[390,320] and all(manifest['visual_checks'].values()), 'Both phone layouts must pass visual review'
+# Remove only the two synthetic review pages created for this change.
+secret_file=case/'preview-token'
+if secret_file.exists():
+    token=secret_file.read_text().strip()
+    assert len(token)==24 and all(x in '0123456789abcdef' for x in token)
+    public=root/'ahmed-api/public/webapp'
+    preview=public/('_card-review-'+token)
+    assert preview.parent.resolve()==public.resolve() and not preview.is_symlink()
+    if preview.exists():
+        for width in [390,320]:
+            page=preview/('card-details-'+str(width)+'.html')
+            assert not page.is_symlink()
+            if page.is_file():page.unlink()
+        preview.rmdir()
+print('TA3MEED_CARD_VISUAL_REVIEW_AND_PREVIEW_CLEANUP_VERIFIED',flush=True)
+
+
 verify_live()
 owner = (root / 'ahmed-mobile/AppShell.js').stat()
 

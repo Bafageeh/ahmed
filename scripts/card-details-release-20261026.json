@@ -620,5 +620,17 @@
     "ahmed-mobile/ta3meedWalletApi.js"
   ],
   "bundle_marker": "opportunity-card-rates-",
-  "update_message": "Show company below category and recorded plus realized profit rates on Ta3meed cards"
+  "update_message": "Show company below category and recorded plus realized profit rates on Ta3meed cards",
+  "ui_verified_commit": "b7310d671ab74fc829db27d5fe2580a45cacb71b",
+  "ui_verified_run": 40353297116,
+  "visual_verified_widths": [
+    390,
+    320
+  ],
+  "visual_checks": {
+    "company_below_grade": true,
+    "rates_centered": true,
+    "rates_adjacent": true,
+    "no_overlap": true
+  }
 }
