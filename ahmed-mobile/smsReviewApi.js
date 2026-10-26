@@ -28,3 +28,6 @@ async function request(id, action, body, sessionKey) {
 
 export const fetchSmsReview = (id, sessionKey) => request(id, 'review', null, sessionKey);
 export const approveSmsReview = (id, body, sessionKey) => request(id, 'approve', body, sessionKey);
+export const fetchSmsInvestment = (id, sessionKey) => request(id, 'investment', null, sessionKey);
+export const completeSmsInvestment = (id, body, sessionKey) => request(id, 'investment/complete', body, sessionKey);
+export const dismissSmsInvestment = (id, version, sessionKey) => request(id, 'investment/dismiss', { version }, sessionKey);

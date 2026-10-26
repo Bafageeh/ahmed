@@ -3,11 +3,14 @@ import { ActivityIndicator, AppState, Linking, Modal, Platform, RefreshControl, 
 import * as Clipboard from 'expo-clipboard';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 import SmsReviewForm from './SmsReviewForm';
+import { AddOpportunityModal } from './Ta3meedNoResetFilterScreen';
+import { getCurrentAhmedSession } from './ahmedCurrentUser';
+import { fetchSmsInvestment, completeSmsInvestment, dismissSmsInvestment } from './smsReviewApi';
 import { disableSmsCapture, enableSmsCapture, fetchSmsArchive, getSmsCaptureStatus, syncSmsCapture } from './smsCapture';
 
 const date = (value) => value ? new Date(Number(value)).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short', calendar: 'gregory' }) : '—';
-const analysisLabel = (item) => item?.analysis?.reason === 'manually_linked' ? 'معتمدة · مرتبطة بحركة مسجلة' : item?.analysis?.reason === 'manually_approved' ? 'معتمدة · تم تسجيل الحركة' : ({ applied: item?.analysis?.action_type === 'deposit' ? 'تم تسجيل الإيداع بالمحفظة' : item?.analysis?.action_type === 'withdrawal' ? 'تم تسجيل السحب من المحفظة' : 'تم تسجيل السداد', duplicate: 'مسجلة سابقًا · دون تكرار', needs_review: 'تحتاج مراجعة', non_payment: 'محفوظة · لا توجد حركة مكتملة', archived: 'محفوظة', pending: 'جارٍ التحليل' }[item?.analysis?.status] || 'محفوظة');
-const reasonLabel = (reason) => reason === 'manually_linked' ? 'تم اعتماد الرسالة وربطها بالحركة المسجلة دون تكرار المبلغ.' : reason === 'manually_approved' ? 'تم اعتماد الرسالة وتحديث السجلات بنجاح.' : ({ wallet_reference_conflict: 'مرجع العملية مسجل بمبلغ مختلف؛ راجع الحركة.', possible_duplicate_wallet_transfer: 'توجد حركة بنفس القيمة والتاريخ؛ راجع السجل لتجنب التكرار.', wallet_fee_needs_review: 'الرسالة تتضمن رسومًا وتحتاج مراجعة قيمة الخصم.', ambiguous_wallet_direction: 'لم تتضح جهة الإيداع أو السحب.', ambiguous_wallet_reference: 'تتضمن الرسالة أكثر من مرجع للعملية.', wallet_transfer_not_confirmed: 'الرسالة لا تؤكد اكتمال الإيداع أو السحب.', opportunity_not_found: 'لم توجد فرصة مطابقة في حسابك.', ambiguous_opportunity: 'يوجد أكثر من تطابق لرقم الفرصة.', missing_or_ambiguous_reference: 'رقم الفرصة ناقص أو غير واضح.', missing_or_ambiguous_amount: 'مبلغ السداد ناقص أو يحتمل أكثر من قيمة.', possible_duplicate_receipt: 'توجد دفعة بالقيمة والتاريخ نفسيهما؛ راجعها قبل الإضافة.', opportunity_already_closed: 'الفرصة مغلقة أو مسددة سابقًا.', amount_exceeds_remaining: 'المبلغ يتجاوز المتبقي في سجل الفرصة.', final_amount_below_remaining_principal: 'مبلغ السداد النهائي أقل من رأس المال المتبقي.', receipt_balance_mismatch: 'رصيد الفرصة يحتاج مطابقة مع سجل الدفعات.', invalid_payment_date: 'تاريخ السداد غير صحيح.', ambiguous_payment_date: 'تاريخ السداد غير واضح.', conflicting_payment_type: 'نوع السداد غير واضح.', payment_not_confirmed: 'الرسالة لا تؤكد إتمام السداد.', processing_failed: 'حُفظت الرسالة وتعذر إكمال التسجيل؛ راجع سجل الدفعات.' }[reason] || '');
+const analysisLabel = (item) => item?.analysis?.action_type === 'investment' ? (item.analysis.status === 'investment_created' ? 'تمت إضافة الفرصة' : 'استثمار مقبول · تحت المراجعة') : item?.analysis?.reason === 'manually_linked' ? 'معتمدة · مرتبطة بحركة مسجلة' : item?.analysis?.reason === 'manually_approved' ? 'معتمدة · تم تسجيل الحركة' : ({ applied: item?.analysis?.action_type === 'deposit' ? 'تم تسجيل الإيداع بالمحفظة' : item?.analysis?.action_type === 'withdrawal' ? 'تم تسجيل السحب من المحفظة' : 'تم تسجيل السداد', duplicate: 'مسجلة سابقًا · دون تكرار', needs_review: 'تحتاج مراجعة', non_payment: 'محفوظة · لا توجد حركة مكتملة', archived: 'محفوظة', pending: 'جارٍ التحليل' }[item?.analysis?.status] || 'محفوظة');
+const reasonLabel = (reason) => reason === 'manually_linked' ? 'تم اعتماد الرسالة وربطها بالحركة المسجلة دون تكرار المبلغ.' : reason === 'manually_approved' ? 'تم اعتماد الرسالة وتحديث السجلات بنجاح.' : ({ investment_requires_completion: 'أكمل بيانات الفرصة لإضافتها، أو اختر إلغاء لاستبعاد الرسالة.', investment_completed: 'تمت إضافة الفرصة بعد إكمال بياناتها وتوزيع المستثمرين.', wallet_reference_conflict: 'مرجع العملية مسجل بمبلغ مختلف؛ راجع الحركة.', possible_duplicate_wallet_transfer: 'توجد حركة بنفس القيمة والتاريخ؛ راجع السجل لتجنب التكرار.', wallet_fee_needs_review: 'الرسالة تتضمن رسومًا وتحتاج مراجعة قيمة الخصم.', ambiguous_wallet_direction: 'لم تتضح جهة الإيداع أو السحب.', ambiguous_wallet_reference: 'تتضمن الرسالة أكثر من مرجع للعملية.', wallet_transfer_not_confirmed: 'الرسالة لا تؤكد اكتمال الإيداع أو السحب.', opportunity_not_found: 'لم توجد فرصة مطابقة في حسابك.', ambiguous_opportunity: 'يوجد أكثر من تطابق لرقم الفرصة.', missing_or_ambiguous_reference: 'رقم الفرصة ناقص أو غير واضح.', missing_or_ambiguous_amount: 'مبلغ السداد ناقص أو يحتمل أكثر من قيمة.', possible_duplicate_receipt: 'توجد دفعة بالقيمة والتاريخ نفسيهما؛ راجعها قبل الإضافة.', opportunity_already_closed: 'الفرصة مغلقة أو مسددة سابقًا.', amount_exceeds_remaining: 'المبلغ يتجاوز المتبقي في سجل الفرصة.', final_amount_below_remaining_principal: 'مبلغ السداد النهائي أقل من رأس المال المتبقي.', receipt_balance_mismatch: 'رصيد الفرصة يحتاج مطابقة مع سجل الدفعات.', invalid_payment_date: 'تاريخ السداد غير صحيح.', ambiguous_payment_date: 'تاريخ السداد غير واضح.', conflicting_payment_type: 'نوع السداد غير واضح.', payment_not_confirmed: 'الرسالة لا تؤكد إتمام السداد.', processing_failed: 'حُفظت الرسالة وتعذر إكمال التسجيل؛ راجع سجل الدفعات.' }[reason] || '');
 
 export default function SmsArchiveScreen({ onBack }) {
   const [status, setStatus] = useState({ supported: false, enabled: false, pendingCount: 0 });
@@ -19,6 +22,11 @@ export default function SmsArchiveScreen({ onBack }) {
   const [message, setMessage] = useState('');
   const [selected, setSelected] = useState(null);
   const [reviewing, setReviewing] = useState(false);
+  const [investmentDraft, setInvestmentDraft] = useState(null);
+  const [investmentBusy, setInvestmentBusy] = useState(false);
+  const [investmentError, setInvestmentError] = useState('');
+  const investmentWriting = useRef(false);
+  const sessionKey = useRef(getCurrentAhmedSession()?.sessionKey);
   const mounted = useRef(true);
 
   const refreshStatus = async () => {
@@ -29,7 +37,14 @@ export default function SmsArchiveScreen({ onBack }) {
     try {
       const result = await fetchSmsArchive(append ? rows[rows.length - 1]?.id : null);
       if (!mounted.current) return;
-      setRows((current) => append ? [...current, ...result.data.filter((item) => !current.some((old) => old.id === item.id))] : [...result.data, ...current.filter((item) => !result.data.some((fresh) => fresh.id === item.id))]);
+      const dismissed = new Set((result.dismissed_ids || []).map(String));
+      const fresh = result.data.filter((item) => !dismissed.has(String(item.id)));
+      setRows((current) => {
+        const kept = current.filter((item) => !dismissed.has(String(item.id)));
+        return append ? [...kept, ...fresh.filter((item) => !kept.some((old) => old.id === item.id))] : [...fresh, ...kept.filter((item) => !fresh.some((row) => row.id === item.id))];
+      });
+      setSelected((current) => dismissed.has(String(current?.id)) ? null : current);
+      setInvestmentDraft((current) => dismissed.has(String(current?.id)) ? null : current);
       setTotal(result.total); setHasMore(result.hasMore);
     } catch (error) { if (mounted.current) setMessage(error.message); }
   };
@@ -61,6 +76,28 @@ export default function SmsArchiveScreen({ onBack }) {
     finally { if (mounted.current) setRefreshing(false); }
   };
 
+  const investmentAction = async (action) => {
+    if (!selected || investmentWriting.current) return;
+    const target = selected;
+    investmentWriting.current = true; setInvestmentBusy(true); setMessage(''); setInvestmentError('');
+    try {
+      const review = await fetchSmsInvestment(target.id, sessionKey.current);
+      if (!mounted.current) return;
+      if (action === 'complete') {
+        const { code, total_amount, start_date, date_source } = review.suggestion;
+        setInvestmentDraft({ id: target.id, version: review.version, initialValues: { code, total_amount, start_date }, date_source });
+      } else {
+        await dismissSmsInvestment(target.id, review.version, sessionKey.current);
+        if (!mounted.current) return;
+        setRows((current) => current.filter((row) => row.id !== target.id));
+        setTotal((current) => Math.max(0, current - 1)); setSelected(null);
+        setMessage('تم إلغاء الرسالة؛ لم تُسجل فرصة أو حركة مالية.');
+        load();
+      }
+    } catch (error) { if (mounted.current) { setMessage(error.message); setInvestmentError(error.message); } }
+    finally { investmentWriting.current = false; if (mounted.current) setInvestmentBusy(false); }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.bar}>
@@ -74,7 +111,7 @@ export default function SmsArchiveScreen({ onBack }) {
             {busy ? <ActivityIndicator color="#6d28d9" /> : <Switch accessibilityLabel="استقبال الرسائل الجديدة تلقائيًا" value={Boolean(status.enabled && status.permissionGranted)} disabled={!status.supported} onValueChange={toggle} trackColor={{ false: '#cbd5e1', true: '#7c3aed' }} thumbColor="#fff" />}
             <View style={styles.captureText}><Text style={styles.captureTitle}>رسائل Ta3meed والحركات التلقائية</Text><Text style={styles.secondary}>{status.enabled && status.permissionGranted ? 'مفعّل · Ta3meed فقط' : 'متوقف'}</Text></View>
           </View>
-          <Text style={styles.explanation}>يُحفظ المرسل والنص ووقت الوصول لرسائل Ta3meed الجديدة فقط، ثم يُسجل السداد الواضح في الفرصة وحصص المستثمرين والمحفظة، وتُضاف الإيداعات والسحوبات المؤكدة إلى محفظة تعميد ويصلك تنبيه بالإتمام. تُمنع الدفعات المكررة، والرسالة غير الواضحة تُحفظ للمراجعة.</Text>
+          <Text style={styles.explanation}>يُحفظ المرسل والنص ووقت الوصول لرسائل Ta3meed الجديدة فقط، ثم يُسجل السداد الواضح في الفرصة وحصص المستثمرين والمحفظة، وتُضاف الإيداعات والسحوبات المؤكدة إلى محفظة تعميد ويصلك تنبيه بالإتمام. تُمنع الدفعات المكررة. قبول الاستثمار يبقى تحت المراجعة حتى إكمال بيانات الفرصة أو إلغاء الرسالة.</Text>
           {status.requiresUpdate ? <Text style={styles.note}>ثبّت تحديث أندرويد لتطبيق فلتر Ta3meed قبل الحفظ والتنبيه في الخلفية.</Text> : null}
           {status.enabled && status.notificationPermissionGranted === false ? <TouchableOpacity onPress={() => Linking.openSettings()}><Text style={styles.link}>فعّل إذن الإشعارات لاستلام تنبيه الإتمام</Text></TouchableOpacity> : null}
           {!status.supported ? <Text style={styles.note}>{Platform.OS === 'android' ? 'ثبّت نسخة APK المحدثة لتفعيل الاستقبال التلقائي.' : 'الاستقبال التلقائي متاح على أندرويد. يمكنك تصفح الأرشيف من هنا.'}</Text> : null}
@@ -87,9 +124,9 @@ export default function SmsArchiveScreen({ onBack }) {
         </View>
         {status.lastUploadedAt ? <Text style={styles.syncTime}>آخر مزامنة: {date(status.lastUploadedAt)}</Text> : null}
         {!!(message || status.lastError) && <Text accessibilityLiveRegion="polite" style={styles.feedback}>{message || status.lastError}</Text>}
-        <View style={styles.listHeading}><Text style={styles.listTitle}>الرسائل المحفوظة</Text><Text style={styles.secondary}>الأحدث أولًا</Text></View>
+        <View style={styles.listHeading}><Text style={styles.listTitle}>الرسائل والمراجعة</Text><Text style={styles.secondary}>الأحدث أولًا</Text></View>
         {!rows.length ? <View style={styles.empty}><Text style={styles.emptyTitle}>لا توجد رسائل محفوظة بعد</Text><Text style={styles.secondary}>ستظهر الرسائل الجديدة هنا بعد التفعيل والمزامنة.</Text></View> : rows.map((item) => (
-          <TouchableOpacity key={String(item.id)} onPress={() => setSelected(item)} style={styles.messageRow} accessibilityLabel={`رسالة من ${item.sender || 'مرسل غير معروف'}، ${date(item.received_at_ms)}`}>
+          <TouchableOpacity testID={`sms-message-${item.id}`} key={String(item.id)} onPress={() => { setSelected(item); setInvestmentError(''); }} style={styles.messageRow} accessibilityLabel={`رسالة من ${item.sender || 'مرسل غير معروف'}، ${date(item.received_at_ms)}`}>
             <View style={styles.rowHeader}><Text style={styles.time}>{date(item.received_at_ms)}</Text><Text style={styles.sender} numberOfLines={1}>{item.sender || 'مرسل غير معروف'}</Text></View>
             <Text numberOfLines={2} style={styles.preview}>{item.body || 'رسالة فارغة'}</Text>
             <Text style={[styles.analysis, item.analysis?.status === 'applied' ? styles.applied : item.analysis?.status === 'needs_review' ? styles.review : null]}>{analysisLabel(item)}</Text>
@@ -97,7 +134,7 @@ export default function SmsArchiveScreen({ onBack }) {
         ))}
         {hasMore ? <TouchableOpacity onPress={() => load(true)} style={styles.more}><Text style={styles.link}>عرض رسائل أقدم</Text></TouchableOpacity> : null}
       </ScrollView>
-      <Modal visible={Boolean(selected)} transparent animationType="fade" onRequestClose={() => { if (!reviewing) setSelected(null); }}>
+      <Modal visible={Boolean(selected && !investmentDraft)} transparent animationType="fade" onRequestClose={() => { if (!reviewing && !investmentBusy) setSelected(null); }}>
         <View style={styles.overlay}><View style={styles.dialog}>
           {reviewing && selected ? <SmsReviewForm key={selected.id} item={selected} onCancel={() => setReviewing(false)} onApproved={(result) => {
             setRows((current) => current.map((row) => row.id === selected.id ? { ...row, analysis: result.analysis } : row));
@@ -105,7 +142,7 @@ export default function SmsArchiveScreen({ onBack }) {
             setMessage(result.analysis.reason === 'manually_linked' ? 'تم اعتماد الرسالة وربطها بالحركة المسجلة دون تكرار المبلغ.' : 'تم اعتماد الرسالة وتحديث السجلات بنجاح.');
             load();
           }} /> : <>
-          <View style={styles.rowHeader}><TouchableOpacity accessibilityLabel="إغلاق تفاصيل الرسالة" onPress={() => setSelected(null)} style={styles.iconButton}><UiIcon name="close" size={23} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.dialogTitle}>تفاصيل الرسالة</Text></View>
+          <View style={styles.rowHeader}><TouchableOpacity accessibilityLabel="إغلاق تفاصيل الرسالة" disabled={investmentBusy} onPress={() => setSelected(null)} style={styles.iconButton}><UiIcon name="close" size={23} color={ICON_COLOR_DARK} /></TouchableOpacity><Text style={styles.dialogTitle}>تفاصيل الرسالة</Text></View>
           <Text style={styles.fieldLabel}>المرسل</Text><Text selectable style={styles.detailSender}>{selected?.sender || 'مرسل غير معروف'}</Text>
           <Text style={styles.fieldLabel}>وقت الوصول</Text><Text style={styles.detailTime}>{date(selected?.received_at_ms)}</Text>
           {selected?.sim_slot != null ? <Text style={styles.detailTime}>الشريحة: {Number(selected.sim_slot) + 1}</Text> : null}
@@ -114,11 +151,25 @@ export default function SmsArchiveScreen({ onBack }) {
           {selected?.analysis?.amount != null ? <Text style={styles.detailTime}>المبلغ: {Number(selected.analysis.amount).toLocaleString('en-US', { minimumFractionDigits: 2 })} ر.س</Text> : null}
           {reasonLabel(selected?.analysis?.reason) ? <Text style={styles.note}>{reasonLabel(selected.analysis.reason)}</Text> : null}
           <ScrollView style={styles.bodyScroll}><Text selectable style={styles.body}>{selected?.body || 'رسالة فارغة'}</Text></ScrollView>
-          {selected?.analysis?.status === 'needs_review' && String(selected?.sender || '').trim().toLowerCase() === 'ta3meed' ? <TouchableOpacity testID="open-sms-message-review" accessibilityLabel="اعتماد الرسالة" onPress={() => setReviewing(true)} style={styles.copy}><Text style={styles.copyText}>اعتماد الرسالة</Text></TouchableOpacity> : null}
+          {selected?.analysis?.status === 'needs_review' && selected.analysis.action_type === 'investment' ? <View testID="sms-investment-review-actions">
+            <TouchableOpacity testID="complete-sms-investment" accessibilityLabel="إكمال بيانات الفرصة" disabled={investmentBusy} onPress={() => investmentAction('complete')} style={styles.copy}>{investmentBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.copyText}>إكمال</Text>}</TouchableOpacity>
+            <TouchableOpacity testID="dismiss-sms-investment" accessibilityLabel="إلغاء رسالة قبول الاستثمار" disabled={investmentBusy} onPress={() => investmentAction('dismiss')} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>إلغاء</Text></TouchableOpacity>
+          </View> : selected?.analysis?.status === 'needs_review' && String(selected?.sender || '').trim().toLowerCase() === 'ta3meed' ? <TouchableOpacity testID="open-sms-message-review" accessibilityLabel="اعتماد الرسالة" onPress={() => setReviewing(true)} style={styles.copy}><Text style={styles.copyText}>اعتماد الرسالة</Text></TouchableOpacity> : null}
+          {!!investmentError && <Text accessibilityRole="alert" style={styles.note}>{investmentError}</Text>}
           <TouchableOpacity onPress={async () => { await Clipboard.setStringAsync(`${selected?.sender || ''}\n${selected?.body || ''}`); setMessage('تم نسخ الرسالة مع المرسل.'); setSelected(null); }} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>نسخ الرسالة مع المرسل</Text></TouchableOpacity>
           </>}
         </View></View>
       </Modal>
+      <AddOpportunityModal key={investmentDraft?.id || 'sms-investment'} visible={Boolean(investmentDraft)}
+        initialValues={investmentDraft?.initialValues}
+        intro={investmentDraft?.date_source === 'message' ? 'بيانات الرسالة معبأة. أكمل الحقول المتبقية ثم احفظ الفرصة.' : 'بيانات الرسالة معبأة. تاريخ التمويل من وقت الرسالة ويمكنك تعديله.'}
+        onClose={() => setInvestmentDraft(null)}
+        onSubmit={(payload) => completeSmsInvestment(investmentDraft.id, { ...payload, version: investmentDraft.version }, sessionKey.current)}
+        onCreated={(result) => {
+          if (!mounted.current) return;
+          setRows((current) => current.map((row) => row.id === result.analysis.message_id ? { ...row, analysis: result.analysis } : row));
+          setSelected(null); setInvestmentDraft(null); setMessage('تمت إضافة فرصة تعميد وتوزيع المستثمرين بعد إكمال بياناتها.'); load();
+        }} />
     </SafeAreaView>
   );
 }

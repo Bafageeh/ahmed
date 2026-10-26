@@ -7,6 +7,7 @@ use App\Support\Ta3meedAllocationPolicy;
 use App\Support\Ta3meedSmsParser;
 use App\Support\Ta3meedSmsProcessor;
 use App\Support\Ta3meedSmsReviewData;
+use App\Support\Ta3meedInvestmentSmsParser;
 use App\Support\Ta3meedWalletLedger;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -28,6 +29,7 @@ final class SmsReviewController extends Controller
         $row = ($lock ? $query->lockForUpdate() : $query)->first();
         abort_unless($row, 404);
         abort_unless(Ta3meedSmsParser::allowedSender(Crypt::decryptString($row->sender)), 422, 'الاعتماد متاح لرسائل Ta3meed فقط.');
+        abort_if($row->action_type === 'investment' || Ta3meedInvestmentSmsParser::recognizes(Crypt::decryptString($row->body)), 422, 'هذه رسالة قبول استثمار؛ استخدم إكمال الفرصة أو إلغاء.');
         return $row;
     }
 

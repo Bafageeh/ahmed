@@ -272,10 +272,13 @@ async function apiJson(path, options = {}) {
   return json;
 }
 
-function AddOpportunityModal({ visible, onClose, onCreated }) {
+export function AddOpportunityModal({ visible, onClose, onCreated, initialValues, onSubmit, intro }) {
   const [form, setForm] = useState(emptyOpportunityForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    if (visible) { setForm({ ...emptyOpportunityForm(), ...(initialValues || {}) }); setError(''); }
+  }, [visible, initialValues]);
 
   const allocationError = allocationFormError(form.allocations, form.total_amount, form.profit);
   const totalAmount = numberValue(form.total_amount);
@@ -298,6 +301,11 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
     const code = form.code.trim();
     if (!code) return 'أدخل رقم الفرصة.';
     if (totalAmount <= 0) return 'أدخل مبلغ الاستثمار بشكل صحيح.';
+    if (onSubmit && !form.start_date.trim()) return 'أدخل تاريخ التمويل.';
+    if (onSubmit && form.profit.trim() === '') return 'أدخل الربح المتوقع، ويمكن إدخال صفر.';
+    if (onSubmit && !form.category) return 'اختر تصنيف الفرصة.';
+    if (onSubmit && !form.months.trim()) return 'أدخل عدد الشهور.';
+    if (onSubmit && !form.maturity_date.trim()) return 'أدخل تاريخ الاستحقاق.';
     if (form.months.trim() && (!Number.isInteger(numberValue(form.months)) || numberValue(form.months) <= 0)) {
       return 'عدد الشهور يجب أن يكون رقمًا صحيحًا أكبر من صفر.';
     }
@@ -317,7 +325,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
 
     try {
       const code = form.code.trim();
-      const current = await apiJson('/ta3meed/investments');
+      const current = onSubmit ? { data: [] } : await apiJson('/ta3meed/investments');
       const existing = (Array.isArray(current?.data) ? current.data : []).find((item) => (
         String(item?.reference_number || item?.code || '').trim().toLowerCase() === code.toLowerCase()
       ));
@@ -342,7 +350,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
         allocations: allocationPayload(form.allocations),
       };
 
-      const created = await apiJson('/ta3meed/investments', {
+      const created = onSubmit ? await onSubmit(payload) : await apiJson('/ta3meed/investments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -350,7 +358,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
 
       setForm(emptyOpportunityForm());
       onClose();
-      onCreated?.(created?.data || payload);
+      onCreated?.(onSubmit ? created : (created?.data || payload));
     } catch (e) {
       setError(e.message || 'تعذر إضافة الفرصة.');
     } finally {
@@ -368,7 +376,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
             </TouchableOpacity>
             <View style={addStyles.titleBlock}>
               <Text style={addStyles.title}>إضافة فرصة تعميد</Text>
-              <Text style={addStyles.subtitle}>إدخال سريع ودقيق بدون ازدحام</Text>
+              <Text style={addStyles.subtitle}>{intro || 'إدخال سريع ودقيق بدون ازدحام'}</Text>
             </View>
             <View style={addStyles.headerMark}><Text style={addStyles.headerMarkText}>+</Text></View>
           </View>
@@ -385,6 +393,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
 
             <FormField
               label="رقم الفرصة *"
+              testID="add-opportunity-reference"
               value={form.code}
               onChangeText={(value) => setField('code', value)}
               placeholder="مثال: ER-ABC123"
@@ -395,6 +404,7 @@ function AddOpportunityModal({ visible, onClose, onCreated }) {
               <FormField
                 compact
                 label="مبلغ الاستثمار *"
+                testID="add-opportunity-capital"
                 value={form.total_amount}
                 onChangeText={(value) => setField('total_amount', normalizeAmountInput(value))}
                 placeholder="0"

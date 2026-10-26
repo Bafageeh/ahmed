@@ -10,6 +10,15 @@ final class Ta3meedSmsProcessor
 {
     public function process(object $message, string $body): void
     {
+        if (Ta3meedInvestmentSmsParser::recognizes($body)) {
+            $facts = Ta3meedInvestmentSmsParser::suggestion($message, $body);
+            DB::table('sms_archive_messages')->where('id', $message->id)->update([
+                'analysis_status' => 'needs_review', 'analysis_reason' => 'investment_requires_completion', 'action_type' => 'investment',
+                'payment_reference' => $facts['code'] ?: null, 'payment_amount' => $facts['total_amount'] !== '' ? $facts['total_amount'] : null,
+                'analyzed_at' => now(), 'updated_at' => now(),
+            ]);
+            return;
+        }
         $wallet = Ta3meedWalletSmsParser::parse($body);
         if ($wallet['status'] !== 'not_wallet') {
             $this->processWallet($message, $body, $wallet);
@@ -82,6 +91,13 @@ final class Ta3meedSmsProcessor
         $action = $message->action_type ?? 'repayment';
         $wallet = in_array($action, ['deposit', 'withdrawal'], true);
         $walletLabel = $action === 'withdrawal' ? 'سحب' : 'إيداع';
+        if ($action === 'investment') {
+            return ['message_id' => $message->id, 'client_id' => $message->client_id, 'status' => $status, 'action_type' => $action,
+                'reason' => $message->analysis_reason, 'reference_number' => $reference, 'amount' => $message->payment_amount,
+                'receipt_id' => null, 'wallet_entry_id' => null, 'opportunity_id' => $message->investment_opportunity_id ?? null,
+                'notification' => $status === 'needs_review' ? ['title' => 'قبول استثمار يحتاج إكمالًا',
+                    'body' => 'افتح رسالة تعميد لإكمال بيانات الفرصة أو إلغائها. لم تُسجل فرصة أو حركة مالية.'] : null];
+        }
         return ['message_id' => $message->id, 'client_id' => $message->client_id, 'status' => $status,
             'action_type' => $action, 'wallet_entry_id' => $message->wallet_entry_id ?? null,
             'reason' => $message->analysis_reason, 'reference_number' => $reference,

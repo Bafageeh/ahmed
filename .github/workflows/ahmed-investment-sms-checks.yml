@@ -1,0 +1,46 @@
+name: Ahmed accepted investment SMS isolated checks
+# Wait for actual review effects before checking the rendered form.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-investment-sms-checks.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-investment-sms-checks
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, openssl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check mobile permissions, old-version gating and account switches
+        run: node --experimental-vm-modules scripts/test-sms-client.cjs
+      - name: Check review authentication, conflicts and uncertain-save retries
+        run: node --experimental-vm-modules scripts/test-sms-review-client.cjs
+      - name: Install API dependencies for isolated tests
+        working-directory: ahmed-api
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Verify new-message cutoff, sender, encryption, retries and account isolation
+        env:
+          APP_ENV: testing
+          CACHE_STORE: array
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          set -euo pipefail
+          php scripts/test-sms-investment.php "$GITHUB_WORKSPACE" | tee /tmp/ahmed-sms-review-checks.log
+          python3 - <<'PY'
+          from pathlib import Path
+          assert 'SMS_INVESTMENT_INTEGRATION_PASSED ' in Path('/tmp/ahmed-sms-review-checks.log').read_text(), 'The complete review suite must pass'
+          PY

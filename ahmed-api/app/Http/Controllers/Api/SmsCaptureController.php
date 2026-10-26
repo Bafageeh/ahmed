@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Support\Ta3meedSmsParser;
 use App\Support\Ta3meedSmsProcessor;
+use App\Support\Ta3meedInvestmentSmsParser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -151,7 +152,7 @@ class SmsCaptureController extends Controller
     public function index(Request $request)
     {
         $owner = $this->owner($request);
-        $query = DB::table('sms_archive_messages')->where('user_id', $owner);
+        $query = DB::table('sms_archive_messages')->where('user_id', $owner)->where('analysis_status', '!=', 'dismissed');
         if ($request->filled('sender')) {
             $query->where('sender_hash', hash_hmac('sha256', (string) $request->input('sender'), (string) config('app.key')));
         }
@@ -161,15 +162,18 @@ class SmsCaptureController extends Controller
         }
         $rows = $query->orderByDesc('id')->limit(51)->get();
         $hasMore = $rows->count() > 50;
-        $items = $rows->take(50)->map(fn ($row) => [
+        $items = $rows->take(50)->map(function ($row) {
+            $body = Crypt::decryptString($row->body);
+            return [
             'id' => $row->id, 'sender' => Crypt::decryptString($row->sender),
-            'body' => Crypt::decryptString($row->body), 'received_at_ms' => (int) $row->received_at_ms,
+            'body' => $body, 'received_at_ms' => (int) $row->received_at_ms,
             'sent_at_ms' => $row->sent_at_ms === null ? null : (int) $row->sent_at_ms,
             'subscription_id' => $row->subscription_id, 'sim_slot' => $row->sim_slot,
-            'analysis' => Ta3meedSmsProcessor::outcome($row),
-        ])->values();
+            'analysis' => Ta3meedSmsProcessor::outcome(Ta3meedInvestmentSmsParser::forDisplay($row, $body)),
+        ]; })->values();
 
-        return response()->json(['data' => $items, 'total' => $total, 'has_more' => $hasMore])
+        return response()->json(['data' => $items, 'total' => $total, 'has_more' => $hasMore,
+            'dismissed_ids' => DB::table('sms_archive_messages')->where('user_id', $owner)->where('analysis_status', 'dismissed')->pluck('id')])
             ->header('Cache-Control', 'no-store, private');
     }
 }

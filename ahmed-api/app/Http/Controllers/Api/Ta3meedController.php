@@ -74,7 +74,9 @@ class Ta3meedController extends Controller
         if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
         $item = DB::transaction(function () use ($data, $platform, $userId) {
-            if (DB::table('investment_opportunities')->where('platform_id', $platform->id)->where('user_id', $userId)->whereRaw('lower(reference_number) = ?', [mb_strtolower(trim($data['code']))])->exists()) {
+            DB::table('users')->where('id', $userId)->lockForUpdate()->first();
+            $referenceKey = mb_strtolower(preg_replace('/[-\s]+/u', '', trim($data['code'])));
+            if (DB::table('investment_opportunities')->where('platform_id', $platform->id)->where('user_id', $userId)->whereRaw("LOWER(REPLACE(REPLACE(reference_number, '-', ''), ' ', '')) = ?", [$referenceKey])->exists()) {
                 Ta3meedAllocationPolicy::fail('code', 'رقم الفرصة موجود مسبقاً. افتح الفرصة الحالية للتعديل.');
             }
             $accountId = $this->accountId($platform->id, $userId);
