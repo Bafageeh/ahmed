@@ -1,0 +1,111 @@
+name: Publish inspected Ahmed APK build 27
+# Runtime compatibility is stored in Android resources, not the embedded asset manifest.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-publish-inspected-apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ahmed-publish-inspected-apk
+  cancel-in-progress: false
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Read-only verification of production source, assets and existing API
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 6m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            CASE="/home/pmsa/secure-backups/ahmed/latest-apk-20261026"
+            mkdir -p "$CASE"
+            chmod 700 "$CASE"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/verify-live-apk-source.py" > "$CASE/verify.py"
+            python3 "$CASE/verify.py"
+  publish-apk:
+    needs: verify-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Retrieve the completed build without rebuilding
+        uses: actions/download-artifact@v4
+        with:
+          name: ahmed-latest-build-candidate
+          path: apk-check/candidate
+          run-id: 40285638148
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install the inspected APK resource reader
+        run: python3 -m pip install 'androguard==4.1.4' --quiet --disable-pip-version-check
+      - name: Verify exact inspected binary, native runtime, latest embedded screens and signing certificate
+        id: apk_metadata
+        run: |
+          mkdir -p ahmed-mobile/build-output
+          cp apk-check/candidate/app-release.apk ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          AHMED_APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          "$AHMED_APKSIGNER" verify --print-certs ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          python3 scripts/verify-built-apk.py ahmed-mobile/build-output/ahmed-1.0.23-27.apk 34d471a6dc01aa371975971cacb70a73fcde906ecebbfbc785aee666cf18f143
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          import subprocess,os
+          actual=subprocess.check_output(['python3','scripts/apk-signer-fingerprint.py','ahmed-mobile/build-output/ahmed-1.0.23-27.apk']).decode().strip()
+          assert actual=='fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c','Signing certificate does not match the installed release'
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha256=34d471a6dc01aa371975971cacb70a73fcde906ecebbfbc785aee666cf18f143\n')
+          print('LATEST_APK_CERTIFICATE_AND_PRESERVED_BUILD_SOURCE_VERIFIED source=1a640f4d7d3254b0f0dc0861eb4b4813641f4e94')
+          PYCODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ahmed-1.0.23-27-apk
+          path: ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          if-no-files-found: error
+      - name: Publish the verified APK to the existing pm.sa downloads directory
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          source: ahmed-mobile/build-output/ahmed-1.0.23-27.apk
+          target: /home/pmsa/public_html/downloads
+          strip_components: 2
+          overwrite: true
+          timeout: 120s
+          command_timeout: 10m
+      - name: Verify the live APK download
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 2m
+          script: |
+            python3 - <<'PYCODE'
+            from pathlib import Path
+            import hashlib,urllib.request
+            p=Path('/home/pmsa/public_html/downloads/ahmed-1.0.23-27.apk')
+            expected='${{ steps.apk_metadata.outputs.sha256 }}'
+            assert hashlib.sha256(p.read_bytes()).hexdigest()==expected
+            p.chmod(0o644)
+            url='https://pm.sa/downloads/ahmed-1.0.23-27.apk?v=${{ github.sha }}'
+            with urllib.request.urlopen(urllib.request.Request(url,method='HEAD'),timeout=30) as response:
+              assert response.code==200 and int(response.headers.get('Content-Length',0))==p.stat().st_size
+            print('SMS_APK_READY '+url+' sha256='+expected)
+            PYCODE
