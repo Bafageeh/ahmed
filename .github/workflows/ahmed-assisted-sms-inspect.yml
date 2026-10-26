@@ -1,0 +1,38 @@
+name: Inspect one user-requested SMS import safely
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-assisted-sms-inspect.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-assisted-sms
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 4m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/assisted-sms-20261026"
+            export AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            printf %s 'LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUFuL290eHE5cjZZY2JZeVFveVRaMQpMMmV1MGc3dkZMSTBYMU5udGpYbzZST0VUNXJkaVVraFRSUHhqUVFoQUlvNHFEZ2l4b2d4c1Q2MnBuL0NMSGpOCk9oVndIZk1BMWJPbkdIYnJBNCsxNi9Bc1dOVHdNaTZyeDdBdTJ5dkNPN0ZKelhOZDZzNHFkcDZTdW1IZW5MbHYKYmxHOTIrSEJkdVo4Sk9aeUZScnVWMUt0K2F4NVpqZFdJTXI2Nms4UjdZQzNDb1NSY0E2cC9veUVhNmdXenFGOQowdEJiVHlMeGdMdmx4ZzAveFpMK2NwQSs4N2xuM0xYMmhPZUhOMGVIaGpGdzJNNHpaN2ppWjlFT0Y1YkNWSDd3CmVXa3ZYVXVqenNJZDMvSWUyeFlISmNheDNEREZnazZ2VTROM1hKWXo3QXpKdy93a2t3bWxVYllvQlZQT28wNSsKd1FJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==' | base64 -d > "$AHMED_SMS_CASE/report-public.pem"
+            chmod 600 "$AHMED_SMS_CASE/report-public.pem"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/inspect-assisted-sms.php" > "$AHMED_SMS_CASE/inspect.php"
+            chmod 600 "$AHMED_SMS_CASE/inspect.php"
+            cd "$ROOT/ahmed-api"
+            /usr/local/bin/php "$AHMED_SMS_CASE/inspect.php"
