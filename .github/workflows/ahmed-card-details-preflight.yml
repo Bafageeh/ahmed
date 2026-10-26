@@ -1,0 +1,59 @@
+name: Ahmed card company and rates source preflight
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-card-details-preflight.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 5m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/card-details-20261026"
+            export AHMED_SMS_SHA="${{ github.sha }}"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            python3 - <<'PYTHON'
+            import pathlib,os,json,hashlib,subprocess,base64
+            root=pathlib.Path(os.environ['AHMED_SMS_ROOT']);case=pathlib.Path(os.environ['AHMED_SMS_CASE'])
+            excluded={'.git','node_modules','.expo','build','.gradle','dist-web','dist','apk','build-output','Pods','vendor','cache'}
+            extensions={'.js','.jsx','.ts','.tsx','.json','.kt','.java','.xml','.gradle','.kts','.php','.png','.jpg','.jpeg','.webp','.svg','.gif','.ttf','.otf'}
+            sources=['ahmed-mobile','ahmed-api/app','ahmed-api/routes','ahmed-api/bootstrap','ahmed-api/config','ahmed-api/database/migrations','ahmed-api/tests']
+            baseline={}
+            for line in subprocess.check_output(['git','ls-tree','-r',os.environ['AHMED_SMS_SHA']],cwd=root).decode().splitlines():
+             meta,name=line.split('\t',1);baseline[name]=meta.split()[2]
+            report={'head':subprocess.check_output(['git','rev-parse','HEAD'],cwd=root).decode().strip(),'status':subprocess.check_output(['git','status','--porcelain','--untracked-files=all'],cwd=root).decode(),'files':{},'contents':{}}
+            for base in sources:
+             for p in (root/base).rglob('*'):
+              rel=p.relative_to(root)
+              if not p.is_file() or p.is_symlink() or any(part in excluded for part in rel.parts) or p.suffix not in extensions:continue
+              if p.name.startswith('.') or any(x in p.name.lower() for x in ['credential','private-key','google-services','service-account']):continue
+              data=p.read_bytes()
+              if len(data)>3000000:continue
+              report['files'][str(rel)]={'sha256':hashlib.sha256(data).hexdigest(),'size':len(data)}
+              if hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()!=baseline.get(str(rel)):report['contents'][str(rel)]=base64.b64encode(data).decode()
+            p=case/'source-preflight.json';p.write_text(json.dumps(report,ensure_ascii=False));p.chmod(0o600)
+            print('SMS_SOURCE_PREFLIGHT_READ_COMPLETE files='+str(len(report['files'])))
+            PYTHON
+            /usr/local/bin/php <<'PHP'
+            <?php
+            $body=gzencode(file_get_contents(getenv('AHMED_SMS_CASE').'/source-preflight.json'),9);$key=random_bytes(32);$iv=random_bytes(12);$cipher=openssl_encrypt($body,'aes-256-gcm',$key,OPENSSL_RAW_DATA,$iv,$tag);
+            $pub=base64_decode('LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUE5RlV1REhsYTlic0wvcVFzY1V0OQo4STkvWWFxRHgvU0RDVEtSMlp0bmdQMnY4OXdEeGxRMVo4eGVEUzluUGFoTEd1T0VKcFRia1MwSGx0N0dPTndzCm1LeUNuNzUvL09iM1A3Rk8za1VXOVBlOCszc1VuUGVad1lOdjUweUUzWW4zcnRoZVkveXpuQ0FOYlNiNStzZ0UKZjRRN1h4SmtMWm42bSt4STdCVXNDZm9leTlNallCMi96T1BKdmI0OFJScTdYK1ZMbTBTb1JyQlhXSzVQU0VVOQp2cnhIQ3pvcWRJNEh3czFIQ3RuTTNxVWtDVzRuS29hdkNtT2hwM0lpN1krbkcxMlRDUlNLTUFCVkNPVFAzUGNiCmoxU1ZCVmNiQi9HSFpqM0JzNFgwZDBmbS9BOHNON1FoUlMwdGE0elc0UWY2UDVKVGxXajZSbXBkaXl6OWdveEoKR1FJREFRQUIKLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==');if(!openssl_public_encrypt($key,$wrapped,$pub,OPENSSL_PKCS1_OAEP_PADDING))throw new RuntimeException('Report protection failed');
+            $encoded=strtoupper(bin2hex(json_encode(['key'=>base64_encode($wrapped),'iv'=>base64_encode($iv),'tag'=>base64_encode($tag),'ciphertext'=>base64_encode($cipher)])));foreach(str_split($encoded,4000) as $i=>$part)echo "SMS_PREFLIGHT_PART_".$i."=".$part."\n";
+            PHP
+            cd "$ROOT/ahmed-mobile"
+            if [ -f node_modules/eas-cli/bin/run ]; then CI=1 node node_modules/eas-cli/bin/run whoami || true; fi
