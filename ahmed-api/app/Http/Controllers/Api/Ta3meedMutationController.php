@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Support\Ta3meedActualProfit;
+use App\Support\Ta3meedCancellation;
 use App\Support\Ta3meedAllocationPolicy;
 use App\Support\Ta3meedInvestorName;
 use Illuminate\Http\Request;
@@ -114,43 +115,21 @@ class Ta3meedMutationController extends Controller
         $platform = $this->platform();
         if (! $platform) return response()->json(['message' => 'Ta3meed platform not found'], 404);
 
-        $investmentQuery = DB::table('investment_opportunities')
-            ->where('id', $id)
-            ->where('platform_id', $platform->id);
-        $this->scopeUser($investmentQuery, 'investment_opportunities', $userId);
-        $investment = $investmentQuery->first();
-        if (! $investment) return response()->json(['message' => 'Investment not found'], 404);
-
-        $status = strtolower(trim((string) $investment->status));
-        if (in_array($status, ['cancelled', 'canceled'], true)) {
-            return response()->json(['data' => $this->readInvestment($id, $userId)]);
-        }
-
-        if (in_array($status, ['received', 'completed', 'closed', 'finished', 'ended', 'settled', 'done'], true)) {
-            return response()->json(['message' => 'لا يمكن إلغاء فرصة منتهية أو مستلمة.'], 422);
-        }
-
-        DB::transaction(function () use ($id, $userId) {
-            $update = [
-                'status' => 'cancelled',
-                'updated_at' => now(),
-            ];
-            if (Schema::hasColumn('investment_opportunities', 'cancelled_at')) {
-                $update['cancelled_at'] = now();
-            }
-            DB::table('investment_opportunities')->where('id', $id)->update($update);
-
-            $allocationsQuery = DB::table('investment_opportunity_allocations')
-                ->where('opportunity_id', $id)
-                ->whereNotIn('status', ['received', 'completed']);
-            $this->scopeUser($allocationsQuery, 'investment_opportunity_allocations', $userId);
-            $allocationsQuery->update([
-                'status' => 'cancelled',
-                'updated_at' => now(),
-            ]);
+        $result = DB::transaction(function () use ($id, $userId, $platform) {
+            DB::table('users')->where('id', $userId)->lockForUpdate()->first();
+            $opportunity = DB::table('investment_opportunities')->where('id', $id)
+                ->where('user_id', $userId)->where('platform_id', $platform->id)
+                ->lockForUpdate()->first();
+            abort_unless($opportunity, 404, 'Investment not found');
+            return Ta3meedCancellation::apply($userId, $opportunity->reference_number);
         });
-
-        return response()->json(['data' => $this->readInvestment($id, $userId)]);
+        if ($result['status'] === 'needs_review') {
+            return response()->json(['message' => 'الإلغاء يحتاج مراجعة؛ لم تتم إضافة مبلغ للمحفظة.',
+                'reason' => $result['reason']], 422);
+        }
+        return response()->json(['data' => $this->readInvestment($id, $userId),
+            'refund' => ['status' => $result['status'], 'wallet_entry_id' => $result['wallet_entry_id'],
+                'amount' => $result['amount_cents'] / 100]]);
     }
 
     public function investorAccount(Request $request, string $code)

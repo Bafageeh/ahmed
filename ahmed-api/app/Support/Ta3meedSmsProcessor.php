@@ -10,6 +10,23 @@ final class Ta3meedSmsProcessor
 {
     public function process(object $message, string $body): void
     {
+        $cancellation = Ta3meedCancellation::parse($body);
+        if ($cancellation['status'] !== 'not_cancellation') {
+            $result = $cancellation['status'] === 'ready'
+                ? Ta3meedCancellation::apply((int) $message->user_id, $cancellation['reference'], (int) $message->id)
+                : $cancellation;
+            DB::table('sms_archive_messages')->where('id', $message->id)->update([
+                'analysis_status' => $result['status'],
+                'analysis_reason' => $result['reason'] ?? null,
+                'action_type' => 'cancellation',
+                'payment_reference' => $cancellation['reference'],
+                'payment_amount' => isset($result['amount_cents']) ? $result['amount_cents'] / 100 : null,
+                'wallet_entry_id' => $result['wallet_entry_id'] ?? null,
+                'investment_opportunity_id' => $result['opportunity_id'] ?? null,
+                'analyzed_at' => now(), 'updated_at' => now(),
+            ]);
+            return;
+        }
         if (Ta3meedInvestmentSmsParser::recognizes($body)) {
             $facts = Ta3meedInvestmentSmsParser::suggestion($message, $body);
             DB::table('sms_archive_messages')->where('id', $message->id)->update([
@@ -91,6 +108,20 @@ final class Ta3meedSmsProcessor
         $action = $message->action_type ?? 'repayment';
         $wallet = in_array($action, ['deposit', 'withdrawal'], true);
         $walletLabel = $action === 'withdrawal' ? 'سحب' : 'إيداع';
+        if ($action === 'cancellation') {
+            return ['message_id' => $message->id, 'client_id' => $message->client_id,
+                'status' => $status, 'action_type' => 'cancellation',
+                'reason' => $message->analysis_reason, 'reference_number' => $reference,
+                'amount' => $message->payment_amount, 'receipt_id' => null,
+                'wallet_entry_id' => $message->wallet_entry_id ?? null,
+                'opportunity_id' => $message->investment_opportunity_id ?? null,
+                'notification' => $status === 'applied'
+                    ? ['title' => 'تم إلغاء فرصة تعميد واسترجاع رأس المال',
+                        'body' => 'أعيد '.($amount ?? '').' ر.س إلى المحفظة للفرصة '.$reference.'.']
+                    : ($status === 'needs_review'
+                        ? ['title' => 'إلغاء تعميد يحتاج مراجعة', 'body' => 'تعذر تحديد الفرصة أو مبلغ الاسترجاع بأمان؛ لم تُضف حركة مالية.']
+                        : null)];
+        }
         if ($action === 'investment') {
             return ['message_id' => $message->id, 'client_id' => $message->client_id, 'status' => $status, 'action_type' => $action,
                 'reason' => $message->analysis_reason, 'reference_number' => $reference, 'amount' => $message->payment_amount,

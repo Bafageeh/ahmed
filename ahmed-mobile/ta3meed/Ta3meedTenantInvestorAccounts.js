@@ -5,6 +5,7 @@ import { money, n } from './ta3meedUtils';
 import { ahmedUserHeaders } from '../ahmedCurrentUser';
 import { ChevronRight, Coins, ArrowLeftRight, Wallet, TrendingUp, UserRound } from 'lucide-react-native';
 import UiIcon from '../UiIcon';
+import { InvestorAccountDashboard } from './Ta3meedInvestorDashboard';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 const todayText = () => new Date().toISOString().slice(0, 10);
@@ -349,36 +350,18 @@ function InvestorDetails({ investor, screen, setScreen, onBack }) {
     }
   };
   useEffect(() => { load(); }, [investor.code]);
-  return <View style={styles.investorScreen}><TouchableOpacity style={styles.investorAccountBackButton} onPress={screen === 'home' ? onBack : () => setScreen('home')}><Text style={styles.investorAccountBackText}>{screen === 'home' ? 'رجوع لحسابات المستثمرين' : `رجوع لشاشة ${investor.name}`}</Text></TouchableOpacity>{screen === 'home' ? <Home investor={investor} account={account} message={message} setScreen={setScreen} /> : null}{screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} onBack={() => setScreen('home')} /> : null}{screen === 'movements' ? <SimpleList title={`الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}</View>;
-}
-
-function Home({ investor, account, message, setScreen }) {
-  const balance = n(account?.balance);
-  const ta3meed = n(account?.ta3meed);
-  const endedProfit = n(account?.endedProfit);
-  const cash = balance + endedProfit - ta3meed;
-  const capital = balance + endedProfit;
-  const cards = [
-    ['مستثمر تعميد', ta3meed, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'مجموع رأس مال المستثمر المتبقي في فرص تعميد غير المنتهية', true],
-    ['الحوالات الشخصية', balance, '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'مجموع الإضافات - مجموع السحوبات'],
-    ['الكاش', cash, cash < 0 ? '#fff1f2' : '#fffbeb', cash < 0 ? '#fecdd3' : '#fde68a', cash < 0 ? '#be123c' : '#b45309', cash < 0 ? '#881337' : '#78350f', 'الحوالات الشخصية + ربح تعميد المنتهي - مستثمر تعميد'],
-    ['إجمالي المستثمر', n(account?.activeInvested), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'مجموع رأس مال المستثمر في الفرص غير المنتهية'],
-    ['نصيبه المستلم', n(account?.activeReceived), '#f5f3ff', '#ddd6fe', '#6d28d9', '#4c1d95', 'المستلم من أصل رأس المال فقط'],
-    ['رأس المال', capital, '#ecfdf5', '#99f6e4', '#0f766e', '#115e59', 'الحوالات الشخصية + ربح تعميد المنتهي'],
-    ['ربح متوقع', n(account?.expectedProfit), '#fffbeb', '#fde68a', '#b45309', '#78350f', 'مجموع الربح المتوقع لحصة المستثمر'],
-    ['ربح تعميد المنتهي', endedProfit, '#eff6ff', '#bfdbfe', '#1d4ed8', '#1e3a8a', 'المسترجع الكامل أو مجموع الدفعات - المبلغ المستثمر'],
-    ['عدد الفرص', n(account?.opportunitiesCount), '#f8fafc', '#e2e8f0', '#475569', '#0f172a', 'عدد فرص المستثمر في تعميد', false, true],
-  ];
-  return <><Text style={styles.investorScreenTitle}>حساب المستثمر: {investor.name}</Text><View style={{ marginTop: 12, flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 }}>{cards.map((card) => <Card key={card[0]} data={card} />)}</View>{!!message && <Text style={styles.message}>{message}</Text>}<Text style={styles.panelTitle}>شاشات المستثمر</Text><Nav title="إدارة حركات الرصيد" text="إضافة رصيد، تسجيل سحب، تعديل وحذف." onPress={() => setScreen('manage')} /><Nav title="الحركات المالية" text="كل الاستلامات والإيداعات والسحوبات في شاشة مستقلة." onPress={() => setScreen('movements')} /></>;
-}
-
-function Card({ data }) {
-  const [title, value, bg, border, titleColor, valueColor, note, wide, count] = data;
-  return <View style={{ flexBasis: wide ? '100%' : '47%', flexGrow: 1, minHeight: wide ? 128 : 108, borderRadius: 24, overflow: 'hidden', backgroundColor: bg, borderWidth: 1, borderColor: border }}><View style={{ width: '100%', paddingVertical: wide ? 12 : 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: border, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: titleColor, fontWeight: '900', fontSize: 13, textAlign: 'center' }}>{title}</Text></View><View style={{ flex: 1, width: '100%', paddingHorizontal: 14, paddingVertical: wide ? 16 : 13, alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: valueColor, fontWeight: '900', fontSize: wide ? 27 : 20, textAlign: 'center', writingDirection: 'rtl' }}>{count ? value : `${money(value, 2)} ر.س`}</Text>{note ? <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 10, marginTop: 7, textAlign: 'center', lineHeight: 16, writingDirection: 'rtl' }}>{note}</Text> : null}</View></View>;
-}
-
-function Nav({ title, text, onPress }) {
-  return <TouchableOpacity style={styles.investorAccountButton} onPress={onPress}><View style={{ flex: 1, alignItems: 'flex-end' }}><Text style={styles.investorAccountButtonText}>{title}</Text><Text style={styles.investorScreenSubtitle}>{text}</Text></View><Text style={styles.investorAccountButtonIcon}>›</Text></TouchableOpacity>;
+  return (
+    <View style={{ marginTop: 12 }}>
+      {screen !== 'home' ? (
+        <TouchableOpacity style={styles.investorAccountBackButton} onPress={() => setScreen('home')} accessibilityRole="button" accessibilityLabel={`رجوع لشاشة ${investor.name}`}>
+          <Text style={styles.investorAccountBackText}>{`رجوع لشاشة ${investor.name}`}</Text>
+        </TouchableOpacity>
+      ) : null}
+      {screen === 'home' ? <InvestorAccountDashboard investor={investor} account={account} message={message} setScreen={setScreen} /> : null}
+      {screen === 'manage' ? <ManageEntries investor={investor} account={account} reload={load} onBack={() => setScreen('home')} /> : null}
+      {screen === 'movements' ? <SimpleList title={`الحركات المالية - ${investor.name}`} rows={account?.timeline || []} /> : null}
+    </View>
+  );
 }
 
 function ManageEntries({ investor, account, reload, onBack }) {

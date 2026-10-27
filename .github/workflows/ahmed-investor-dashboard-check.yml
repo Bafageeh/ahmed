@@ -1,0 +1,30 @@
+name: Ahmed investor dashboard review
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-investor-dashboard-check.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 7m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/investor-details-20261027" AHMED_SMS_SHA="${{ github.sha }}"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/prepare-investor-dashboard.py" > "$AHMED_SMS_CASE/prepare.py"
+            python3 "$AHMED_SMS_CASE/prepare.py"
