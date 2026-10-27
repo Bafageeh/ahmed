@@ -16,6 +16,7 @@ parser.add_argument('path', type=Path)
 parser.add_argument('expected_sha256', nargs='?')
 parser.add_argument('--version-code', type=int, default=27)
 parser.add_argument('--require-investment-funding', action='store_true')
+parser.add_argument('--require-investor-settings', action='store_true')
 args = parser.parse_args()
 path = args.path
 expected = args.expected_sha256
@@ -44,5 +45,8 @@ with zipfile.ZipFile(path) as archive:
     if args.require_investment_funding:
         for marker in [b'mark-sms-investment-uploaded', b'sms-investment-review-actions', b'investment/uploaded', b'investment_funded']:
             assert marker in bundle, 'Investment funding feature is missing: ' + marker.decode()
+    if args.require_investor_settings:
+        for marker in [b'investor-settings-shortcuts', b'ta3meed-investor-dashboard']:
+            assert marker in bundle, 'Latest investor screen feature is missing: ' + marker.decode()
     assert not re.search(rb'#S-\d{2,4}\b', bundle), 'An old screen identifier remains embedded'
-print('LATEST_APK_BINARY_INSPECTION_PASSED ' + json.dumps({'sha256': digest, 'bytes': path.stat().st_size, 'package': apk.get_package(), 'versionCode': args.version_code, 'runtime': '1.0.23', 'embedded_latest_features': True, 'investment_funding_verified': args.require_investment_funding}))
+print('LATEST_APK_BINARY_INSPECTION_PASSED ' + json.dumps({'sha256': digest, 'bytes': path.stat().st_size, 'package': apk.get_package(), 'versionCode': args.version_code, 'runtime': '1.0.23', 'embedded_latest_features': True, 'investment_funding_verified': args.require_investment_funding, 'investor_settings_verified': args.require_investor_settings}))
