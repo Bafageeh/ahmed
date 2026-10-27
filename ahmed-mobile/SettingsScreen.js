@@ -1,11 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Platform, SafeAreaView, ScrollView, StatusBar as NativeStatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import UiIcon from './UiIcon';
+import { InvestorManagerModal } from './Ta3meedInvestorControls';
 
 const TOP_INSET = Platform.OS === 'android' ? Math.max(NativeStatusBar.currentHeight || 0, 24) : 0;
 const ACCENT = '#6d57b8';
 
-export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout }) {
+export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout, onOpenInvestorAccounts }) {
+  const [investorManagerOpen, setInvestorManagerOpen] = useState(false);
+  const investorItems = [
+    { key: 'ta3meedAccounts', title: 'حسابات المستثمرين', detail: 'الأرصدة والحركات المالية وتفاصيل الحسابات', icon: 'wallet' },
+    { key: 'manageInvestors', title: 'إدارة المستثمرين', detail: 'أسماء المستثمرين وإدارة مشاركاتهم', icon: 'users' },
+  ];
+  const openInvestorTool = (key) => {
+    if (key === 'ta3meedAccounts') onOpenInvestorAccounts();
+    else setInvestorManagerOpen(true);
+  };
   const adminItems = [
     { key: 'bankStatementSchedules', title: 'مواعيد كشف البطاقات', detail: 'إدارة مواعيد الكشف والتنبيهات', icon: 'payments' },
     { key: 'usersManager', title: 'إدارة المستخدمين', detail: 'إضافة المستخدمين وإدارة حساباتهم', icon: 'users' },
@@ -27,6 +37,7 @@ export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout })
         <View style={s.role}><Text style={s.roleText}>{isAdmin ? 'مدير' : 'مستخدم'}</Text></View>
       </View>
 
+      <View testID="investor-settings-shortcuts"><Group title="المستثمرون" items={investorItems} goTo={openInvestorTool} /></View>
       {isAdmin ? <Group title="الإدارة" items={adminItems} goTo={goTo} /> : null}
       <Group title="الرسائل والبيانات" items={dataItems} goTo={goTo} />
 
@@ -34,6 +45,7 @@ export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout })
         <SettingsRow title="تسجيل الخروج" detail="إنهاء الجلسة الحالية" icon="logout" danger onPress={onLogout} />
       </View>
     </ScrollView>
+    <InvestorManagerModal visible={investorManagerOpen} onClose={() => setInvestorManagerOpen(false)} />
   </SafeAreaView>;
 }
 

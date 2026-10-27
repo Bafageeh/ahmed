@@ -344,7 +344,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenInvestorAccounts, onOpenImageImport, onOpenBackup, onOpenWallet, onEditOpportunity, onManageInvestors, selectedSortOrder, onSortOrderChange }) {
+export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenImageImport, onOpenBackup, onOpenWallet, onEditOpportunity, selectedSortOrder, onSortOrderChange }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -839,18 +839,6 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
                 <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f5f3ff' }]}><UiIcon name="investments" size={26} color="#7c3aed" /></View>
                 <Text style={styles.quickMenuItemTitle}>استثماراتي</Text>
                 <Text style={styles.quickMenuItemText}>العودة إلى منصات الاستثمار</Text>
-              </TouchableOpacity>
-
-              {onManageInvestors ? <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); onManageInvestors(); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f0fdfa' }]}><UiIcon name="users" size={26} color="#0f766e" /></View>
-                <Text style={styles.quickMenuItemTitle}>إدارة المستثمرين</Text>
-                <Text style={styles.quickMenuItemText}>الأسماء والاختيار وإيقاف المشاركات الجديدة</Text>
-              </TouchableOpacity> : null}
-
-              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenInvestorAccounts || onOpenMore)?.(); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#eff6ff' }]}><UiIcon name="users" size={26} color="#2563eb" /></View>
-                <Text style={styles.quickMenuItemTitle}>حسابات المستثمرين</Text>
-                <Text style={styles.quickMenuItemText}>الحركات والأرصدة والتفاصيل</Text>
               </TouchableOpacity>
 
               <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenImageImport || onOpenMore)?.(); }}>

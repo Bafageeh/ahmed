@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { InvestorAllocationEditor, InvestorManagerModal, InvestorOwnerChangeModal } from './Ta3meedInvestorControls';
+import { InvestorAllocationEditor, InvestorOwnerChangeModal } from './Ta3meedInvestorControls';
 import { allocationFormError, allocationFormRows, allocationPayload, hasProtectedAllocations, normalizeAmountInput } from './ta3meedAllocationForm';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
@@ -872,7 +872,6 @@ function FormField({ label, compact, multiline, shortMultiline, ...inputProps })
 
 export default function Ta3meedNoResetFilterScreen(props) {
   const [addOpen, setAddOpen] = useState(false);
-  const [investorManagerOpen, setInvestorManagerOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [screenVersion, setScreenVersion] = useState(0);
@@ -911,7 +910,7 @@ export default function Ta3meedNoResetFilterScreen(props) {
 
   return (
     <View style={addStyles.host}>
-      <Ta3meedCompactFiltersScreen key={screenVersion} {...props} selectedSortOrder={sortOrder} onSortOrderChange={setSortOrder} onEditOpportunity={handleEdit} onManageInvestors={() => setInvestorManagerOpen(true)} />
+      <Ta3meedCompactFiltersScreen key={screenVersion} {...props} selectedSortOrder={sortOrder} onSortOrderChange={setSortOrder} onEditOpportunity={handleEdit} />
 
       <TouchableOpacity
         accessibilityRole="button"
@@ -929,7 +928,6 @@ export default function Ta3meedNoResetFilterScreen(props) {
         </View>
       )}
 
-      <InvestorManagerModal visible={investorManagerOpen} onClose={() => { setInvestorManagerOpen(false); setScreenVersion((version) => version + 1); }} />
       <AddOpportunityModal
         visible={addOpen}
         onClose={() => setAddOpen(false)}

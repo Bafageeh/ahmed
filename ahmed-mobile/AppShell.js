@@ -98,9 +98,9 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'smsArchive') return <SmsArchiveScreen key={String(currentUser?.id)} onBack={() => openTab('more')} />;
     if (activeTab === 'more') return <MoreScreen goTo={openTab} openInvestment={openInvestment} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />;
     if (activeTab === 'investments') {
-      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenInvestorAccounts={() => setInvestmentScreen('ta3meedAccounts')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} onOpenWallet={() => setInvestmentScreen('ta3meedWallet')} />;
+      if (investmentScreen === 'ta3meed') return <Ta3meedScreen onBack={() => setInvestmentScreen('list')} onOpenInvestments={() => setInvestmentScreen('list')} onOpenImageImport={() => setInvestmentScreen('ta3meedImageImport')} onOpenBackup={() => setInvestmentScreen('ta3meedBackup')} onOpenWallet={() => setInvestmentScreen('ta3meedWallet')} />;
       if (investmentScreen === 'ta3meedWallet') return <Ta3meedWalletScreen key={String(currentUser?.id)} onBack={() => setInvestmentScreen('ta3meed')} />;
-      if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => setInvestmentScreen('list')} />;
+      if (investmentScreen === 'ta3meedAccounts') return <Ta3meedInvestorAccountsScreen onBack={() => openTab('more')} />;
       if (investmentScreen === 'ta3meedImageImport') return <Ta3meedImageImportScreen onBack={() => setInvestmentScreen('list')} />;
       if (investmentScreen === 'ta3meedBackup') return <Ta3meedBackupScreen onBack={() => setInvestmentScreen('ta3meed')} />;
       if (investmentScreen === 'moneymoon') return <MoneyMoonScreen onBack={() => setInvestmentScreen('list')} />;
@@ -153,7 +153,7 @@ function FutureMonthlyIncomeScreen({ goTo }) {
 
 function ActualMonthlyIncomeScreen({ goTo }) { return <ScreenWrap><TopBar title="دخل شهري حقيقي" onBack={() => goTo('accounts')} /><Header badge="حساباتي" title="#S-122 دخل شهري حقيقي" subtitle="شاشة لحساب الدخل الشهري الفعلي." icon="wealth" /></ScreenWrap>; }
 function UsersManagerScreen({ onBack, currentUser }) { return <ScreenWrap><TopBar title="إدارة المستخدمين" onBack={onBack} /><Header badge="Ahmed" title="#S-151 إدارة المستخدمين" subtitle="هذه الشاشة للمدير فقط." icon="users" /><AhmedUsersManagerPanel currentUser={currentUser} /></ScreenWrap>; }
-function MoreScreen({ goTo, currentUser, isAdmin, onLogout }) { return <SettingsScreen goTo={goTo} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} />; }
+function MoreScreen({ goTo, openInvestment, currentUser, isAdmin, onLogout }) { return <SettingsScreen goTo={goTo} currentUser={currentUser} isAdmin={isAdmin} onLogout={onLogout} onOpenInvestorAccounts={() => openInvestment('ta3meedAccounts')} />; }
 function Quick({ title, text, icon, onPress }) { return <TouchableOpacity onPress={onPress} style={styles.card}><View style={styles.iconBox}><UiIcon name={icon} size={24} /></View><Text style={styles.cardTitle}>{title}</Text>{text ? <Text style={styles.cardText}>{text}</Text> : null}<Text style={styles.openText}>فتح الشاشة</Text></TouchableOpacity>; }
 function MenuRow({ title, text, icon, onPress, last, danger }) { return <TouchableOpacity onPress={onPress} style={[styles.menuRow, last && styles.menuRowLast, danger && styles.menuRowDanger]}><View style={[styles.menuIcon, danger && styles.menuIconDanger]}><UiIcon name={icon} size={24} color={danger ? '#b91c1c' : ICON_COLOR_DARK} /></View><View style={styles.menuTextBlock}><Text style={[styles.menuTitle, danger && styles.menuTitleDanger]}>{title}</Text><Text style={[styles.menuText, danger && styles.menuTextDanger]}>{text}</Text></View><UiIcon name="back" size={22} color={danger ? '#b91c1c' : ICON_COLOR_SOFT} /></TouchableOpacity>; }
 
