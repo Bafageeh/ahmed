@@ -319,5 +319,10 @@
     "ahmed-mobile/ta3meed/Ta3meedTenantInvestorAccounts.js": "d5c5afca5969a746a40d98f7bd625b1353a734b101845f8c250632b40b6e29f4"
   },
   "bundle_marker": "ta3meed-investor-dashboard",
-  "update_message": "Compact investor account dashboard with top balance and movement icons"
+  "update_message": "Compact investor account dashboard with top balance and movement icons",
+  "ui_verified_commit": "6beb1f2f9842f3520454a3176077d169782893fd",
+  "rendered_preview_widths": [
+    390,
+    320
+  ]
 }

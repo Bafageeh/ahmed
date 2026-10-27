@@ -1,0 +1,45 @@
+name: Ahmed investor account dashboard update
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-investor-dashboard-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ahmed-investor-dashboard-release
+  cancel-in-progress: false
+jobs:
+  deliver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Verify dashboard navigation and account calculation checks
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {data: run}=await github.rest.actions.getWorkflowRun({...context.repo,run_id:40580193006});
+            if(run.head_sha!=='6beb1f2f9842f3520454a3176077d169782893fd'||run.conclusion!=='success')throw new Error('Dashboard checks must pass before publishing');
+      - name: Publish the reviewed investor dashboard to web and production OTA without APK
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 22m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/investor-details-20261027" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_UI_RELEASE_MANIFEST="scripts/investor-dashboard-release-20261027.json"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/deliver-investor-dashboard.py" > "$AHMED_SMS_CASE/deliver.py"
+            python3 "$AHMED_SMS_CASE/deliver.py"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/publish-investment-sms.py" > "$AHMED_SMS_CASE/publish.py"
+            python3 "$AHMED_SMS_CASE/publish.py"
