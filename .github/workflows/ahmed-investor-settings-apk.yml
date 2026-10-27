@@ -1,9 +1,6 @@
 name: Ahmed investor settings APK build 29
 # Runtime compatibility is stored in Android resources, not the embedded asset manifest.
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/ahmed-investor-settings-apk.yml']
   workflow_dispatch:
 permissions:
   contents: read
