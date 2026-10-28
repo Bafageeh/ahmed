@@ -103,7 +103,8 @@ foreach (['2026_05_04_000001_create_financial_core_tables.php', '2026_05_04_0000
     (require $source.'/ahmed-api/database/migrations/'.$migration)->up();
 }
 foreach (['investment_opportunities', 'investment_investors', 'investment_opportunity_allocations', 'ta3meed_receipts', 'ta3meed_receipt_allocations'] as $table) {
-    Schema::table($table, fn ($schema) => $schema->unsignedBigInteger('user_id'));
+    // Older production SQLite requires a default when adding a NOT NULL test column.
+    Schema::table($table, fn ($schema) => $schema->unsignedBigInteger('user_id')->default(0));
 }
 DB::table('investment_platforms')->insert(['id' => 1, 'code' => 'ta3meed', 'name_ar' => 'تعميد']);
 foreach ([1, 2] as $id) {

@@ -1,5 +1,6 @@
 name: Ahmed automatic partial repayment SMS
 # Keep the wallet review fixtures on the date of their incoming SMS.
+# Verify staged classes with the production PHP and SQLite versions before installation.
 on:
   push:
     branches: [main]
