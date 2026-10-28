@@ -31,11 +31,11 @@
     "ahmed-mobile/BankLogo.js": "522f9774efb6cb46df54935b0bca48999a6323e2c2d60013e5ed2e684ae61006",
     "ahmed-mobile/aljaziraLogoData.js": "d264a9311c21d60c8d1678e28c47d28597e022e00d9b2c5af590ac360e253103",
     "ahmed-mobile/SafeNotifications.js": "0e203584e13982f05296ff763132a9caf5adad6d6211ce19828fe77840590b5e",
-    "ahmed-mobile/Ta3meedCompactFiltersScreen.js": "b096a388a9105d6ebe1602e0873960ba6cd96c6b649fec11bf02503fbadcc1fa",
+    "ahmed-mobile/Ta3meedCompactFiltersScreen.js": "c416f1650e96e604b6c62e30e77b5a2f9ba9844199ad20493ac76ceb746990e4",
     "ahmed-mobile/babel-plugin-debt-last-payment-stat.js": "4227877998964082b5a6e2346b51287b97921139fddd64914121478ec4265af4",
     "ahmed-mobile/anbLogoData.js": "ffa7db80412b149398573b1e5db45c1f4494d7202941ecb3d4f098d0485e4cd7",
     "ahmed-mobile/AutoUpdater.js": "f0b3dad42a0f2f72d24d03fe5173187e88fc8ce662cb1d6d7c2e740cd21703c0",
-    "ahmed-mobile/AppShell.js": "13cf27bf90488942ca0ee7036588d352eb7c1aae1b7dc031c2face3cf1c9dd43",
+    "ahmed-mobile/AppShell.js": "0b2956117022911c602640f165638063ded8c46e3ee8b90c203b410859908a44",
     "ahmed-mobile/babel-plugin-debt-header-safe-area.js": "55156e0171c0978f5a630edc89f7a45101d36cc0e9af2bb4c5aaefcce081f532",
     "ahmed-mobile/package-lock.json": "2e8e39f3192e8d372328e1c981172ecc72b1a35d349f03000970c193ff1852c3",
     "ahmed-mobile/index.js": "49f2499516c2dc835dc2c4d80e845f23d0350e9a9b41f8507d854c559763c0ec",
@@ -65,7 +65,7 @@
     "ahmed-mobile/package.json": "3888800df34f7e06b5bf569ce3303b96dd1f309acd2ab9fee2e834523d1baf68",
     "ahmed-mobile/snbLogoData.js": "a80e48a56ef7a5fdbac0d01f94fdcb36bebe09e8143d0a764a8aab848c27ed5a",
     "ahmed-mobile/dinarInvestmentMath.js": "a6bf71b6bc9aa0f28554bb91a351e52d0a96c51a53306813356efc77c34239ae",
-    "ahmed-mobile/Ta3meedNoResetFilterScreen.js": "f199ec603919cdda7c478898f805750797f432c9348973dd5d9362cc57a0ffd6",
+    "ahmed-mobile/Ta3meedNoResetFilterScreen.js": "9fbf664791041131ce1e3fe7ebba152ab960c375f3e4ef6ed56e028811d42c77",
     "ahmed-mobile/UiIcon.js": "e98d7cdddc95413d7e20092454edf62f3f862e05e7549dfde046fdad2f4257be",
     "ahmed-mobile/AppNativeClean.js": "3ead188083690344a7b8b17e21059ccceda1a6b965b05a2d6791dad3c98a444f",
     "ahmed-mobile/AppNativeCleanFixed.js": "c5c19a50f25c85387907b5c111113da009fb11ed922976fc0141054f260d8ed0",
@@ -312,11 +312,9 @@
   },
   "preserved_production_sources": [],
   "files": {
-    "ahmed-mobile/AppShell.js": "0b2956117022911c602640f165638063ded8c46e3ee8b90c203b410859908a44",
-    "ahmed-mobile/Ta3meedCompactFiltersScreen.js": "c416f1650e96e604b6c62e30e77b5a2f9ba9844199ad20493ac76ceb746990e4",
-    "ahmed-mobile/Ta3meedNoResetFilterScreen.js": "9fbf664791041131ce1e3fe7ebba152ab960c375f3e4ef6ed56e028811d42c77"
+    "ahmed-mobile/AppShell.js": "a6a04d198f3ea37fc31326e424f2ef456c862e496b81f589cca8cd4caaa50512"
   },
-  "bundle_marker": "ta3meed-header-add",
+  "bundle_marker": "ahmed-bottom-navigation-transparent-15",
   "bundle_markers": [
     "ahmed-bottom-navigation-four-tabs",
     "ahmed-settings-bottom-navigation",
@@ -325,7 +323,7 @@
     "investment-platform-",
     "ta3meed-header-add",
     "ta3meed-header-back",
-    "ahmed-bottom-navigation-transparent-85"
+    "ahmed-bottom-navigation-transparent-15"
   ],
-  "update_message": "Move Ta3meed add and back actions to the top header and make navigation 85 percent transparent"
+  "update_message": "Set bottom navigation background transparency to 15 percent"
 }

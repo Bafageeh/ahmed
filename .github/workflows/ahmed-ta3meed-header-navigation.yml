@@ -1,5 +1,5 @@
-name: Ahmed Ta3meed header actions and transparent navigation
-# Compile all changed header modules and retain the platform-navigation smoke checks.
+name: Ahmed bottom navigation 15 percent transparency
+# Keep the current header actions and verify navigation before publishing the opacity change.
 on:
   push:
     branches: [main]
@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Compare the complete live source before changing the Ta3meed header and bottom navigation
+      - name: Compare the complete live source before setting bottom navigation transparency to 15 percent
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -27,8 +27,8 @@ jobs:
             set -eu
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="f7793b42066ca7ba03199554feaff51967c0cf1d"
-            export AHMED_APK_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-header-navigation-20261028/source"
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="6299bdd96f982c6d6b9b154f6b33b3ee8e39606b"
+            export AHMED_APK_CASE="/home/pmsa/secure-backups/ahmed/navigation-opacity15-20261028/source"
             mkdir -p "$AHMED_APK_CASE"
             chmod 700 "$AHMED_APK_CASE"
             git -C "$ROOT" fetch origin "${{ github.sha }}"
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Compile header modules, verify platform navigation and publish the header layout
+      - name: Verify platform navigation and publish the 15 percent transparency update
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.AHMED_SSH_HOST }}
@@ -52,7 +52,7 @@ jobs:
             umask 022
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-header-navigation-20261028" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/navigation-opacity15-20261028" AHMED_SMS_SHA="${{ github.sha }}"
             export AHMED_UI_RELEASE_MANIFEST="scripts/ta3meed-header-navigation-release-20261028.json"
             export AHMED_UI_NAVIGATION_CHECKER="check-ta3meed-navigation.cjs"
             mkdir -p "$AHMED_SMS_CASE"
