@@ -104,6 +104,7 @@ function loadShell(source) {
   const module = { exports: {} };
   const sandbox = {
     module, exports: module.exports, require: requireMock, console,
+    __DEV__: true, $RefreshReg$() {}, $RefreshSig$: () => (component) => component,
     process: { env: { EXPO_PUBLIC_API_URL: 'https://ahmed.pm.sa/api' } },
     setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0, clearInterval() {},
     fetch: () => { throw new Error('Navigation checks must never access application data'); },

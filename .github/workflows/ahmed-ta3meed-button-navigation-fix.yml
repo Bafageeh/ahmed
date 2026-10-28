@@ -1,5 +1,5 @@
 name: Ahmed Ta3meed platform button fix
-# Exercise Expo virtual environment bindings in the compiled navigation smoke check.
+# Verify the installed fix with Expo virtual bindings and Metro refresh globals.
 on:
   push:
     branches: [main]
@@ -27,7 +27,7 @@ jobs:
             set -eu
             ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
             if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
-            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="c34ddc66933530981d14cde6ca9de72e366d8bd3"
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="60e014ef63af1b160febf7ecae3ed14805b994e9"
             export AHMED_APK_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-button-navigation-20261028/source"
             mkdir -p "$AHMED_APK_CASE"
             chmod 700 "$AHMED_APK_CASE"
