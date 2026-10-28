@@ -34,9 +34,8 @@ const FINANCE_NET_PROFIT_AFTER_STUCK_PATHS = [
 ];
 
 const tabs = [
-  { key: 'wealth', label: 'ثروتي', icon: 'wealth' },
   { key: 'accounts', label: 'حساباتي', icon: 'wallet' },
-  { key: 'reports', label: '', icon: 'reports', center: true, accessibilityLabel: 'تقارير' },
+  { key: 'reports', label: 'تقارير', icon: 'reports' },
   { key: 'investments', label: 'استثماراتي', icon: 'investments' },
   { key: 'more', label: 'الإعدادات', icon: 'settings' },
 ];
@@ -53,7 +52,7 @@ const platforms = [
 ];
 
 export default function AppShell({ currentUser, onLogout }) {
-  const [activeTab, setActiveTab] = useState('wealth');
+  const [activeTab, setActiveTab] = useState('reports');
   const [investmentScreen, setInvestmentScreen] = useState('list');
   const isAdmin = Boolean(currentUser?.is_admin);
 
@@ -112,11 +111,11 @@ export default function AppShell({ currentUser, onLogout }) {
     return <WealthScreen openInvestments={openInvestments} />;
   };
 
-  return <View style={styles.root}><StatusBar style="dark" /><View style={[styles.screenLayer, inFullScreen && styles.noTabs]}>{renderScreen()}</View>{!inFullScreen ? <BottomTabs activeTab={activeTab} setActiveTab={openTab} /> : null}</View>;
+  return <View style={styles.root}><StatusBar style="dark" /><View style={[styles.screenLayer, inFullScreen && styles.noTabs]}>{renderScreen()}</View>{!inFullScreen ? <BottomTabs activeTab={activeTab === 'wealth' ? 'accounts' : activeTab} setActiveTab={openTab} /> : null}</View>;
 }
 
 function BottomTabs({ activeTab, setActiveTab }) {
-  return <View style={styles.tabWrap} pointerEvents="box-none" testID="ahmed-settings-bottom-navigation"><View style={styles.tabBar}>{tabs.map((tab) => <TouchableOpacity key={tab.key} activeOpacity={0.84} onPress={() => setActiveTab(tab.key)} style={[tab.center ? styles.centerTabHit : styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}>{tab.center ? <View style={[styles.centerTabButton, activeTab === 'more' && styles.settingsCenterButton, activeTab === tab.key && styles.centerTabButtonActive]}><UiIcon name={tab.icon} size={30} color="#fff" /></View> : <><View style={[styles.tabIconBubble, activeTab === tab.key && styles.tabIconBubbleActive]}><UiIcon name={tab.icon} size={21} color={activeTab === tab.key ? '#fff' : ICON_COLOR} /></View><Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>{tab.label}</Text></>}</TouchableOpacity>)}</View></View>;
+  return <View style={styles.tabWrap} pointerEvents="box-none" testID="ahmed-settings-bottom-navigation"><View style={styles.tabBar} testID="ahmed-bottom-navigation-four-tabs">{tabs.map((tab) => <TouchableOpacity key={tab.key} activeOpacity={0.84} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: activeTab === tab.key }} onPress={() => setActiveTab(tab.key)} style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}><View style={[styles.tabIconBubble, activeTab === tab.key && styles.tabIconBubbleActive]}><UiIcon name={tab.icon} size={21} color={activeTab === tab.key ? '#fff' : ICON_COLOR} /></View><Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>{tab.label}</Text></TouchableOpacity>)}</View></View>;
 }
 
 function Header({ badge, title, subtitle, icon }) {
@@ -213,3 +212,4 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
 });
+

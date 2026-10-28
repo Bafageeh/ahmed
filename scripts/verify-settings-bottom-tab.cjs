@@ -6,7 +6,7 @@ const mobile = path.join(process.env.AHMED_SMS_ROOT, 'ahmed-mobile');
 const liveRequire = createRequire(path.join(mobile, 'package.json'));
 const babel = liveRequire('@babel/core');
 const t = babel.types;
-const marker = 'ahmed-settings-bottom-navigation';
+const marker = 'ahmed-bottom-navigation-four-tabs';
 
 function verify(source, label) {
   const ast = babel.parseSync(source, { configFile: false, babelrc: false, sourceType: 'unambiguous' });
@@ -29,9 +29,11 @@ function verify(source, label) {
   });
   assert.equal(arrays.length, 1, 'The final bottom navigation must be present');
   const tabs = arrays[0].elements.map((node) => Object.fromEntries(node.properties.filter((property) => t.isObjectProperty(property)).map((property) => [property.key.name || property.key.value, property.value.value])));
-  assert.deepEqual(tabs.map((tab) => tab.key), ['wealth', 'accounts', 'reports', 'investments', 'more']);
-  assert.equal(tabs[4].label, 'الإعدادات');
-  assert.equal(tabs[4].icon, 'settings');
+  assert.deepEqual(tabs.map((tab) => tab.key), ['accounts', 'reports', 'investments', 'more']);
+  assert.equal(tabs[3].label, 'الإعدادات');
+  assert.equal(tabs[3].icon, 'settings');
+  assert.equal(tabs[1].label, 'تقارير');
+  assert.ok(tabs.every((tab) => !tab.center), 'Four navigation items must use the same layout');
   assert.equal(reports.length, 1);
   const titles = [];
   let settingsLinks = 0;
@@ -63,10 +65,11 @@ if (process.argv[2] === '--staged') {
     return Array.isArray(entry) ? [resolved, ...entry.slice(1)] : resolved;
   };
   const options = { configFile: false, babelrc: false, presets: config.presets.map((entry) => resolve(entry, false)), plugins: config.plugins.map((entry) => resolve(entry, true)), caller: { name: 'metro', platform: 'android', supportsStaticESM: false } };
-  for (const name of ['AppShell.js', 'babel-plugin-appshell-settings-vault-tab.js']) {
+  for (const name of ['AppShell.js']) {
     const result = babel.transformSync(fs.readFileSync(path.join(stage, name), 'utf8'), { ...options, filename: path.join(mobile, name) });
     if (name === 'AppShell.js') verify(result.code, 'staged full Babel composition');
   }
 } else if (process.argv[2] === '--bundle') {
   verify(fs.readFileSync(process.argv[3], 'utf8'), 'actual served Android bundle');
 } else throw new Error('Specify the staged source or served bundle');
+
