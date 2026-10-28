@@ -1,4 +1,5 @@
 name: Ahmed automatic partial repayment SMS
+# Keep the wallet review fixtures on the date of their incoming SMS.
 on:
   push:
     branches: [main]

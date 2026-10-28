@@ -27,9 +27,10 @@ function approveReview(int $id, array $form, ?array $headers = null): array
 }
 
 $cash = walletSummary($owner)['summary']['balance_cents'];
-[$first] = receivePayment('تم إيداع مبلغ 1.07 عبر تحويل بنكي في محفظتك الاستثمارية في منصة تعميد رقم 0000001 26-10-2026 01:41');
+$reviewWalletDay = now('Asia/Riyadh')->format('d-m-Y');
+[$first] = receivePayment('تم إيداع مبلغ 1.07 عبر تحويل بنكي في محفظتك الاستثمارية في منصة تعميد رقم 0000001 '.$reviewWalletDay.' 01:41');
 verifySms($first['status'] === 'applied', 'actual Ta3meed wallet message format posts the first cash transfer'); $cash += 107;
-[$pending] = receivePayment('تم إيداع مبلغ 1.07 عبر تحويل بنكي في محفظتك الاستثمارية في منصة تعميد رقم 0000001 26-10-2026 03:48');
+[$pending] = receivePayment('تم إيداع مبلغ 1.07 عبر تحويل بنكي في محفظتك الاستثمارية في منصة تعميد رقم 0000001 '.$reviewWalletDay.' 03:48');
 verifySms($pending['status'] === 'needs_review', 'second equal-value transfer awaits a deliberate review');
 $id = $pending['message_id'];
 $original = DB::table('sms_archive_messages')->where('id', $id)->first();

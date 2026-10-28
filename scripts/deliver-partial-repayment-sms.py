@@ -90,10 +90,11 @@ bootstrap.write_text("<?php\nrequire " + json.dumps(str(root / 'ahmed-api/vendor
 environment = dict(os.environ, APP_ENV='testing', CACHE_STORE='array', SESSION_DRIVER='array',
     DB_CONNECTION='sqlite', DB_DATABASE=':memory:')
 result = subprocess.run([php, str(bootstrap), str(root)], cwd=root, env=environment,
-    check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
+    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
 output = result.stdout.decode()
-assert 'PARTIAL_REPAYMENT_SMS_INTEGRATION_PASSED ' in output, 'Staged integration suite did not complete'
 print(output, end='', flush=True)
+result.check_returncode()
+assert 'PARTIAL_REPAYMENT_SMS_INTEGRATION_PASSED ' in output, 'Staged integration suite did not complete'
 
 # Check again after staging and tests, then replace only the approved PHP files.
 verify_live(True)
