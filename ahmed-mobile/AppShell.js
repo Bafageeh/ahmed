@@ -40,7 +40,7 @@ const tabs = [
   { key: 'more', label: 'الإعدادات', icon: 'settings' },
 ];
 
-const activeInvestmentKeys = ['ta3meed', 'ta3meedReceipt', 'ta3meedWallet', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
+const activeInvestmentKeys = ['ta3meedReceipt', 'ta3meedWallet', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
 const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'debts', 'financeImports', 'stats', 'smsArchive'];
 
 const platforms = [
@@ -112,7 +112,7 @@ export default function AppShell({ currentUser, onLogout }) {
     return <WealthScreen openInvestments={openInvestments} />;
   };
 
-  return <View style={styles.root}><StatusBar style="dark" /><View style={[styles.screenLayer, inFullScreen && styles.noTabs]}>{renderScreen()}</View>{!inFullScreen ? <BottomTabs activeTab={activeTab === 'wealth' ? 'accounts' : activeTab} setActiveTab={openTab} /> : null}</View>;
+  return <View style={styles.root} testID="ahmed-ta3meed-bottom-navigation"><StatusBar style="dark" /><View style={[styles.screenLayer, inFullScreen && styles.noTabs]}>{renderScreen()}</View>{!inFullScreen ? <BottomTabs activeTab={activeTab === 'wealth' ? 'accounts' : activeTab} setActiveTab={openTab} /> : null}</View>;
 }
 
 function BottomTabs({ activeTab, setActiveTab }) {
