@@ -83,6 +83,16 @@ checker=case/'verify-settings-bottom-tab.cjs'
 checker.write_bytes(git_file('scripts/verify-settings-bottom-tab.cjs'))
 subprocess.run(['node',str(checker),'--staged'],cwd=root/'ahmed-mobile',check=True,timeout=120)
 
+additional_checker = None
+additional_checker_name = os.environ.get('AHMED_UI_NAVIGATION_CHECKER')
+if additional_checker_name:
+    if Path(additional_checker_name).name != additional_checker_name or not additional_checker_name.endswith('.cjs'):
+        raise RuntimeError('Invalid navigation checker name')
+    additional_checker = case / additional_checker_name
+    additional_checker.write_bytes(git_file('scripts/' + additional_checker_name))
+    subprocess.run(['node', str(additional_checker), '--staged'], cwd=root/'ahmed-mobile', check=True, timeout=120)
+
+
 
 verify_live()
 owner = (root / 'ahmed-mobile/AppShell.js').stat()
@@ -179,6 +189,9 @@ bundle_file=case/'expo-four-tab-navigation.bundle.js'
 bundle_file.write_bytes(bundle)
 bundle_file.chmod(0o600)
 subprocess.run(['node',str(checker),'--bundle',str(bundle_file)],cwd=root/'ahmed-mobile',check=True,timeout=120)
+if additional_checker:
+    subprocess.run(['node', str(additional_checker), '--bundle', str(bundle_file)], cwd=root/'ahmed-mobile', check=True, timeout=120)
+
 (case / 'delivery.json').write_text(json.dumps({'sha': sha, 'files': manifest['files'], 'api_verified': True, 'expo_verified': True, 'bundle_marker': manifest['bundle_marker'], 'update_message': manifest['update_message']}))
 print('FOUR_TAB_NAVIGATION_API_AND_EXPO_VERIFIED', flush=True)
 

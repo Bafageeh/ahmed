@@ -40,7 +40,8 @@ const tabs = [
   { key: 'more', label: 'الإعدادات', icon: 'settings' },
 ];
 
-const activeInvestmentKeys = ['ta3meedReceipt', 'ta3meedWallet', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
+const activeInvestmentKeys = ['ta3meed', 'ta3meedReceipt', 'ta3meedWallet', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
+const fullScreenInvestmentKeys = activeInvestmentKeys.filter((key) => key !== 'ta3meed');
 const fullScreenTabs = ['usersManager', 'secureVault', 'futureMonthlyIncome', 'actualMonthlyIncome', 'personalExpenses', 'debts', 'financeImports', 'stats', 'smsArchive'];
 
 const platforms = [
@@ -81,7 +82,7 @@ export default function AppShell({ currentUser, onLogout }) {
 
   const openInvestments = () => { setActiveTab('investments'); setInvestmentScreen('list'); };
   const openInvestment = (screen) => { setActiveTab('investments'); setInvestmentScreen(screen); };
-  const inFullScreen = fullScreenTabs.includes(activeTab) || (activeTab === 'investments' && activeInvestmentKeys.includes(investmentScreen));
+  const inFullScreen = fullScreenTabs.includes(activeTab) || (activeTab === 'investments' && fullScreenInvestmentKeys.includes(investmentScreen));
 
   const renderScreen = () => {
     if (activeTab === 'accounts') return <AccountsScreen goTo={openTab} />;
@@ -133,7 +134,7 @@ function ReportsScreen({ goTo, openInvestments }) {
   return <ScreenWrap><Header badge="مركز التقارير" title="#S-130 تقارير أحمد" subtitle="اختصارات التقارير والإحصائيات." icon="reports" /><View style={styles.grid}><Quick title="احصائيات" text="إحصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><Quick title="حساباتي" text="الدخل والقيم المستوردة" icon="wealth" onPress={() => goTo('accounts')} /><Quick title="استثماراتي" text="منصات الاستثمار" icon="investments" onPress={openInvestments} /><Quick title="الخزنة الآمنة" text="حفظ الحسابات والبطاقات وبيانات الدخول" icon="settings" onPress={() => goTo('secureVault')} /></View></ScreenWrap>;
 }
 function StatsScreen({ onBack }) { return <ScreenWrap><TopBar title="احصائيات" onBack={onBack} /><StatsDashboardScreen /></ScreenWrap>; }
-function InvestmentsScreen({ openPlatform }) { return <ScreenWrap><Header badge="استثماراتي" title="#S-140 منصات الاستثمار" subtitle="منصات الاستثمار فقط." icon="investments" /><View style={styles.grid}>{platforms.map((p) => { const isActive = activeInvestmentKeys.includes(p.key); return <TouchableOpacity key={p.key} disabled={!isActive} onPress={() => openPlatform(p.key)} style={[styles.card, !isActive && styles.disabledCard]}><View style={styles.iconBox}><UiIcon name={p.icon} size={29} /></View><Text style={styles.cardTitle}>{p.name}</Text><Text style={styles.cardText}>{p.text}</Text><Text style={[styles.openText, !isActive && styles.soonText]}>{isActive ? 'فتح الشاشة' : 'قريبًا'}</Text></TouchableOpacity>; })}</View></ScreenWrap>; }
+function InvestmentsScreen({ openPlatform }) { return <ScreenWrap><Header badge="استثماراتي" title="#S-140 منصات الاستثمار" subtitle="منصات الاستثمار فقط." icon="investments" /><View style={styles.grid}>{platforms.map((p) => { const isActive = activeInvestmentKeys.includes(p.key); return <TouchableOpacity key={p.key} testID={`investment-platform-${p.key}`} disabled={!isActive} onPress={() => openPlatform(p.key)} style={[styles.card, !isActive && styles.disabledCard]}><View style={styles.iconBox}><UiIcon name={p.icon} size={29} /></View><Text style={styles.cardTitle}>{p.name}</Text><Text style={styles.cardText}>{p.text}</Text><Text style={[styles.openText, !isActive && styles.soonText]}>{isActive ? 'فتح الشاشة' : 'قريبًا'}</Text></TouchableOpacity>; })}</View></ScreenWrap>; }
 
 function FinanceImportsScreen({ onBack }) {
   const [summary, setSummary] = useState(null);
