@@ -33,6 +33,7 @@ function verify(source, label) {
   assert.equal(tabs[3].label, 'الإعدادات');
   assert.equal(tabs[3].icon, 'settings');
   assert.equal(tabs[1].label, 'الرئيسية');
+  assert.equal(tabs[1].icon, 'home');
   assert.ok(tabs.every((tab) => !tab.center), 'Four navigation items must use the same layout');
   assert.equal(reports.length, 1);
   const titles = [];
@@ -65,7 +66,7 @@ if (process.argv[2] === '--staged') {
     return Array.isArray(entry) ? [resolved, ...entry.slice(1)] : resolved;
   };
   const options = { configFile: false, babelrc: false, presets: config.presets.map((entry) => resolve(entry, false)), plugins: config.plugins.map((entry) => resolve(entry, true)), caller: { name: 'metro', platform: 'android', supportsStaticESM: false } };
-  for (const name of ['AppShell.js']) {
+  for (const name of ['AppShell.js', 'UiIcon.js']) {
     const result = babel.transformSync(fs.readFileSync(path.join(stage, name), 'utf8'), { ...options, filename: path.join(mobile, name) });
     if (name === 'AppShell.js') verify(result.code, 'staged full Babel composition');
   }

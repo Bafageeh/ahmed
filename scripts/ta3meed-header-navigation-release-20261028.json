@@ -31,11 +31,11 @@
     "ahmed-mobile/BankLogo.js": "522f9774efb6cb46df54935b0bca48999a6323e2c2d60013e5ed2e684ae61006",
     "ahmed-mobile/aljaziraLogoData.js": "d264a9311c21d60c8d1678e28c47d28597e022e00d9b2c5af590ac360e253103",
     "ahmed-mobile/SafeNotifications.js": "0e203584e13982f05296ff763132a9caf5adad6d6211ce19828fe77840590b5e",
-    "ahmed-mobile/Ta3meedCompactFiltersScreen.js": "c416f1650e96e604b6c62e30e77b5a2f9ba9844199ad20493ac76ceb746990e4",
+    "ahmed-mobile/Ta3meedCompactFiltersScreen.js": "04d8390b0e06fefc3c2132a1bfbb2631e58fefdc10076f4520fdb80e4069f9fd",
     "ahmed-mobile/babel-plugin-debt-last-payment-stat.js": "4227877998964082b5a6e2346b51287b97921139fddd64914121478ec4265af4",
     "ahmed-mobile/anbLogoData.js": "ffa7db80412b149398573b1e5db45c1f4494d7202941ecb3d4f098d0485e4cd7",
     "ahmed-mobile/AutoUpdater.js": "f0b3dad42a0f2f72d24d03fe5173187e88fc8ce662cb1d6d7c2e740cd21703c0",
-    "ahmed-mobile/AppShell.js": "a6a04d198f3ea37fc31326e424f2ef456c862e496b81f589cca8cd4caaa50512",
+    "ahmed-mobile/AppShell.js": "163106a7dc9bd361c9e06a99679aab6eccaa8d72b816b1885494921960ce05d2",
     "ahmed-mobile/babel-plugin-debt-header-safe-area.js": "55156e0171c0978f5a630edc89f7a45101d36cc0e9af2bb4c5aaefcce081f532",
     "ahmed-mobile/package-lock.json": "2e8e39f3192e8d372328e1c981172ecc72b1a35d349f03000970c193ff1852c3",
     "ahmed-mobile/index.js": "49f2499516c2dc835dc2c4d80e845f23d0350e9a9b41f8507d854c559763c0ec",
@@ -181,7 +181,7 @@
     "ahmed-api/app/Http/Controllers/Api/Ta3meedController.php": "d7fcf83330313c392ad1e7a593618dfeeddfefd5c3af6e909465a16302f5b4eb",
     "ahmed-api/app/Http/Controllers/Api/Ta3meedInvestorAccountController.php": "e2045821a2493077bef5afe32891209914af22daa03d0673942205110cde3cb2",
     "ahmed-api/app/Http/Controllers/Api/Ta3meedMutationController.php": "5d147cb3e19b50d2f1f05b0db86441cc48ecf8c264df9cbbd37a234d248d45d9",
-    "ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php": "1b150d9471cb97734018ba93609d602c63c347b8af7bc8876d9aeddd767d6644",
+    "ahmed-api/app/Http/Controllers/Api/Ta3meedReceiptController.php": "ae272a7ef68dda459d63317727bf7b1ed75669d6c5ec4eb028fba56d0d1e5538",
     "ahmed-api/app/Http/Controllers/Api/SmsCaptureController.php": "b093fbce78f0a8371e6682d54afbda81c6e5cb2a49e67f90e56ac80c4be79625",
     "ahmed-api/app/Http/Controllers/Api/SmsInvestmentController.php": "1c7fc08409942fbdb357d3cb1bd37d346b50f639a5a288c90fd62a204f1fcc82",
     "ahmed-api/app/Http/Controllers/Api/PersonalExpenseController.php": "04e3fd04259e8fb9a678dc61e90b2fa3dc91f8a006c7d3568039ca8f50c99489",
@@ -210,7 +210,7 @@
     "ahmed-api/app/Support/Ta3meedInvestorName.php": "0499aa284077daad1b7c6f1aa9d5159faf268203fdf950ea7456cd78aec046d5",
     "ahmed-api/app/Support/Ta3meedActualProfit.php": "9d631a64776f3686111ef549eda3b76ba322ae5eba4a675d0f0b26b2d91e4d4e",
     "ahmed-api/app/Support/Ta3meedAllocationPolicy.php": "6e5c0ca509d06bfd8e7cd7327d595d859f794a9a0935fb8cdff2b1e14511216e",
-    "ahmed-api/app/Support/Ta3meedSmsParser.php": "005c98c754147ccc33ae428a0d7fde19b4fee3bd14bcea5d65354d3642850acb",
+    "ahmed-api/app/Support/Ta3meedSmsParser.php": "bf4b2680531d521b230708e270b1765a004dc45d7bf8f5df53636226448f04af",
     "ahmed-api/app/Support/Ta3meedSmsProcessor.php": "44ad946ff22b60c46b95bf21cb72e50ac858b889de25a4455bac38897f6e3ce8",
     "ahmed-api/app/Support/Ta3meedWalletLedger.php": "e3827fa673c908e9be4eb316e24cd2591439735742717f47649e9bdc40f71811",
     "ahmed-api/app/Support/Ta3meedWalletSmsParser.php": "339e1d9409ee2faa803700f172aa898c73590f10646a9b2e62e72ac037fc71df",
@@ -312,10 +312,10 @@
   },
   "preserved_production_sources": [],
   "files": {
-    "ahmed-mobile/AppShell.js": "163106a7dc9bd361c9e06a99679aab6eccaa8d72b816b1885494921960ce05d2",
-    "ahmed-mobile/Ta3meedCompactFiltersScreen.js": "04d8390b0e06fefc3c2132a1bfbb2631e58fefdc10076f4520fdb80e4069f9fd"
+    "ahmed-mobile/AppShell.js": "5863ded3f023a8be443431cca22da1f5ac1db2edfce01e65af7e44ac99682943",
+    "ahmed-mobile/UiIcon.js": "a79a98affb507006aabfdb2365177ee659268705c0adf836c97e3ea5a616c5e3"
   },
-  "bundle_marker": "ta3meed-header-no-back",
+  "bundle_marker": "ahmed-home-tab-house-icon",
   "bundle_markers": [
     "ahmed-bottom-navigation-four-tabs",
     "ahmed-settings-bottom-navigation",
@@ -324,7 +324,8 @@
     "investment-platform-",
     "ta3meed-header-add",
     "ta3meed-header-no-back",
-    "ahmed-bottom-navigation-transparent-15"
+    "ahmed-bottom-navigation-transparent-15",
+    "ahmed-home-tab-house-icon"
   ],
-  "update_message": "Remove the Ta3meed header back button and rename the reports tab to Home"
+  "update_message": "Use a house icon for the Home bottom navigation tab"
 }

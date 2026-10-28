@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Remove Wealth from the bottom navigation using the verified complete production source."""
+"""Apply reviewed navigation and icon changes using the verified complete production source."""
 import hashlib
 import json
 import os
@@ -26,7 +26,7 @@ def git_file(name):
 
 
 manifest = json.loads(git_file(os.environ['AHMED_UI_RELEASE_MANIFEST']))
-allowed_ui_files = {'ahmed-mobile/AppShell.js', 'ahmed-mobile/Ta3meedCompactFiltersScreen.js', 'ahmed-mobile/Ta3meedNoResetFilterScreen.js'}
+allowed_ui_files = {'ahmed-mobile/AppShell.js', 'ahmed-mobile/Ta3meedCompactFiltersScreen.js', 'ahmed-mobile/Ta3meedNoResetFilterScreen.js', 'ahmed-mobile/UiIcon.js'}
 assert 'ahmed-mobile/AppShell.js' in manifest['files'] and set(manifest['files']) <= allowed_ui_files, 'Unexpected bottom navigation scope'
 
 

@@ -35,7 +35,7 @@ const FINANCE_NET_PROFIT_AFTER_STUCK_PATHS = [
 
 const tabs = [
   { key: 'accounts', label: 'حساباتي', icon: 'wallet' },
-  { key: 'reports', label: 'الرئيسية', icon: 'reports' },
+  { key: 'reports', label: 'الرئيسية', icon: 'home' },
   { key: 'investments', label: 'استثماراتي', icon: 'investments' },
   { key: 'more', label: 'الإعدادات', icon: 'settings' },
 ];
@@ -118,7 +118,7 @@ export default function AppShell({ currentUser, onLogout }) {
 }
 
 function BottomTabs({ activeTab, setActiveTab }) {
-  return <View style={styles.tabWrap} pointerEvents="box-none" testID="ahmed-settings-bottom-navigation"><View style={styles.tabBar} testID="ahmed-bottom-navigation-four-tabs" nativeID="ahmed-bottom-navigation-transparent-15">{tabs.map((tab) => <TouchableOpacity key={tab.key} activeOpacity={0.84} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: activeTab === tab.key }} onPress={() => setActiveTab(tab.key)} style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}><View style={[styles.tabIconBubble, activeTab === tab.key && styles.tabIconBubbleActive]}><UiIcon name={tab.icon} size={21} color={activeTab === tab.key ? '#fff' : ICON_COLOR} /></View><Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>{tab.label}</Text></TouchableOpacity>)}</View></View>;
+  return <View style={styles.tabWrap} pointerEvents="box-none" testID="ahmed-settings-bottom-navigation"><View style={styles.tabBar} testID="ahmed-bottom-navigation-four-tabs" nativeID="ahmed-bottom-navigation-transparent-15">{tabs.map((tab) => <TouchableOpacity key={tab.key} activeOpacity={0.84} accessibilityRole="tab" accessibilityLabel={tab.label} accessibilityState={{ selected: activeTab === tab.key }} onPress={() => setActiveTab(tab.key)} style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}><View testID={tab.key === 'reports' ? 'ahmed-home-tab-house-icon' : undefined} style={[styles.tabIconBubble, activeTab === tab.key && styles.tabIconBubbleActive]}><UiIcon name={tab.icon} size={21} color={activeTab === tab.key ? '#fff' : ICON_COLOR} /></View><Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>{tab.label}</Text></TouchableOpacity>)}</View></View>;
 }
 
 function Header({ badge, title, subtitle, icon }) {
