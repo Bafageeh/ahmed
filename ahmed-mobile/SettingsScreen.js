@@ -1,13 +1,49 @@
 import React, { useState } from 'react';
-import { Platform, SafeAreaView, ScrollView, StatusBar as NativeStatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Linking, Platform, SafeAreaView, ScrollView, StatusBar as NativeStatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import UiIcon from './UiIcon';
 import { InvestorManagerModal } from './Ta3meedInvestorControls';
 
 const TOP_INSET = Platform.OS === 'android' ? Math.max(NativeStatusBar.currentHeight || 0, 24) : 0;
 const ACCENT = '#6d57b8';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://ahmed.pm.sa/api';
 
-export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout, onOpenInvestorAccounts }) {
+export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout, onOpenInvestorAccounts, onOpenTa3meedWallet, onOpenTa3meedReceipt, onOpenTa3meedImageImport, onOpenTa3meedBackup }) {
   const [investorManagerOpen, setInvestorManagerOpen] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const ta3meedItems = [
+    { key: 'ta3meedWallet', title: 'محفظة تعميد', detail: 'الرصيد والإيداع والسحب اليدوي أو من الرسائل', icon: 'wallet' },
+    { key: 'ta3meedReceipt', title: 'السداد', detail: 'إضافة واعتماد دفعة تعميد', icon: 'payments' },
+    { key: 'ta3meedImageImport', title: 'استيراد صورة تعميد', detail: 'قراءة بيانات الفرصة من الصورة', icon: 'ta3meed' },
+    { key: 'ta3meedExcel', title: exportingExcel ? 'جاري تجهيز Excel...' : 'تصدير Excel', detail: 'كل الفرص والمستثمرين وجميع التفاصيل', icon: 'reports' },
+    { key: 'ta3meedBackup', title: 'نسخة احتياطية', detail: 'إنشاء نسخة واسترجاع البيانات عند الحاجة', icon: 'save' },
+  ];
+  const exportTa3meedExcel = async () => {
+    if (exportingExcel) return;
+    setExportingExcel(true);
+    try {
+      const response = await fetch(`${API_URL}/ta3meed/export-link`, {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json?.message || 'تعذر تجهيز ملف Excel');
+      const url = json?.data?.url;
+      if (!url) throw new Error('لم يتم إنشاء رابط ملف Excel');
+      if (!await Linking.canOpenURL(url)) throw new Error('تعذر فتح رابط تنزيل ملف Excel');
+      await Linking.openURL(url);
+    } catch (error) {
+      Alert.alert('تعذر تصدير Excel', error?.message || 'حدث خطأ أثناء تجهيز الملف.');
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+  const openTa3meedTool = (key) => {
+    if (key === 'ta3meedWallet') onOpenTa3meedWallet?.();
+    else if (key === 'ta3meedReceipt') onOpenTa3meedReceipt?.();
+    else if (key === 'ta3meedImageImport') onOpenTa3meedImageImport?.();
+    else if (key === 'ta3meedBackup') onOpenTa3meedBackup?.();
+    else if (key === 'ta3meedExcel') exportTa3meedExcel();
+  };
   const investorItems = [
     { key: 'ta3meedAccounts', title: 'حسابات المستثمرين', detail: 'الأرصدة والحركات المالية وتفاصيل الحسابات', icon: 'wallet' },
     { key: 'manageInvestors', title: 'إدارة المستثمرين', detail: 'أسماء المستثمرين وإدارة مشاركاتهم', icon: 'users' },
@@ -37,6 +73,7 @@ export default function SettingsScreen({ goTo, currentUser, isAdmin, onLogout, o
         <View style={s.role}><Text style={s.roleText}>{isAdmin ? 'مدير' : 'مستخدم'}</Text></View>
       </View>
 
+      <View testID="ta3meed-settings-tools"><Group title="تعميد" items={ta3meedItems} goTo={openTa3meedTool} /></View>
       <View testID="investor-settings-shortcuts"><Group title="المستثمرون" items={investorItems} goTo={openInvestorTool} /></View>
       {isAdmin ? <Group title="الإدارة" items={adminItems} goTo={goTo} /> : null}
       <Group title="الرسائل والبيانات" items={dataItems} goTo={goTo} />
