@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Modal, Platform, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Modal, Platform, RefreshControl, SafeAreaView, ScrollView, StatusBar as NativeStatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import UiIcon, { ICON_COLOR_DARK } from './UiIcon';
 import SmsReviewForm from './SmsReviewForm';
@@ -7,6 +7,8 @@ import { AddOpportunityModal } from './Ta3meedNoResetFilterScreen';
 import { getCurrentAhmedSession } from './ahmedCurrentUser';
 import { fetchSmsInvestment, completeSmsInvestment, markSmsInvestmentUploaded, dismissSmsInvestment } from './smsReviewApi';
 import { disableSmsCapture, enableSmsCapture, fetchSmsArchive, getSmsCaptureStatus, syncSmsCapture } from './smsCapture';
+
+const ANDROID_STATUS_BAR_INSET = Platform.OS === 'android' ? Math.max(NativeStatusBar.currentHeight || 0, 24) : 0;
 
 const date = (value) => value ? new Date(Number(value)).toLocaleString('ar-SA', { dateStyle: 'short', timeStyle: 'short', calendar: 'gregory' }) : '—';
 const analysisLabel = (item) => item?.analysis?.action_type === 'investment' ? (item.analysis.status === 'investment_funded' ? 'تم الرفع · تم خصم مبلغ الاستثمار' : item.analysis.status === 'investment_created' ? 'تمت إضافة الفرصة · بانتظار خصم المحفظة' : 'استثمار مقبول · تحت المراجعة') : item?.analysis?.reason === 'manually_linked' ? 'معتمدة · مرتبطة بحركة مسجلة' : item?.analysis?.reason === 'manually_approved' ? 'معتمدة · تم تسجيل الحركة' : ({ applied: item?.analysis?.action_type === 'deposit' ? 'تم تسجيل الإيداع بالمحفظة' : item?.analysis?.action_type === 'withdrawal' ? 'تم تسجيل السحب من المحفظة' : 'تم تسجيل السداد', duplicate: 'مسجلة سابقًا · دون تكرار', needs_review: 'تحتاج مراجعة', non_payment: 'محفوظة · لا توجد حركة مكتملة', archived: 'محفوظة', pending: 'جارٍ التحليل' }[item?.analysis?.status] || 'محفوظة');
@@ -107,7 +109,7 @@ export default function SmsArchiveScreen({ onBack }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.bar}>
+      <View style={styles.bar} testID="sms-archive-safe-header">
         <TouchableOpacity accessibilityLabel="رجوع" onPress={onBack} style={styles.iconButton}><UiIcon name="back" size={23} color={ICON_COLOR_DARK} /></TouchableOpacity>
         <Text style={styles.title}>رسائل SMS</Text>
         <TouchableOpacity accessibilityLabel="تحديث ومزامنة الرسائل" onPress={refresh} style={styles.iconButton}>{refreshing ? <ActivityIndicator /> : <UiIcon name="refresh" size={21} color={ICON_COLOR_DARK} />}</TouchableOpacity>
@@ -187,7 +189,7 @@ export default function SmsArchiveScreen({ onBack }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f5f6fa' }, page: { padding: 16, paddingBottom: 32 },
-  bar: { paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#e9eaf0' },
+  bar: { paddingHorizontal: 16, paddingTop: ANDROID_STATUS_BAR_INSET + 10, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderBottomWidth: 1, borderColor: '#e9eaf0' },
   title: { color: '#172033', fontWeight: '800', fontSize: 20 }, iconButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   captureCard: { backgroundColor: '#fff', padding: 14, borderRadius: 18, borderWidth: 1, borderColor: '#e9eaf0' }, captureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 }, captureText: { flex: 1, alignItems: 'flex-end' },
   captureTitle: { fontSize: 15, color: '#172033', fontWeight: '800', textAlign: 'right' }, secondary: { marginTop: 4, color: '#6b7280', fontSize: 12, textAlign: 'right' }, explanation: { marginTop: 12, color: '#475569', lineHeight: 21, fontSize: 12, textAlign: 'right' },
