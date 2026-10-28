@@ -38,7 +38,7 @@ const tabs = [
   { key: 'accounts', label: 'حساباتي', icon: 'wallet' },
   { key: 'reports', label: '', icon: 'reports', center: true, accessibilityLabel: 'تقارير' },
   { key: 'investments', label: 'استثماراتي', icon: 'investments' },
-  { key: 'more', label: 'مزيد', icon: 'more' },
+  { key: 'more', label: 'الإعدادات', icon: 'settings' },
 ];
 
 const activeInvestmentKeys = ['ta3meed', 'ta3meedWallet', 'ta3meedAccounts', 'ta3meedImageImport', 'ta3meedBackup', 'moneymoon', 'dinar', 'sulfa', 'tokenize'];
@@ -116,7 +116,7 @@ export default function AppShell({ currentUser, onLogout }) {
 }
 
 function BottomTabs({ activeTab, setActiveTab }) {
-  return <View style={styles.tabWrap} pointerEvents="box-none"><View style={styles.tabBar}>{tabs.map((tab) => <TouchableOpacity key={tab.key} activeOpacity={0.84} onPress={() => setActiveTab(tab.key)} style={[tab.center ? styles.centerTabHit : styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}>{tab.center ? <View style={[styles.centerTabButton, activeTab === 'more' && styles.settingsCenterButton, activeTab === tab.key && styles.centerTabButtonActive]}><UiIcon name={tab.icon} size={30} color="#fff" /></View> : <><View style={[styles.tabIconBubble, activeTab === tab.key && styles.tabIconBubbleActive]}><UiIcon name={tab.icon} size={21} color={activeTab === tab.key ? '#fff' : ICON_COLOR} /></View><Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>{tab.label}</Text></>}</TouchableOpacity>)}</View></View>;
+  return <View style={styles.tabWrap} pointerEvents="box-none" testID="ahmed-settings-bottom-navigation"><View style={styles.tabBar}>{tabs.map((tab) => <TouchableOpacity key={tab.key} activeOpacity={0.84} onPress={() => setActiveTab(tab.key)} style={[tab.center ? styles.centerTabHit : styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}>{tab.center ? <View style={[styles.centerTabButton, activeTab === 'more' && styles.settingsCenterButton, activeTab === tab.key && styles.centerTabButtonActive]}><UiIcon name={tab.icon} size={30} color="#fff" /></View> : <><View style={[styles.tabIconBubble, activeTab === tab.key && styles.tabIconBubbleActive]}><UiIcon name={tab.icon} size={21} color={activeTab === tab.key ? '#fff' : ICON_COLOR} /></View><Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>{tab.label}</Text></>}</TouchableOpacity>)}</View></View>;
 }
 
 function Header({ badge, title, subtitle, icon }) {
@@ -130,7 +130,7 @@ function AccountsScreen({ goTo }) {
 }
 
 function ReportsScreen({ goTo, openInvestments }) {
-  return <ScreenWrap><Header badge="مركز التقارير" title="#S-130 تقارير أحمد" subtitle="اختصارات التقارير والإحصائيات." icon="reports" /><View style={styles.grid}><Quick title="احصائيات" text="إحصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><Quick title="حساباتي" text="الدخل والقيم المستوردة" icon="wealth" onPress={() => goTo('accounts')} /><Quick title="استثماراتي" text="منصات الاستثمار" icon="investments" onPress={openInvestments} /><Quick title="الخزنة الآمنة" text="حفظ الحسابات والبطاقات وبيانات الدخول" icon="settings" onPress={() => goTo('secureVault')} /><Quick title="مزيد" text="الإعدادات والاختصارات" icon="more" onPress={() => goTo('more')} /></View></ScreenWrap>;
+  return <ScreenWrap><Header badge="مركز التقارير" title="#S-130 تقارير أحمد" subtitle="اختصارات التقارير والإحصائيات." icon="reports" /><View style={styles.grid}><Quick title="احصائيات" text="إحصائيات عامة" icon="stats" onPress={() => goTo('stats')} /><Quick title="حساباتي" text="الدخل والقيم المستوردة" icon="wealth" onPress={() => goTo('accounts')} /><Quick title="استثماراتي" text="منصات الاستثمار" icon="investments" onPress={openInvestments} /><Quick title="الخزنة الآمنة" text="حفظ الحسابات والبطاقات وبيانات الدخول" icon="settings" onPress={() => goTo('secureVault')} /></View></ScreenWrap>;
 }
 function StatsScreen({ onBack }) { return <ScreenWrap><TopBar title="احصائيات" onBack={onBack} /><StatsDashboardScreen /></ScreenWrap>; }
 function InvestmentsScreen({ openPlatform }) { return <ScreenWrap><Header badge="استثماراتي" title="#S-140 منصات الاستثمار" subtitle="منصات الاستثمار فقط." icon="investments" /><View style={styles.grid}>{platforms.map((p) => { const isActive = activeInvestmentKeys.includes(p.key); return <TouchableOpacity key={p.key} disabled={!isActive} onPress={() => openPlatform(p.key)} style={[styles.card, !isActive && styles.disabledCard]}><View style={styles.iconBox}><UiIcon name={p.icon} size={29} /></View><Text style={styles.cardTitle}>{p.name}</Text><Text style={styles.cardText}>{p.text}</Text><Text style={[styles.openText, !isActive && styles.soonText]}>{isActive ? 'فتح الشاشة' : 'قريبًا'}</Text></TouchableOpacity>; })}</View></ScreenWrap>; }
