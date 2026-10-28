@@ -22,7 +22,7 @@ function compile(sourceFile) {
   };
   const portable = process.env.AHMED_NAVIGATION_PORTABLE_BABEL === '1';
   const result = babel.transformSync(fs.readFileSync(sourceFile, 'utf8'), {
-    filename: path.join(mobile, 'AppShell.js'),
+    filename: path.join(mobile, path.basename(sourceFile)),
     configFile: false,
     babelrc: false,
     compact: false,
@@ -193,7 +193,13 @@ async function verify(source, label) {
 async function main() {
   if (mode === '--bundle') await verify(fs.readFileSync(process.argv[3], 'utf8'), 'actual served Android bundle');
   else if (mode === '--compiled') await verify(fs.readFileSync(process.argv[3], 'utf8'), 'compiled module reproduction');
-  else if (mode === '--staged') await verify(compile(path.join(process.env.AHMED_SMS_CASE, 'staged/ahmed-mobile/AppShell.js')), 'staged production Babel composition');
+  else if (mode === '--staged') {
+    for (const name of ['Ta3meedCompactFiltersScreen.js', 'Ta3meedNoResetFilterScreen.js']) {
+      const candidate = path.join(process.env.AHMED_SMS_CASE, 'staged/ahmed-mobile', name);
+      if (fs.existsSync(candidate)) compile(candidate);
+    }
+    await verify(compile(path.join(process.env.AHMED_SMS_CASE, 'staged/ahmed-mobile/AppShell.js')), 'staged production Babel composition');
+  }
   else if (mode === '--source') await verify(compile(path.resolve(process.argv[3])), 'source navigation smoke check');
   else throw new Error('Specify --staged, --bundle, --compiled, or --source');
 }

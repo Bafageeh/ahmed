@@ -910,17 +910,7 @@ export default function Ta3meedNoResetFilterScreen(props) {
 
   return (
     <View style={addStyles.host}>
-      <Ta3meedCompactFiltersScreen key={screenVersion} {...props} selectedSortOrder={sortOrder} onSortOrderChange={setSortOrder} onEditOpportunity={handleEdit} />
-
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel="إضافة فرصة تعميد"
-        activeOpacity={0.88}
-        onPress={() => setAddOpen(true)}
-        style={addStyles.floatingAddButton}
-      >
-        <Text style={addStyles.floatingAddPlus}>+</Text>
-      </TouchableOpacity>
+      <Ta3meedCompactFiltersScreen key={screenVersion} {...props} selectedSortOrder={sortOrder} onSortOrderChange={setSortOrder} onEditOpportunity={handleEdit} onAddOpportunity={() => setAddOpen(true)} />
 
       {!!toast && (
         <View pointerEvents="none" style={addStyles.toast}>
@@ -952,32 +942,6 @@ export default function Ta3meedNoResetFilterScreen(props) {
 const addStyles = StyleSheet.create({
   host: {
     flex: 1,
-  },
-  floatingAddButton: {
-    position: 'absolute',
-    left: 24,
-    bottom: 92,
-    width: 56,
-    height: 56,
-    borderRadius: 20,
-    backgroundColor: '#0f766e',
-    borderWidth: 1,
-    borderColor: '#0b675f',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 10,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.2,
-    shadowRadius: 13,
-    shadowOffset: { width: 0, height: 7 },
-    zIndex: 70,
-  },
-  floatingAddPlus: {
-    color: '#ffffff',
-    fontSize: 34,
-    lineHeight: 37,
-    fontWeight: '500',
-    marginTop: -2,
   },
   toast: {
     position: 'absolute',

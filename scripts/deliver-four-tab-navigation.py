@@ -26,7 +26,8 @@ def git_file(name):
 
 
 manifest = json.loads(git_file(os.environ['AHMED_UI_RELEASE_MANIFEST']))
-assert set(manifest['files']) == {'ahmed-mobile/AppShell.js'}, 'Unexpected bottom navigation scope'
+allowed_ui_files = {'ahmed-mobile/AppShell.js', 'ahmed-mobile/Ta3meedCompactFiltersScreen.js', 'ahmed-mobile/Ta3meedNoResetFilterScreen.js'}
+assert 'ahmed-mobile/AppShell.js' in manifest['files'] and set(manifest['files']) <= allowed_ui_files, 'Unexpected bottom navigation scope'
 
 
 def verify_live():

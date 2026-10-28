@@ -1,0 +1,65 @@
+name: Ahmed Ta3meed header actions and transparent navigation
+# Compile all changed header modules and retain the platform-navigation smoke checks.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-ta3meed-header-navigation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-navigation-release
+  cancel-in-progress: false
+jobs:
+  verify-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Compare the complete live source before changing the Ta3meed header and bottom navigation
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 6m
+          script: |
+            set -eu
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_SHA="f7793b42066ca7ba03199554feaff51967c0cf1d"
+            export AHMED_APK_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-header-navigation-20261028/source"
+            mkdir -p "$AHMED_APK_CASE"
+            chmod 700 "$AHMED_APK_CASE"
+            git -C "$ROOT" fetch origin "${{ github.sha }}"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/verify-live-apk-source.py" > "$AHMED_APK_CASE/verify.py"
+            python3 "$AHMED_APK_CASE/verify.py"
+  deliver:
+    needs: verify-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Compile header modules, verify platform navigation and publish the header layout
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 22m
+          script: |
+            set -eu
+            umask 022
+            ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$ROOT" ] || [ ! -d "$ROOT/.git" ]; then ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$ROOT" AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/ta3meed-header-navigation-20261028" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_UI_RELEASE_MANIFEST="scripts/ta3meed-header-navigation-release-20261028.json"
+            export AHMED_UI_NAVIGATION_CHECKER="check-ta3meed-navigation.cjs"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/deliver-four-tab-navigation.py" > "$AHMED_SMS_CASE/deliver.py"
+            python3 "$AHMED_SMS_CASE/deliver.py"
+            git -C "$ROOT" show "$AHMED_SMS_SHA:scripts/publish-investment-sms.py" > "$AHMED_SMS_CASE/publish.py"
+            python3 "$AHMED_SMS_CASE/publish.py"
+

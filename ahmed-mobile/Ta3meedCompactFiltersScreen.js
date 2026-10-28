@@ -343,7 +343,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack, onEditOpportunity, selectedSortOrder, onSortOrderChange, openReceiptOnMount = false, onReceiptClose }) {
+export default function Ta3meedCompactFiltersScreen({ onBack, onAddOpportunity, onEditOpportunity, selectedSortOrder, onSortOrderChange, openReceiptOnMount = false, onReceiptClose }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -717,9 +717,28 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onEditOpportunity,
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <View style={styles.header}>
-        <TouchableOpacity style={[styles.headerIcon, styles.backHeaderButton]} onPress={onBack} activeOpacity={0.85}>
-          <UiIcon name="back" size={24} color={ICON_COLOR_DARK} />
+      <View testID="ta3meed-top-navigation" style={styles.header}>
+        {onAddOpportunity ? (
+          <TouchableOpacity
+            testID="ta3meed-header-add"
+            accessibilityRole="button"
+            accessibilityLabel="إضافة فرصة تعميد"
+            style={[styles.headerIcon, styles.addHeaderButton]}
+            onPress={onAddOpportunity}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.addHeaderPlus}>+</Text>
+          </TouchableOpacity>
+        ) : null}
+        <TouchableOpacity
+          testID="ta3meed-header-back"
+          accessibilityRole="button"
+          accessibilityLabel="رجوع"
+          style={[styles.headerIcon, styles.backHeaderButton]}
+          onPress={onBack}
+          activeOpacity={0.85}
+        >
+          <UiIcon name="back" size={24} color={ICON_COLOR_DARK} style={styles.backHeaderGlyph} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>تعميد</Text>
         <TouchableOpacity
@@ -1326,8 +1345,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f4f7fb' },
   header: { minHeight: 88, paddingHorizontal: 22, paddingTop: 34, paddingBottom: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4f7fb', position: 'relative' },
   headerIcon: { position: 'absolute', top: 34, width: 46, height: 46, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
-  backHeaderButton: { left: 22 },
-  searchHeaderButton: { right: 22 },
+  addHeaderButton: { left: 22, backgroundColor: '#0f766e', borderColor: '#0b675f' },
+  addHeaderPlus: { color: '#ffffff', fontSize: 28, lineHeight: 30, fontWeight: '600', marginTop: -2 },
+  backHeaderButton: { right: 22 },
+  backHeaderGlyph: { transform: [{ rotate: '180deg' }] },
+  searchHeaderButton: { left: 76 },
   filterHeaderButton: { right: 76 },
   filterHeaderButtonActive: { backgroundColor: '#f5f3ff', borderColor: '#a5b4fc' },
   headerTitle: { color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'center' },
