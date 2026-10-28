@@ -22,9 +22,19 @@ class Ta3meedReceiptController extends Controller
             $reference = str_replace('-', '', $this->cleanOpportunityReference($parsed['reference_number']));
             $matches = DB::table('investment_opportunities')->where('platform_id', $platformId)->where('user_id', $userId)
                 ->whereRaw('LOWER(REPLACE(reference_number, \'-\', \'\')) = ?', [strtolower($reference)])
-                ->orderBy('id')->lockForUpdate()->limit(2)->get();
-            if ($matches->count() !== 1) return $review($matches->isEmpty() ? 'opportunity_not_found' : 'ambiguous_opportunity');
-            $investment = $matches->first();
+                ->orderBy('id')->lockForUpdate()->limit(51)->get();
+            // Cancelled or already settled copies of the same reference must not block a
+            // single open opportunity. Never guess if multiple open matches remain.
+            $closedStatuses = ['received', 'completed', 'closed', 'settled', 'finished', 'ended',
+                'cancelled', 'canceled', 'ملغي', 'ملغى', 'ملغاة', 'منتهي', 'مستلم'];
+            $openMatches = $matches->reject(fn ($row) =>
+                in_array(mb_strtolower(trim((string) $row->status)), $closedStatuses, true));
+            if ($matches->count() > 50 || $openMatches->count() !== 1) {
+                $reason = $matches->isEmpty() ? 'opportunity_not_found'
+                    : ($matches->count() > 50 || $openMatches->count() > 1 ? 'ambiguous_opportunity' : 'opportunity_already_closed');
+                return $review($reason);
+            }
+            $investment = $openMatches->first();
             $receipts = DB::table('ta3meed_receipts')->where('opportunity_id', $investment->id)->where('user_id', $userId);
             $same = (clone $receipts)->where('amount', $parsed['amount'])->get();
             foreach ($reviewed ? [] : $same as $receipt) {
