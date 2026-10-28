@@ -1,4 +1,5 @@
 name: Ahmed Ta3meed platform button fix
+# Exercise Expo virtual environment bindings in the compiled navigation smoke check.
 on:
   push:
     branches: [main]

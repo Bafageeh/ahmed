@@ -25,6 +25,7 @@ function compile(sourceFile) {
     filename: path.join(mobile, 'AppShell.js'),
     configFile: false,
     babelrc: false,
+    compact: false,
     parserOpts: { plugins: ['jsx'] },
     presets: portable ? [] : config.presets.map((entry) => resolve(entry, false)),
     plugins: config.plugins.map((entry) => resolve(entry, true)),
@@ -92,6 +93,7 @@ function loadShell(source) {
     };
     if (name === 'react-native') return native;
     if (name === 'expo-status-bar') return { StatusBar: 'StatusBar' };
+    if (name === 'expo/virtual/env') return { env: { EXPO_PUBLIC_API_URL: 'https://example.invalid/api' } };
     if (name === 'expo-local-authentication') return { hasHardwareAsync: async () => false, isEnrolledAsync: async () => false };
     if (name.includes('UiIcon')) return { ...stub(name), ICON_COLOR: '#7c3aed', ICON_COLOR_DARK: '#312e81', ICON_COLOR_SOFT: '#64748b' };
     if (name.includes('ahmedCurrentUser')) return { ahmedUserHeaders: (headers) => headers || {} };
@@ -189,8 +191,9 @@ async function verify(source, label) {
 
 async function main() {
   if (mode === '--bundle') await verify(fs.readFileSync(process.argv[3], 'utf8'), 'actual served Android bundle');
+  else if (mode === '--compiled') await verify(fs.readFileSync(process.argv[3], 'utf8'), 'compiled module reproduction');
   else if (mode === '--staged') await verify(compile(path.join(process.env.AHMED_SMS_CASE, 'staged/ahmed-mobile/AppShell.js')), 'staged production Babel composition');
   else if (mode === '--source') await verify(compile(path.resolve(process.argv[3])), 'source navigation smoke check');
-  else throw new Error('Specify --staged, --bundle, or --source');
+  else throw new Error('Specify --staged, --bundle, --compiled, or --source');
 }
 main().catch((error) => { console.error(error.stack); process.exitCode = 1; });
