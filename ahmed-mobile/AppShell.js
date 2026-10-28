@@ -90,7 +90,7 @@ export default function AppShell({ currentUser, onLogout }) {
     if (activeTab === 'stats') return <StatsScreen onBack={() => openTab('reports')} />;
     if (activeTab === 'futureMonthlyIncome') return <FutureMonthlyIncomeScreen goTo={openTab} />;
     if (activeTab === 'actualMonthlyIncome') return <ActualMonthlyIncomeScreen goTo={openTab} />;
-    if (activeTab === 'personalExpenses') return <PersonalExpensesScreen onBack={() => openTab('accounts')} />;
+    if (activeTab === 'personalExpenses') return <PersonalExpensesScreen key={String(currentUser?.id)} onBack={() => openTab('accounts')} />;
     if (activeTab === 'debts') return <DebtsScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'financeImports') return <FinanceImportsScreen onBack={() => openTab('accounts')} />;
     if (activeTab === 'usersManager') return <UsersManagerScreen onBack={() => openTab('more')} currentUser={currentUser} />;
