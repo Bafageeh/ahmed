@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   Modal,
   RefreshControl,
   SafeAreaView,
@@ -344,7 +343,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpenInvestments, onOpenImageImport, onOpenBackup, onOpenWallet, onEditOpportunity, selectedSortOrder, onSortOrderChange }) {
+export default function Ta3meedCompactFiltersScreen({ onBack, onEditOpportunity, selectedSortOrder, onSortOrderChange, openReceiptOnMount = false, onReceiptClose }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -365,27 +364,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
   const searchInputRef = useRef(null);
   const [expandedId, setExpandedId] = useState(null);
   const [picker, setPicker] = useState(null);
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
-  const [exportingExcel, setExportingExcel] = useState(false);
-
-  const exportTa3meedExcel = async () => {
-    if (exportingExcel) return;
-    setExportingExcel(true);
-    try {
-      const json = await apiJson('/ta3meed/export-link', { method: 'POST' });
-      const url = json?.data?.url;
-      if (!url) throw new Error('لم يتم إنشاء رابط ملف Excel');
-      const supported = await Linking.canOpenURL(url);
-      if (!supported) throw new Error('تعذر فتح رابط تنزيل ملف Excel');
-      setQuickMenuOpen(false);
-      await Linking.openURL(url);
-    } catch (error) {
-      Alert.alert('تعذر تصدير Excel', error?.message || 'حدث خطأ أثناء تجهيز الملف.');
-    } finally {
-      setExportingExcel(false);
-    }
-  };
+  const [receiptOpen, setReceiptOpen] = useState(Boolean(openReceiptOnMount));
   const [receiptText, setReceiptText] = useState('');
   const [receiptPreview, setReceiptPreview] = useState(null);
   const [savingReceipt, setSavingReceipt] = useState(false);
@@ -779,12 +758,6 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
           <Metric title="إجمالي المستلم" value={money(totals.received, 2)} wide />
         </View>
 
-        {onOpenWallet ? <TouchableOpacity onPress={onOpenWallet} style={{ flexDirection: 'row-reverse', alignItems: 'center', gap: 9, backgroundColor: '#eaf5f1', borderRadius: 12, padding: 12, marginTop: 10 }} accessibilityLabel="فتح محفظة تعميد">
-          <UiIcon name="wallet" size={21} color="#0f766e" />
-          <Text style={{ color: '#0f766e', fontWeight: '900', fontSize: 13, flex: 1, textAlign: 'right' }}>محفظة تعميد</Text>
-          <Text style={{ color: '#517970', fontSize: 11 }}>إيداع وسحب ورصيد</Text>
-        </TouchableOpacity> : null}
-
         {!!message && <Text style={styles.message}>{message}</Text>}
         {loading ? <ActivityIndicator color="#0f766e" style={styles.loader} /> : null}
 
@@ -797,72 +770,6 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
 
         {!loading && filteredItems.length === 0 ? <View style={styles.emptyCard}><Text style={styles.emptyTitle}>لا توجد فرص مطابقة</Text><Text style={styles.emptyText}>غيّر المستثمر أو التصنيف أو الحالة.</Text></View> : null}
       </ScrollView>
-
-      <TouchableOpacity
-        activeOpacity={0.86}
-        onPress={() => setQuickMenuOpen(true)}
-        style={styles.moreFloatingButton}
-        accessibilityRole="button"
-        accessibilityLabel="اختصارات تعميد"
-      >
-        <UiIcon name="more" size={27} color={ICON_COLOR_DARK} />
-      </TouchableOpacity>
-
-      <Modal visible={quickMenuOpen} transparent animationType="fade" onRequestClose={() => setQuickMenuOpen(false)}>
-        <View style={styles.quickMenuOverlay}>
-          <TouchableOpacity activeOpacity={1} style={StyleSheet.absoluteFillObject} onPress={() => setQuickMenuOpen(false)} />
-          <View style={styles.quickMenuCard}>
-            <View style={styles.quickMenuHeader}>
-              <TouchableOpacity style={styles.quickMenuClose} onPress={() => setQuickMenuOpen(false)} activeOpacity={0.82}>
-                <Text style={styles.quickMenuCloseText}>×</Text>
-              </TouchableOpacity>
-              <View style={styles.quickMenuHeaderText}>
-                <Text style={styles.quickMenuTitle}>اختصارات تعميد</Text>
-                <Text style={styles.quickMenuSubtitle}>وصول سريع لأهم الأدوات والشاشات</Text>
-              </View>
-              <View style={styles.quickMenuHeaderIcon}><UiIcon name="more" size={22} color="#ffffff" /></View>
-            </View>
-
-            <View style={styles.quickMenuGrid}>
-              {onOpenWallet ? <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); onOpenWallet(); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#eaf5f1' }]}><UiIcon name="wallet" size={26} color="#0f766e" /></View>
-                <Text style={styles.quickMenuItemTitle}>محفظة تعميد</Text>
-                <Text style={styles.quickMenuItemText}>الرصيد والإيداع والسحب اليدوي أو من الرسائل</Text>
-              </TouchableOpacity> : null}
-              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); setReceiptOpen(true); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#ecfdf5' }]}><UiIcon name="payments" size={26} color="#0f766e" /></View>
-                <Text style={styles.quickMenuItemTitle}>السداد</Text>
-                <Text style={styles.quickMenuItemText}>إضافة واعتماد دفعة تعميد</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenInvestments || onBack)?.(); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f5f3ff' }]}><UiIcon name="investments" size={26} color="#7c3aed" /></View>
-                <Text style={styles.quickMenuItemTitle}>استثماراتي</Text>
-                <Text style={styles.quickMenuItemText}>العودة إلى منصات الاستثمار</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenImageImport || onOpenMore)?.(); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#fff7ed' }]}><UiIcon name="ta3meed" size={26} color="#c2410c" /></View>
-                <Text style={styles.quickMenuItemTitle}>استيراد صورة تعميد</Text>
-                <Text style={styles.quickMenuItemText}>قراءة بيانات الفرصة من الصورة</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity disabled={exportingExcel} activeOpacity={0.86} style={[styles.quickMenuItem, exportingExcel && { opacity: 0.65 }]} onPress={exportTa3meedExcel}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#ecfeff' }]}><UiIcon name="reports" size={26} color="#0e7490" /></View>
-                <Text style={styles.quickMenuItemTitle}>{exportingExcel ? 'جاري تجهيز Excel...' : 'تصدير Excel'}</Text>
-                <Text style={styles.quickMenuItemText}>كل الفرص والمستثمرين وجميع التفاصيل</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity activeOpacity={0.86} style={styles.quickMenuItem} onPress={() => { setQuickMenuOpen(false); (onOpenBackup || onOpenMore)?.(); }}>
-                <View style={[styles.quickMenuItemIcon, { backgroundColor: '#f0fdf4' }]}><UiIcon name="save" size={26} color="#15803d" /></View>
-                <Text style={styles.quickMenuItemTitle}>نسخة احتياطية</Text>
-                <Text style={styles.quickMenuItemText}>إنشاء نسخة واسترجاع البيانات عند الحاجة</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
 
       <FilterPickerModal visible={Boolean(picker)} type={picker} onClose={() => setPicker(null)} investors={investors} selectedInvestor={investorFilter} selectedCategory={categoryFilter} selectedStatus={statusFilter} selectedSort={sortOrder} onInvestor={(value) => { setInvestorFilter(value); setPicker(null); }} onCategory={(value) => { setCategoryFilter(value); setPicker(null); }} onStatus={(value) => { setStatusFilter(value); setPicker(null); }} onSort={(value) => { setSortOrder(value); setPicker(null); }} />
 
@@ -900,7 +807,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onOpenMore, onOpen
         </View>
       </Modal>
 
-      <ReceiptModal visible={receiptOpen} onClose={() => setReceiptOpen(false)} receiptText={receiptText} setReceiptText={setReceiptText} preview={receiptPreview} parseReceipt={parseReceipt} applyReceipt={applyReceipt} saving={savingReceipt} />
+      <ReceiptModal visible={receiptOpen} onClose={() => { setReceiptOpen(false); onReceiptClose?.(); }} receiptText={receiptText} setReceiptText={setReceiptText} preview={receiptPreview} parseReceipt={parseReceipt} applyReceipt={applyReceipt} saving={savingReceipt} />
     </SafeAreaView>
   );
 }
@@ -1156,60 +1063,6 @@ function ReceiptModal({ visible, onClose, receiptText, setReceiptText, preview, 
 
 const styles = StyleSheet.create({
 
-  quickMenuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.38)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 14,
-    paddingBottom: 92,
-  },
-  quickMenuCard: {
-    width: '100%',
-    maxWidth: 560,
-    alignSelf: 'center',
-    backgroundColor: '#ffffff',
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 14,
-    elevation: 22,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.24,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 12 },
-  },
-  quickMenuHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  quickMenuClose: { width: 40, height: 40, borderRadius: 14, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  quickMenuCloseText: { color: '#475569', fontSize: 26, lineHeight: 28, fontWeight: '500' },
-  quickMenuHeaderText: { flex: 1, alignItems: 'flex-end', paddingHorizontal: 12 },
-  quickMenuTitle: { color: '#0f172a', fontSize: 19, fontWeight: '900', textAlign: 'right' },
-  quickMenuSubtitle: { marginTop: 3, color: '#64748b', fontSize: 11.5, fontWeight: '800', textAlign: 'right' },
-  quickMenuHeaderIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: '#312e81', alignItems: 'center', justifyContent: 'center' },
-  quickMenuGrid: { flexDirection: 'row-reverse', flexWrap: 'wrap', gap: 10 },
-  quickMenuItem: { flexBasis: '47%', flexGrow: 1, minHeight: 142, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 20, padding: 12, alignItems: 'flex-end' },
-  quickMenuItemIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-  quickMenuItemTitle: { color: '#0f172a', fontSize: 15, fontWeight: '900', textAlign: 'right' },
-  quickMenuItemText: { marginTop: 5, color: '#64748b', fontSize: 11.5, fontWeight: '700', lineHeight: 17, textAlign: 'right' },
-
-  moreFloatingButton: {
-    position: 'absolute',
-    bottom: 24,
-    left: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#dbe3ea',
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    shadowColor: '#0f172a',
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    zIndex: 50,
-  },
   cardTitleLeft: {
     width: '100%',
     alignItems: 'flex-start',
