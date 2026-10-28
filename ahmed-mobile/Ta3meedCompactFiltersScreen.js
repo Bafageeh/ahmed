@@ -343,7 +343,7 @@ function formatRealInvestmentDuration(days) {
   return `${days} يوم`;
 }
 
-export default function Ta3meedCompactFiltersScreen({ onBack, onAddOpportunity, onEditOpportunity, selectedSortOrder, onSortOrderChange, openReceiptOnMount = false, onReceiptClose }) {
+export default function Ta3meedCompactFiltersScreen({ onAddOpportunity, onEditOpportunity, selectedSortOrder, onSortOrderChange, openReceiptOnMount = false, onReceiptClose }) {
   const [items, setItems] = useState([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
@@ -717,7 +717,7 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onAddOpportunity, 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      <View testID="ta3meed-top-navigation" style={styles.header}>
+      <View testID="ta3meed-top-navigation" nativeID="ta3meed-header-no-back" style={styles.header}>
         {onAddOpportunity ? (
           <TouchableOpacity
             testID="ta3meed-header-add"
@@ -730,16 +730,6 @@ export default function Ta3meedCompactFiltersScreen({ onBack, onAddOpportunity, 
             <Text style={styles.addHeaderPlus}>+</Text>
           </TouchableOpacity>
         ) : null}
-        <TouchableOpacity
-          testID="ta3meed-header-back"
-          accessibilityRole="button"
-          accessibilityLabel="رجوع"
-          style={[styles.headerIcon, styles.backHeaderButton]}
-          onPress={onBack}
-          activeOpacity={0.85}
-        >
-          <UiIcon name="back" size={24} color={ICON_COLOR_DARK} style={styles.backHeaderGlyph} />
-        </TouchableOpacity>
         <Text style={styles.headerTitle}>تعميد</Text>
         <TouchableOpacity
           testID="ta3meed-filter-toggle"
@@ -1347,10 +1337,8 @@ const styles = StyleSheet.create({
   headerIcon: { position: 'absolute', top: 34, width: 46, height: 46, borderRadius: 16, backgroundColor: '#fff', borderWidth: 1, borderColor: '#dbe3ea', alignItems: 'center', justifyContent: 'center' },
   addHeaderButton: { left: 22, backgroundColor: '#0f766e', borderColor: '#0b675f' },
   addHeaderPlus: { color: '#ffffff', fontSize: 28, lineHeight: 30, fontWeight: '600', marginTop: -2 },
-  backHeaderButton: { right: 22 },
-  backHeaderGlyph: { transform: [{ rotate: '180deg' }] },
   searchHeaderButton: { left: 76 },
-  filterHeaderButton: { right: 76 },
+  filterHeaderButton: { right: 22 },
   filterHeaderButtonActive: { backgroundColor: '#f5f3ff', borderColor: '#a5b4fc' },
   headerTitle: { color: '#0f172a', fontSize: 24, fontWeight: '900', textAlign: 'center' },
   floatingPayButton: { position: 'absolute', top: 34, left: 22, height: 46, minWidth: 62, borderRadius: 16, backgroundColor: '#0f766e', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, elevation: 8, shadowColor: '#0f172a', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 5 }, zIndex: 60 },

@@ -181,7 +181,7 @@ async function verify(source, label) {
   receipt.props.onReceiptClose();
   tree = render();
   assert.ok(findScreen(tree, 'SettingsScreen'), 'Closing receipt entry must return to Settings');
-  for (const title of ['حساباتي', 'تقارير', 'استثماراتي']) {
+  for (const title of ['حساباتي', 'الرئيسية', 'استثماراتي']) {
     await findTab(tree, title).props.onPress();
     tree = render();
     assert.equal(findTab(tree, title).props.accessibilityState.selected, true, 'Bottom tab selection must update: ' + title);

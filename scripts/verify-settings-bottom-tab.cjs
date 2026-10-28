@@ -32,7 +32,7 @@ function verify(source, label) {
   assert.deepEqual(tabs.map((tab) => tab.key), ['accounts', 'reports', 'investments', 'more']);
   assert.equal(tabs[3].label, 'الإعدادات');
   assert.equal(tabs[3].icon, 'settings');
-  assert.equal(tabs[1].label, 'تقارير');
+  assert.equal(tabs[1].label, 'الرئيسية');
   assert.ok(tabs.every((tab) => !tab.center), 'Four navigation items must use the same layout');
   assert.equal(reports.length, 1);
   const titles = [];

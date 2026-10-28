@@ -35,7 +35,7 @@ const FINANCE_NET_PROFIT_AFTER_STUCK_PATHS = [
 
 const tabs = [
   { key: 'accounts', label: 'حساباتي', icon: 'wallet' },
-  { key: 'reports', label: 'تقارير', icon: 'reports' },
+  { key: 'reports', label: 'الرئيسية', icon: 'reports' },
   { key: 'investments', label: 'استثماراتي', icon: 'investments' },
   { key: 'more', label: 'الإعدادات', icon: 'settings' },
 ];
