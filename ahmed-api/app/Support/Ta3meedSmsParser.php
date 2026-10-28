@@ -24,8 +24,8 @@ final class Ta3meedSmsParser
     {
         $text = self::normalize($body);
         $result = ['status' => 'non_payment', 'reason' => 'not_a_payment', 'reference_number' => null, 'amount' => null, 'receipt_type' => 'partial', 'receipt_date' => null];
-        if (preg_match('/(?:لم\s+(?:يتم|يكتمل)|سيتم|سوف|قريبا|قريبًا|موعد\s+السداد|طلب\s+(?:السداد|سداد)|(?:عدم|فشل|تعذر|إلغاء|الغاء)\s+(?:السداد|سداد)|رمز\s+التحقق|\bOTP\b|payment\s+(?:due|failed|request)|will\s+be\s+paid)/iu', $text)) return $result;
-        $completed = preg_match('/(?:تم\s+(?:(?:بحمد\s+الله|بنجاح)\s+)?(?:سداد|تسديد|استلام|إستلام|ايداع|إيداع|استرداد)|استلمت|استلمتم|سداد\s+(?:جزئي|كلي|كامل)\s+(?:للفرصة|للفرصه|للاستثمار)|(?:payment|repayment)\s+(?:received|completed)|fully\s+repaid)/iu', $text);
+        if (preg_match('/(?:لم\s+(?:يتم|يكتمل)|سيتم|سوف|قريبا|قريبًا|موعد\s+السداد|طلب\s+(?:[إا]ضافة\s+)?(?:السداد|سداد)|(?:عدم|فشل|تعذر|إلغاء|الغاء)\s+(?:[إا]ضافة\s+)?(?:السداد|سداد)|رمز\s+التحقق|\bOTP\b|payment\s+(?:due|failed|request)|will\s+be\s+paid)/iu', $text)) return $result;
+        $completed = preg_match('/(?:تم\s+(?:(?:بحمد\s+الله|بنجاح)\s+)?(?:[إا]ضافة\s+سداد\s+جزئي|سداد|تسديد|استلام|إستلام|ايداع|إيداع|استرداد)|استلمت|استلمتم|سداد\s+(?:جزئي|كلي|كامل)\s+(?:للفرصة|للفرصه|للاستثمار)|(?:payment|repayment)\s+(?:received|completed)|fully\s+repaid)/iu', $text);
         if (! $completed) {
             if (preg_match('/سداد|تسديد|repayment/iu', $text)) return array_replace($result, ['status' => 'needs_review', 'reason' => 'payment_not_confirmed']);
             return $result;

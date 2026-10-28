@@ -96,8 +96,8 @@ verifySms($code === 200 && $receiptResult['analysis']['receipt_id'] && $receiptR
 $receiptId = $receiptResult['analysis']['receipt_id'];
 verifySms((int) round(DB::table('ta3meed_receipt_allocations')->where('receipt_id', $receiptId)->sum('received_amount') * 100) === 2749, 'reviewed repayment updates investor allocations without losing cents');
 verifySms(DB::table('investment_opportunities')->where('id', 40)->value('status') === 'partial_received', 'reviewed partial repayment preserves opportunity lifecycle');
-[$receiptRepeat] = receivePayment('تم سداد جزئي للفرصة INV-REVIEW40 بقيمة 27.49 ريال بتاريخ '.$day);
-$repeatForm = reviewForm($receiptRepeat['message_id']);
+[$receiptRepeat] = receivePayment('تم سداد جزئي بقيمة 27.49 ريال بتاريخ '.$day);
+$repeatForm = reviewForm($receiptRepeat['message_id'], ['reference' => 'INV-REVIEW40']);
 [$code, $receiptConflict] = approveReview($receiptRepeat['message_id'], $repeatForm);
 verifySms($code === 409 && $receiptConflict['candidates'][0]['linkable'], 'equal repayment shows the existing matching receipt for linking');
 [$code] = approveReview($receiptRepeat['message_id'], $repeatForm + ['confirm_duplicate' => true, 'duplicate_token' => $receiptConflict['duplicate_token']]);

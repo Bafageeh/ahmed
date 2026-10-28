@@ -1,0 +1,71 @@
+name: Ahmed automatic partial repayment SMS
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/ahmed-partial-repayment-sms.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ahmed-navigation-release
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, pdo_sqlite, sqlite3, openssl
+          coverage: none
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check SMS permissions, account switches and review retries
+        run: |
+          node --experimental-vm-modules scripts/test-sms-client.cjs
+          node --experimental-vm-modules scripts/test-sms-review-client.cjs
+      - name: Install API dependencies for isolated financial tests
+        working-directory: ahmed-api
+        run: composer install --prefer-dist --no-interaction --no-progress --no-scripts
+      - name: Verify automatic partial repayments, deduplication and all existing SMS flows
+        env:
+          APP_ENV: testing
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+        run: |
+          set -euo pipefail
+          php scripts/test-partial-repayment-sms.php "$GITHUB_WORKSPACE" | tee /tmp/partial-repayment-sms.log
+          python3 - <<'PY'
+          from pathlib import Path
+          assert 'PARTIAL_REPAYMENT_SMS_INTEGRATION_PASSED ' in Path('/tmp/partial-repayment-sms.log').read_text(), 'The full financial integration suite must finish'
+          PY
+  deliver:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify complete production source, test staged classes and install only the two backend changes
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.AHMED_SSH_HOST }}
+          username: ${{ secrets.AHMED_SSH_USER }}
+          key: ${{ secrets.AHMED_SSH_PRIVATE_KEY }}
+          port: 2222
+          command_timeout: 6m
+          script: |
+            set -eu
+            umask 022
+            AHMED_TASK_ROOT="${{ secrets.AHMED_PROJECT_PATH }}"
+            if [ -z "$AHMED_TASK_ROOT" ] || [ ! -d "$AHMED_TASK_ROOT/.git" ]; then AHMED_TASK_ROOT="/home/pmsa/apps/ahmed"; fi
+            export AHMED_SMS_ROOT="$AHMED_TASK_ROOT" AHMED_SMS_SHA="${{ github.sha }}"
+            export AHMED_SMS_CASE="/home/pmsa/secure-backups/ahmed/partial-repayment-sms-20261028"
+            mkdir -p "$AHMED_SMS_CASE"
+            chmod 700 "$AHMED_SMS_CASE"
+            git -C "$AHMED_SMS_ROOT" fetch origin "$AHMED_SMS_SHA"
+            git -C "$AHMED_SMS_ROOT" show "$AHMED_SMS_SHA:scripts/deliver-partial-repayment-sms.py" > "$AHMED_SMS_CASE/deliver.py"
+            python3 "$AHMED_SMS_CASE/deliver.py"

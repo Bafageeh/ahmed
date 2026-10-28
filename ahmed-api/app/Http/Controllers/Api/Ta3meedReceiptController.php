@@ -38,7 +38,10 @@ class Ta3meedReceiptController extends Controller
             $receipts = DB::table('ta3meed_receipts')->where('opportunity_id', $investment->id)->where('user_id', $userId);
             $same = (clone $receipts)->where('amount', $parsed['amount'])->get();
             foreach ($reviewed ? [] : $same as $receipt) {
-                if (substr((string) $receipt->receipt_date, 0, 10) === $date && $receipt->source_message && \App\Support\Ta3meedSmsParser::normalize($receipt->source_message) === \App\Support\Ta3meedSmsParser::normalize($message)) {
+                // Partial SMS match the account's opportunity, amount and payment date,
+                // including manually entered receipts and messages with different wording.
+                if (substr((string) $receipt->receipt_date, 0, 10) === $date && ($parsed['receipt_type'] === 'partial'
+                    || ($receipt->source_message && \App\Support\Ta3meedSmsParser::normalize($receipt->source_message) === \App\Support\Ta3meedSmsParser::normalize($message)))) {
                     return ['status' => 'duplicate', 'reason' => 'receipt_already_exists', 'receipt_id' => $receipt->id];
                 }
                 if (substr((string) $receipt->receipt_date, 0, 10) === $date) return $review('possible_duplicate_receipt');

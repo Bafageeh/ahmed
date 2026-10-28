@@ -49,8 +49,8 @@ verifySms($unrelated['suggestion']['kind'] === '' && $unrelated['suggestion']['r
 smsOpportunity(50, 'ER-PREFILL50');
 $beforeCash = walletSummary($owner)['summary']['balance_cents'];
 $beforeReceipts = DB::table('ta3meed_receipts')->count();
-[$pendingPrefill, $payload] = receivePayment('تم إضافة سداد جزئي بقيمة 41.83 للفرصة رقم ER-PREFILL50 إلى محفظتك الاستثمارية');
-verifySms($pendingPrefill['status'] === 'needs_review', 'richer review extraction does not weaken automatic posting criteria');
+[$pendingPrefill, $payload] = receivePayment('إشعار سداد جزئي بقيمة 41.83 للفرصة رقم ER-PREFILL50 إلى محفظتك الاستثمارية');
+verifySms($pendingPrefill['status'] === 'needs_review' && $pendingPrefill['reason'] === 'payment_not_confirmed', 'unconfirmed wording still requires review despite complete extracted facts');
 $prefillId = $pendingPrefill['message_id'];
 [$code, $review] = smsRequest('GET', '/api/sms/messages/'.$prefillId.'/review', [], $owner);
 verifySms($code === 200 && $review['suggestion']['amount'] === '41.83' && $review['suggestion']['reference'] === 'ER-PREFILL50' && $review['suggestion']['receipt_type'] === 'partial' && $review['missing_fields'] === [], 'authenticated review fills real archived SMS without manual retyping');

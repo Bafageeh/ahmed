@@ -146,8 +146,9 @@ verifySms($repeat['status'] === 'duplicate' && $repeat['notification'] === null 
 [$code, $secondDevice] = smsRequest('POST', '/api/sms/devices', ['installation_id' => (string) Str::uuid()], $owner);
 [$repeat] = receivePayment($partialPayload['body'], [], ['X-Ahmed-SMS-Token' => $secondDevice['upload_token']]);
 verifySms($repeat['status'] === 'duplicate' && DB::table('ta3meed_receipts')->count() === 1, 'duplicates are prevented across devices of the same account');
-[$review] = receivePayment('تم سداد جزئي للفرصة INV-TEST10 بمبلغ 100.75 ريال بنجاح');
-verifySms($review['status'] === 'needs_review' && $review['reason'] === 'possible_duplicate_receipt', 'a possible manual duplicate is held for review');
+[$repeat] = receivePayment('تم سداد جزئي للفرصة INV-TEST10 بمبلغ 100.75 ريال بنجاح');
+verifySms($repeat['status'] === 'duplicate' && $repeat['reason'] === 'receipt_already_exists' && $repeat['receipt_id'] === $partial['receipt_id']
+    && $repeat['notification'] === null && DB::table('ta3meed_receipts')->count() === 1, 'equal partial payment and date link to the existing receipt despite different wording');
 [$full] = receivePayment('تم سداد كلي للفرصة INV-TEST10 بقيمة 999.25 ريال');
 verifySms($full['status'] === 'applied' && DB::table('investment_opportunities')->where('id', 10)->value('status') === 'received', 'final payment completes the opportunity');
 verifySms(DB::table('investment_opportunities')->where('id', 10)->value('actual_profit_amount') == 100
